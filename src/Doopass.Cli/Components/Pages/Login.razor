@@ -1,29 +1,32 @@
 @page "/"
+@layout AuthLayout
 @inject DoopassSession Session
 @inject NavigationManager Nav
 
 <PageTitle>Doopass — Log in</PageTitle>
 
-<div class="card">
-    <h2>Log in</h2>
-    <p class="muted">Unlock your encrypted store.</p>
+<h1 class="auth-title">Welcome back</h1>
+<p class="auth-sub">Unlock your encrypted vault to continue.</p>
 
-    <div class="form-grid">
-        <FluentTextInput @bind-Value="_password"
-                         Type="TextInputType.Password"
-                         Placeholder="Password for the store" />
+<div class="auth-form" @onkeydown="HandleKeyDown">
+    <FluentTextInput @bind-Value="_password"
+                     Type="TextInputType.Password"
+                     Placeholder="Master password" />
 
-        @if (!string.IsNullOrEmpty(_error))
-        {
-            <div class="error">@_error</div>
-        }
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="error">@_error</div>
+    }
 
-        <div class="toolbar">
-            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="LogIn">Log in</FluentButton>
-            <FluentButton OnClick="@(() => Nav.NavigateTo("/init"))">Init store</FluentButton>
-        </div>
+    <div class="auth-actions">
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      Class="grow"
+                      OnClick="LogIn">Unlock vault</FluentButton>
+        <FluentButton OnClick="@(() => Nav.NavigateTo("/init"))">Init store</FluentButton>
     </div>
 </div>
+
+<p class="auth-foot">Your data never leaves this machine.</p>
 
 @code {
     private string? _password;
@@ -34,6 +37,14 @@
         if (Session.IsUnlocked)
         {
             Nav.NavigateTo("/store");
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            LogIn();
         }
     }
 

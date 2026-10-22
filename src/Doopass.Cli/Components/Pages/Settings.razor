@@ -1,48 +1,76 @@
 @page "/settings"
 @inject DoopassSession Session
 @inject NavigationManager Nav
+@inject INotificationService Toast
 
 <PageTitle>Doopass — Settings</PageTitle>
 
-<div class="toolbar">
-    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="RestoreDefaults">Restore defaults</FluentButton>
-</div>
-
-@if (_editing)
-{
-    <div class="card">
-        <div class="form-grid">
-            <div><strong>@_editSection · @_editKey</strong></div>
-            <FluentTextInput @bind-Value="_editValue" Placeholder="Value" />
-            <div class="toolbar">
-                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveEdit">Update</FluentButton>
-                <FluentButton OnClick="CancelEdit">Back</FluentButton>
-            </div>
-        </div>
+<div class="page-head">
+    <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-sub">Application configuration stored locally in settings.json.</p>
     </div>
-}
+    <FluentButton Appearance="ButtonAppearance.Outline"
+                  IconStart="@(new Icons.Regular.Size20.ArrowReset())"
+                  OnClick="ConfirmRestoreDefaults">Restore defaults</FluentButton>
+</div>
 
 @foreach (var section in Session.Settings.Sections)
 {
-    <h3>@(char.ToUpper(section[0]) + section[1..])</h3>
+    <div class="card" style="margin-bottom:16px;">
+        <h2 class="card-title">@SectionTitle(section)</h2>
+        <p class="card-sub">@SectionSubtitle(section)</p>
 
-    <div class="card">
         @foreach (var pair in Session.Settings.GetSection(section))
         {
-            <div class="row">
-                <span class="key">@pair.Key</span>
-                <span class="mono muted">@pair.Value</span>
-                <FluentButton OnClick="@(() => BeginEdit(section, pair.Key, pair.Value))">Change</FluentButton>
+            <div class="setting-row">
+                <span class="setting-key">@pair.Key</span>
+                <span class="setting-value">@pair.Value</span>
+                <FluentButton Appearance="ButtonAppearance.Subtle"
+                              Class="icon-btn"
+                              IconStart="@(new Icons.Regular.Size20.Edit())"
+                              Title="Change"
+                              OnClick="@(() => BeginEdit(section, pair.Key, pair.Value))" />
             </div>
         }
     </div>
 }
 
+<Modal Visible="_showEdit" Title="@($"Edit {_editKey}")" OnClose="CancelEdit">
+    <ChildContent>
+        <p class="muted" style="margin:0;">@_editSection</p>
+        <div class="field">
+            <label class="field-label">@_editKey</label>
+            <FluentTextInput @bind-Value="_editValue" Placeholder="Value" />
+        </div>
+    </ChildContent>
+    <Footer>
+        <FluentButton OnClick="CancelEdit">Cancel</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      IconStart="@(new Icons.Regular.Size20.Checkmark())"
+                      OnClick="SaveEdit">Save</FluentButton>
+    </Footer>
+</Modal>
+
+<Modal Visible="_showRestoreDefaults" Title="Restore defaults?" OnClose="CancelRestoreDefaults">
+    <ChildContent>
+        <p style="margin:0;">Reset all settings to their default values? Your vault is not affected.</p>
+    </ChildContent>
+    <Footer>
+        <FluentButton OnClick="CancelRestoreDefaults">Cancel</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      IconStart="@(new Icons.Regular.Size20.ArrowReset())"
+                      OnClick="RestoreDefaults">Restore</FluentButton>
+    </Footer>
+</Modal>
+
 @code {
-    private bool _editing;
+    private bool _showEdit;
     private string _editSection = string.Empty;
     private string _editKey = string.Empty;
     private string? _editValue;
+
+    private bool _showRestoreDefaults;
 
     protected override void OnInitialized()
     {
@@ -52,25 +80,45 @@
         }
     }
 
+    private static string SectionTitle(string section) =>
+        section.Length == 0 ? section : char.ToUpper(section[0]) + section[1..];
+
+    private static string SectionSubtitle(string section) => section switch
+    {
+        "local" => "Storage paths and file locations",
+        "remote" => "Sync server connection settings",
+        _ => "Configuration section",
+    };
+
     private void BeginEdit(string section, string key, string value)
     {
-        _editing = true;
         _editSection = section;
         _editKey = key;
         _editValue = value;
+        _showEdit = true;
     }
 
-    private void CancelEdit() => _editing = false;
+    private void CancelEdit()
+    {
+        _showEdit = false;
+        _editValue = null;
+    }
 
-    private void SaveEdit()
+    private async Task SaveEdit()
     {
         Session.Settings.ModifyProperty(_editSection, _editKey, _editValue ?? string.Empty);
-        _editing = false;
+        _showEdit = false;
+        await Toast.ShowSuccessToastAsync("Saved", $"'{_editKey}' updated");
     }
 
-    private void RestoreDefaults()
+    private void ConfirmRestoreDefaults() => _showRestoreDefaults = true;
+
+    private void CancelRestoreDefaults() => _showRestoreDefaults = false;
+
+    private async Task RestoreDefaults()
     {
         Session.Settings.RestoreDefaults();
-        _editing = false;
+        _showRestoreDefaults = false;
+        await Toast.ShowSuccessToastAsync("Restored", "Default settings restored");
     }
 }

@@ -1,41 +1,65 @@
 @page "/init"
+@layout AuthLayout
 @inject DoopassSession Session
 @inject NavigationManager Nav
 
 <PageTitle>Doopass — Init store</PageTitle>
 
-<div class="card">
-    <h2>Init store</h2>
-    <p class="muted">Create a new encrypted store. Choose a strong master password.</p>
+<h1 class="auth-title">Create your vault</h1>
+<p class="auth-sub">Pick a strong master password. It encrypts everything and cannot be recovered.</p>
 
-    <div class="form-grid">
-        <FluentTextInput @bind-Value="_password"
-                         Type="TextInputType.Password"
-                         Placeholder="Password for the store" />
+<div class="auth-form" @onkeydown="HandleKeyDown">
+    <FluentTextInput @bind-Value="_password"
+                     Type="TextInputType.Password"
+                     Placeholder="Master password" />
+    <FluentTextInput @bind-Value="_confirm"
+                     Type="TextInputType.Password"
+                     Placeholder="Repeat password" />
 
-        @if (!string.IsNullOrEmpty(_error))
-        {
-            <div class="error">@_error</div>
-        }
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="error">@_error</div>
+    }
 
-        <div class="toolbar">
-            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SignUp">Sign up</FluentButton>
-            <FluentButton OnClick="@(() => Nav.NavigateTo("/"))">To Main Menu</FluentButton>
-        </div>
+    <div class="auth-actions">
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      Class="grow"
+                      OnClick="SignUp">Create vault</FluentButton>
+        <FluentButton OnClick="@(() => Nav.NavigateTo("/"))">Back</FluentButton>
     </div>
 </div>
 
+<p class="auth-foot">Stored locally in ~/doopass/appdata</p>
+
 @code {
     private string? _password;
+    private string? _confirm;
     private string? _error;
+
+    private void HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            SignUp();
+        }
+    }
 
     private void SignUp()
     {
+        _error = null;
+
+        if (!string.Equals(_password, _confirm, StringComparison.Ordinal))
+        {
+            _error = "Passwords do not match.";
+            return;
+        }
+
         var (success, message) = Session.Init(_password ?? string.Empty);
 
         if (success)
         {
             _password = null;
+            _confirm = null;
             Nav.NavigateTo("/store");
             return;
         }

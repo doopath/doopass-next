@@ -1,0 +1,35 @@
+@inject IThemeService Theme
+
+<FluentButton Appearance="ButtonAppearance.Subtle"
+              Class="icon-btn"
+              IconStart="@ThemeIcon"
+              Title="Toggle light / dark theme"
+              OnClick="Toggle" />
+
+@code {
+    private bool _isDark;
+
+    private Icon ThemeIcon => _isDark
+        ? new Icons.Regular.Size20.WeatherSunny()
+        : new Icons.Regular.Size20.WeatherMoon();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        // Apply the indigo brand colour while keeping the current (possibly persisted) mode.
+        await Theme.SetThemeAsync("#4F46E5", isExact: false);
+        _isDark = await Theme.IsDarkModeAsync();
+        StateHasChanged();
+    }
+
+    private async Task Toggle()
+    {
+        await Theme.SwitchThemeAsync();
+        _isDark = await Theme.IsDarkModeAsync();
+        StateHasChanged();
+    }
+}

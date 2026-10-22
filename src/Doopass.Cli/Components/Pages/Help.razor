@@ -2,27 +2,45 @@
 
 <PageTitle>Doopass — Help</PageTitle>
 
-<div class="card">
-    <h2>Help</h2>
+<div class="page-head">
+    <div>
+        <h1 class="page-title">Help</h1>
+        <p class="page-sub">Shortcuts, security notes and about this project.</p>
+    </div>
+</div>
 
-    <h3>Hotkeys (TUI)</h3>
-    <div class="help-line"><span class="hotkey">Q, ESCAPE</span><span>quit the app</span></div>
-    <div class="help-line"><span class="hotkey">H, F1</span><span>open / close help screen</span></div>
-    <div class="help-line"><span class="hotkey">SPACE</span><span>leave help screen</span></div>
-    <div class="help-line"><span class="hotkey">DownArrow, TAB, J</span><span>focus next element</span></div>
-    <div class="help-line"><span class="hotkey">UpArrow, Shift+TAB, K</span><span>focus previous element</span></div>
+<div class="help-grid">
+    <div class="card">
+        <h2 class="card-title">Terminal shortcuts</h2>
+        <p class="card-sub">Keys available in the TUI application.</p>
 
-    <p class="muted">Register of the key pressed doesn't matter, but be sure you are using an English keyboard layout.</p>
+        <div class="help-row"><span>Quit the app</span><span><span class="kbd">Q</span> <span class="kbd">Esc</span></span></div>
+        <div class="help-row"><span>Open / close help</span><span><span class="kbd">H</span> <span class="kbd">F1</span></span></div>
+        <div class="help-row"><span>Leave help screen</span><span><span class="kbd">Space</span></span></div>
+        <div class="help-row"><span>Focus next element</span><span><span class="kbd">Tab</span> <span class="kbd">J</span> <span class="kbd">↓</span></span></div>
+        <div class="help-row"><span>Focus previous element</span><span><span class="kbd">Shift</span>+<span class="kbd">Tab</span> <span class="kbd">K</span> <span class="kbd">↑</span></span></div>
+    </div>
 
-    <h3>About Doopass</h3>
-    <p>This software is ABSOLUTELY FREE and open-source. See the LICENSE file for more information.</p>
-    <p>Github: <a href="https://github.com/doopath/PasswordManager" target="_blank">https://github.com/doopath/PasswordManager</a></p>
-    <p>Contact me: <a href="mailto:doopath@gmail.com">doopath@gmail.com</a></p>
-    <p>Contact me: <a href="https://t.me/doopath" target="_blank">https://t.me/doopath</a></p>
+    <div class="card">
+        <h2 class="card-title">Security</h2>
+        <p class="card-sub">How your data is protected.</p>
 
-    <h3>Store format</h3>
-    <p class="muted">
-        Your data is encrypted with AES (Fernet) using a key derived from your master password
-        with PBKDF2-HMAC-SHA256. The store is fully compatible with the original Doopass.
-    </p>
+        <p style="margin-top:0;">
+            Your vault is encrypted with AES (Fernet) using a key derived from your master
+            password with PBKDF2-HMAC-SHA256 (100,000 iterations).
+        </p>
+        <p class="muted">
+            The store format is fully compatible with the original Doopass, so existing
+            <span class="mono">store.enc</span> files open without migration.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">About Doopass</h2>
+        <p class="card-sub">Free and open-source.</p>
+
+        <div class="help-row"><span>GitHub</span><a href="https://github.com/doopath/PasswordManager" target="_blank" rel="noreferrer">doopath/PasswordManager</a></div>
+        <div class="help-row"><span>Email</span><a href="mailto:doopath@gmail.com">doopath@gmail.com</a></div>
+        <div class="help-row"><span>Telegram</span><a href="https://t.me/doopath" target="_blank" rel="noreferrer">@("@doopath")</a></div>
+    </div>
 </div>

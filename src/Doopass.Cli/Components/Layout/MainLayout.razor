@@ -1,17 +1,99 @@
 @inherits LayoutComponentBase
+@inject DoopassSession Session
+@inject NavigationManager Nav
 
-<div class="app-shell">
-    <header class="topbar">
-        <span class="brand">Doopass</span>
-        <nav class="nav">
-            <NavLink href="/store" Match="NavLinkMatch.Prefix">Store</NavLink>
-            <NavLink href="/backups">Backups</NavLink>
-            <NavLink href="/settings">Settings</NavLink>
-            <NavLink href="/help">Help</NavLink>
-        </nav>
-    </header>
+<FluentToastProvider />
 
-    <main class="content">
-        @Body
-    </main>
+<div class="app-shell @(_sidebarOpen ? "sidebar-open" : string.Empty)">
+    <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
+
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-mark">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="10" width="16" height="11" rx="2.5" />
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                </svg>
+            </div>
+            <div class="brand-text">
+                <span class="brand-title">Doopass</span>
+                <span class="brand-sub">Password Manager</span>
+            </div>
+        </div>
+
+        <div class="side-nav">
+            <FluentNav Width="100%">
+                <FluentNavItem Href="/store"
+                               Match="NavLinkMatch.Prefix"
+                               IconRest="@(new Icons.Regular.Size20.Key())"
+                               IconActive="@(new Icons.Regular.Size20.Key())">Store</FluentNavItem>
+                <FluentNavItem Href="/backups"
+                               IconRest="@(new Icons.Regular.Size20.History())"
+                               IconActive="@(new Icons.Regular.Size20.History())">Backups</FluentNavItem>
+                <FluentNavItem Href="/settings"
+                               IconRest="@(new Icons.Regular.Size20.Settings())"
+                               IconActive="@(new Icons.Regular.Size20.Settings())">Settings</FluentNavItem>
+                <FluentNavItem Href="/help"
+                               IconRest="@(new Icons.Regular.Size20.QuestionCircle())"
+                               IconActive="@(new Icons.Regular.Size20.QuestionCircle())">Help</FluentNavItem>
+            </FluentNav>
+        </div>
+
+        <div class="sidebar-footer">
+            <FluentButton Appearance="ButtonAppearance.Subtle"
+                          Class="logout-btn"
+                          IconStart="@(new Icons.Regular.Size20.ArrowExit())"
+                          OnClick="Logout">Log out</FluentButton>
+            <span class="version">Doopass v@(Doopass.Core.Constants.Version)</span>
+        </div>
+    </aside>
+
+    <div class="main-col">
+        <header class="topbar">
+            <button type="button" class="icon-btn hamburger" @onclick="ToggleSidebar" aria-label="Open navigation">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+            </button>
+
+            <span class="crumb">@Section</span>
+            <span class="chip desktop-only">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="5" y="11" width="14" height="9" rx="2" />
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+                Local &amp; encrypted
+            </span>
+
+            <span class="topbar-spacer"></span>
+
+            <ThemeToggle />
+        </header>
+
+        <main class="content">
+            @Body
+        </main>
+    </div>
 </div>
+
+@code {
+    private bool _sidebarOpen;
+
+    private string Section => Nav.ToBaseRelativePath(Nav.Uri) switch
+    {
+        var path when path.StartsWith("backups", StringComparison.OrdinalIgnoreCase) => "Backups",
+        var path when path.StartsWith("settings", StringComparison.OrdinalIgnoreCase) => "Settings",
+        var path when path.StartsWith("help", StringComparison.OrdinalIgnoreCase) => "Help",
+        _ => "Store",
+    };
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+
+    private void CloseSidebar() => _sidebarOpen = false;
+
+    private void Logout()
+    {
+        Session.Logout();
+        Nav.NavigateTo("/");
+    }
+}

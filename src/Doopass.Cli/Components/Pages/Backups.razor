@@ -1,32 +1,106 @@
 @page "/backups"
 @inject DoopassSession Session
 @inject NavigationManager Nav
-@inject IJSRuntime JS
+@inject INotificationService Toast
 
 <PageTitle>Doopass — Backups</PageTitle>
 
-<div class="toolbar">
-    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateBackup">Create backup</FluentButton>
+<div class="page-head">
+    <div>
+        <h1 class="page-title">Backups</h1>
+        <p class="page-sub">Create, restore or delete dated snapshots of your vault.</p>
+    </div>
+    <FluentButton Appearance="ButtonAppearance.Primary"
+                  IconStart="@(new Icons.Regular.Size20.Add())"
+                  OnClick="CreateBackup">Create backup</FluentButton>
 </div>
 
-<div class="card">
-    @if (_names.Count == 0)
-    {
-        <p class="muted">No backups</p>
-    }
+@if (_names.Count > 0)
+{
+    <div class="card-grid">
+        @foreach (var name in _names)
+        {
+            <div class="item-card">
+                <div class="item-head">
+                    <div class="item-icon">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M12 7v5l3 2" />
+                        </svg>
+                    </div>
+                    <div style="min-width:0;">
+                        <div class="item-title" title="@name">@name</div>
+                        <div class="muted" style="font-size:.78rem;">Encrypted snapshot</div>
+                    </div>
+                </div>
 
-    @foreach (var name in _names)
-    {
-        <div class="row">
-            <span class="key mono">@name</span>
-            <FluentButton OnClick="@(() => RestoreAsync(name))">Restore</FluentButton>
-            <FluentButton OnClick="@(() => DeleteAsync(name))">Delete</FluentButton>
+                <div class="item-actions">
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
+                                  IconStart="@(new Icons.Regular.Size20.ArrowReset())"
+                                  OnClick="@(() => ConfirmRestore(name))">Restore</FluentButton>
+                    <span class="push"></span>
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
+                                  Class="icon-btn"
+                                  IconStart="@(new Icons.Regular.Size20.Delete())"
+                                  Title="Delete"
+                                  OnClick="@(() => ConfirmDelete(name))" />
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="empty">
+        <div class="empty-icon">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+            </svg>
         </div>
-    }
-</div>
+        <div class="empty-title">No backups yet</div>
+        <div>Create a snapshot before making big changes.</div>
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      IconStart="@(new Icons.Regular.Size20.Add())"
+                      OnClick="CreateBackup">Create backup</FluentButton>
+    </div>
+}
+
+<Modal Visible="_showRestore" Title="Restore backup?" OnClose="CancelRestore">
+    <ChildContent>
+        <p style="margin:0;">
+            Replace your current vault with <strong>@_restoreName</strong>?
+            A safety backup of the current vault is created first.
+        </p>
+    </ChildContent>
+    <Footer>
+        <FluentButton OnClick="CancelRestore">Cancel</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      IconStart="@(new Icons.Regular.Size20.ArrowReset())"
+                      OnClick="RestoreConfirmed">Restore</FluentButton>
+    </Footer>
+</Modal>
+
+<Modal Visible="_showDelete" Title="Delete backup?" OnClose="CancelDelete">
+    <ChildContent>
+        <p style="margin:0;">Delete <strong>@_deleteName</strong>? This cannot be undone.</p>
+    </ChildContent>
+    <Footer>
+        <FluentButton OnClick="CancelDelete">Cancel</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      IconStart="@(new Icons.Regular.Size20.Delete())"
+                      OnClick="DeleteConfirmed">Delete</FluentButton>
+    </Footer>
+</Modal>
 
 @code {
     private List<string> _names = new();
+
+    private bool _showRestore;
+    private string? _restoreName;
+
+    private bool _showDelete;
+    private string? _deleteName;
 
     private string Extension => Session.Settings.BackupExtension;
 
@@ -43,36 +117,67 @@
 
     private void Refresh() => _names = Session.Backups.GetBackupNames().ToList();
 
-    private void CreateBackup()
+    private async Task CreateBackup()
     {
         Session.Backups.MakeBackup();
         Refresh();
+        await Toast.ShowSuccessToastAsync("Backup created", "A new snapshot of your vault is ready");
     }
 
-    private async Task RestoreAsync(string name)
+    private void ConfirmRestore(string name)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Restore backup '{name}'?");
+        _restoreName = name;
+        _showRestore = true;
+    }
 
-        if (!confirmed)
+    private void CancelRestore()
+    {
+        _showRestore = false;
+        _restoreName = null;
+    }
+
+    private async Task RestoreConfirmed()
+    {
+        if (_restoreName is null)
         {
             return;
         }
 
+        var name = _restoreName;
         Session.Backups.SwapStoreWithBackup(name + Extension);
         Session.Reload();
+        _showRestore = false;
+        _restoreName = null;
         Refresh();
+
+        await Toast.ShowSuccessToastAsync("Restored", $"Vault restored from '{name}'");
     }
 
-    private async Task DeleteAsync(string name)
+    private void ConfirmDelete(string name)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete backup '{name}'?");
+        _deleteName = name;
+        _showDelete = true;
+    }
 
-        if (!confirmed)
+    private void CancelDelete()
+    {
+        _showDelete = false;
+        _deleteName = null;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        if (_deleteName is null)
         {
             return;
         }
 
+        var name = _deleteName;
         Session.Backups.DeleteBackup(name + Extension);
+        _showDelete = false;
+        _deleteName = null;
         Refresh();
+
+        await Toast.ShowSuccessToastAsync("Backup deleted", $"'{name}' removed");
     }
 }

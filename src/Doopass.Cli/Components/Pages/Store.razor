@@ -2,68 +2,166 @@
 @inject DoopassSession Session
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject INotificationService Toast
 
 <PageTitle>Doopass — Store</PageTitle>
 
-<div class="toolbar">
-    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="BeginAdd">Add pair</FluentButton>
-    <FluentTextInput @bind-Value="_filter"
-                     Type="TextInputType.Search"
-                     Placeholder="Search" />
-    <FluentButton OnClick="Logout">Log out</FluentButton>
+<div class="page-head">
+    <div>
+        <h1 class="page-title">Your vault</h1>
+        <p class="page-sub">@CountText</p>
+    </div>
+    <FluentButton Appearance="ButtonAppearance.Primary"
+                  IconStart="@(new Icons.Regular.Size20.Add())"
+                  OnClick="BeginAdd">Add pair</FluentButton>
 </div>
 
-@if (_editing)
+<div class="toolbar">
+    <div class="search">
+        <FluentTextInput @bind-Value="_filter"
+                         Type="TextInputType.Search"
+                         Placeholder="Search keys..." />
+    </div>
+</div>
+
+@if (FilteredKeys.Any())
 {
-    <div class="card">
-        <div class="form-grid">
-            <FluentTextInput @bind-Value="_formKey" Placeholder="Key" />
-            <FluentTextInput @bind-Value="_formValue" Placeholder="Value" />
+    <div class="card-grid">
+        @foreach (var key in FilteredKeys)
+        {
+            <div class="item-card">
+                <div class="item-head">
+                    <div class="item-icon">@Initial(key)</div>
+                    <div class="item-title" title="@key">@key</div>
+                </div>
 
-            @if (!string.IsNullOrEmpty(_formError))
-            {
-                <div class="error">@_formError</div>
-            }
+                <div class="item-value">
+                    @if (IsRevealed(key))
+                    {
+                        <span>@Session.GetValue(key)</span>
+                    }
+                    else
+                    {
+                        <span class="secret">••••••••••</span>
+                    }
+                </div>
 
-            <div class="toolbar">
-                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveForm">
-                    @(_editingKey is null ? "Add pair" : "Update")
-                </FluentButton>
-                <FluentButton OnClick="CancelForm">Back</FluentButton>
+                <div class="item-actions">
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
+                                  Class="icon-btn"
+                                  IconStart="@RevealIcon(key)"
+                                  Title="Show / hide value"
+                                  OnClick="@(() => ToggleReveal(key))" />
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
+                                  Class="icon-btn"
+                                  IconStart="@(new Icons.Regular.Size20.Copy())"
+                                  Title="Copy value"
+                                  OnClick="@(() => CopyAsync(key))" />
+                    <span class="push"></span>
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
+                                  Class="icon-btn"
+                                  IconStart="@(new Icons.Regular.Size20.Edit())"
+                                  Title="Edit"
+                                  OnClick="@(() => BeginEdit(key))" />
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
+                                  Class="icon-btn"
+                                  IconStart="@(new Icons.Regular.Size20.Delete())"
+                                  Title="Delete"
+                                  OnClick="@(() => ConfirmDelete(key))" />
+                </div>
             </div>
+        }
+    </div>
+}
+else
+{
+    <div class="empty">
+        <div class="empty-icon">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="8" cy="15" r="4" />
+                <path d="M11 12l8-8 3 3M16 6l2 2" />
+            </svg>
         </div>
+        <div class="empty-title">@(string.IsNullOrEmpty(_filter) ? "No items yet" : "Nothing found")</div>
+        <div>@(string.IsNullOrEmpty(_filter) ? "Add your first key / value pair to get started." : "Try a different search term.")</div>
+        @if (string.IsNullOrEmpty(_filter))
+        {
+            <FluentButton Appearance="ButtonAppearance.Primary"
+                          IconStart="@(new Icons.Regular.Size20.Add())"
+                          OnClick="BeginAdd">Add pair</FluentButton>
+        }
     </div>
 }
 
-<div class="card">
-    @if (!FilteredKeys.Any())
-    {
-        <p class="muted">No store items</p>
-    }
-
-    @foreach (var key in FilteredKeys)
-    {
-        <div class="row">
-            <span class="key">@key</span>
-            <FluentButton OnClick="@(() => CopyAsync(key))">Copy</FluentButton>
-            <FluentButton OnClick="@(() => Edit(key))">Update</FluentButton>
-            <FluentButton OnClick="@(() => DeleteAsync(key))">Delete</FluentButton>
+<Modal Visible="_showEditor"
+       Title="@(_editingKey is null ? "Add pair" : "Edit pair")"
+       OnClose="CloseEditor">
+    <ChildContent>
+        <div class="field">
+            <label class="field-label">Key</label>
+            <FluentTextInput @bind-Value="_formKey" Placeholder="e.g. github" />
         </div>
-    }
-</div>
+        <div class="field">
+            <label class="field-label">Value</label>
+            <FluentTextInput @bind-Value="_formValue" Placeholder="Secret value" />
+        </div>
+        @if (!string.IsNullOrEmpty(_formError))
+        {
+            <div class="error">@_formError</div>
+        }
+    </ChildContent>
+    <Footer>
+        <FluentButton OnClick="CloseEditor">Cancel</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      IconStart="@(new Icons.Regular.Size20.Checkmark())"
+                      OnClick="SaveForm">@(_editingKey is null ? "Add pair" : "Save")</FluentButton>
+    </Footer>
+</Modal>
+
+<Modal Visible="_showDelete" Title="Delete item?" OnClose="CancelDelete">
+    <ChildContent>
+        <p style="margin:0;">
+            Delete <strong>@_deleteKey</strong> from your vault? This cannot be undone.
+        </p>
+    </ChildContent>
+    <Footer>
+        <FluentButton OnClick="CancelDelete">Cancel</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary"
+                      IconStart="@(new Icons.Regular.Size20.Delete())"
+                      OnClick="DeleteConfirmed">Delete</FluentButton>
+    </Footer>
+</Modal>
 
 @code {
     private string? _filter;
-    private bool _editing;
+    private readonly HashSet<string> _revealed = new(StringComparer.Ordinal);
+
+    private bool _showEditor;
     private string? _editingKey;
     private string? _formKey;
     private string? _formValue;
     private string? _formError;
 
+    private bool _showDelete;
+    private string? _deleteKey;
+
     private IEnumerable<string> FilteredKeys =>
         Session.GetKeys()
             .Where(key => string.IsNullOrEmpty(_filter) || key.Contains(_filter, StringComparison.OrdinalIgnoreCase))
             .OrderBy(key => key, StringComparer.Ordinal);
+
+    private string CountText
+    {
+        get
+        {
+            var total = Session.GetKeys().Count;
+            var shown = FilteredKeys.Count();
+
+            return string.IsNullOrEmpty(_filter)
+                ? $"{total} item{(total == 1 ? string.Empty : "s")}"
+                : $"{shown} of {total} shown";
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -73,48 +171,74 @@
         }
     }
 
+    private static string Initial(string key) =>
+        string.IsNullOrEmpty(key) ? "?" : key[..1].ToUpperInvariant();
+
+    private bool IsRevealed(string key) => _revealed.Contains(key);
+
+    private void ToggleReveal(string key)
+    {
+        if (!_revealed.Add(key))
+        {
+            _revealed.Remove(key);
+        }
+    }
+
+    private Icon RevealIcon(string key) => IsRevealed(key)
+        ? new Icons.Regular.Size20.EyeOff()
+        : new Icons.Regular.Size20.Eye();
+
     private void BeginAdd()
     {
-        _editing = true;
         _editingKey = null;
         _formKey = string.Empty;
         _formValue = string.Empty;
         _formError = null;
+        _showEditor = true;
     }
 
-    private void Edit(string key)
+    private void BeginEdit(string key)
     {
-        _editing = true;
         _editingKey = key;
         _formKey = key;
         _formValue = Session.GetValue(key);
         _formError = null;
+        _showEditor = true;
     }
 
-    private void CancelForm()
+    private void CloseEditor()
     {
-        _editing = false;
+        _showEditor = false;
         _formError = null;
     }
 
-    private void SaveForm()
+    private async Task SaveForm()
     {
         _formError = null;
-        var key = _formKey ?? string.Empty;
+        var key = (_formKey ?? string.Empty).Trim();
         var value = _formValue ?? string.Empty;
+
+        if (key.Length == 0)
+        {
+            _formError = "Key is required.";
+            return;
+        }
 
         try
         {
             if (_editingKey is null)
             {
                 Session.Add(key, value);
+                await Toast.ShowSuccessToastAsync("Added", $"'{key}' added to your vault");
             }
             else
             {
                 Session.Update(_editingKey, key, value);
+                _revealed.Remove(_editingKey);
+                await Toast.ShowSuccessToastAsync("Saved", $"'{key}' updated");
             }
 
-            _editing = false;
+            _showEditor = false;
         }
         catch (Exception ex) when (ex is Doopass.Core.PropertyAlreadyExistError or Doopass.Core.PropertyDoesNotExistError)
         {
@@ -125,24 +249,34 @@
     private async Task CopyAsync(string key)
     {
         await JS.InvokeVoidAsync("navigator.clipboard.writeText", Session.GetValue(key));
+        await Toast.ShowSuccessToastAsync("Copied", $"'{key}' copied to clipboard");
     }
 
-    private async Task DeleteAsync(string key)
+    private void ConfirmDelete(string key)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete '{key}'?");
+        _deleteKey = key;
+        _showDelete = true;
+    }
 
-        if (!confirmed)
+    private void CancelDelete()
+    {
+        _showDelete = false;
+        _deleteKey = null;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        if (_deleteKey is null)
         {
             return;
         }
 
+        var key = _deleteKey;
         Session.Remove(key);
-        await InvokeAsync(StateHasChanged);
-    }
+        _revealed.Remove(key);
+        _showDelete = false;
+        _deleteKey = null;
 
-    private void Logout()
-    {
-        Session.Logout();
-        Nav.NavigateTo("/");
+        await Toast.ShowSuccessToastAsync("Deleted", $"'{key}' removed");
     }
 }
