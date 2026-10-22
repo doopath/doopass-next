@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Doopass.Tui</RootNamespace>
+    <AssemblyName>Doopass.Tui</AssemblyName>
+    <Version>3.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Terminal.Gui" Version="2.4.17" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Doopass.Core\Doopass.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,76 @@
+@page "/settings"
+@inject DoopassSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Doopass — Settings</PageTitle>
+
+<div class="toolbar">
+    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="RestoreDefaults">Restore defaults</FluentButton>
+</div>
+
+@if (_editing)
+{
+    <div class="card">
+        <div class="form-grid">
+            <div><strong>@_editSection · @_editKey</strong></div>
+            <FluentTextInput @bind-Value="_editValue" Placeholder="Value" />
+            <div class="toolbar">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveEdit">Update</FluentButton>
+                <FluentButton OnClick="CancelEdit">Back</FluentButton>
+            </div>
+        </div>
+    </div>
+}
+
+@foreach (var section in Session.Settings.Sections)
+{
+    <h3>@(char.ToUpper(section[0]) + section[1..])</h3>
+
+    <div class="card">
+        @foreach (var pair in Session.Settings.GetSection(section))
+        {
+            <div class="row">
+                <span class="key">@pair.Key</span>
+                <span class="mono muted">@pair.Value</span>
+                <FluentButton OnClick="@(() => BeginEdit(section, pair.Key, pair.Value))">Change</FluentButton>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool _editing;
+    private string _editSection = string.Empty;
+    private string _editKey = string.Empty;
+    private string? _editValue;
+
+    protected override void OnInitialized()
+    {
+        if (!Session.IsUnlocked)
+        {
+            Nav.NavigateTo("/");
+        }
+    }
+
+    private void BeginEdit(string section, string key, string value)
+    {
+        _editing = true;
+        _editSection = section;
+        _editKey = key;
+        _editValue = value;
+    }
+
+    private void CancelEdit() => _editing = false;
+
+    private void SaveEdit()
+    {
+        Session.Settings.ModifyProperty(_editSection, _editKey, _editValue ?? string.Empty);
+        _editing = false;
+    }
+
+    private void RestoreDefaults()
+    {
+        Session.Settings.RestoreDefaults();
+        _editing = false;
+    }
+}

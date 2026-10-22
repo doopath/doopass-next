@@ -1,0 +1,45 @@
+@page "/init"
+@inject DoopassSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Doopass — Init store</PageTitle>
+
+<div class="card">
+    <h2>Init store</h2>
+    <p class="muted">Create a new encrypted store. Choose a strong master password.</p>
+
+    <div class="form-grid">
+        <FluentTextInput @bind-Value="_password"
+                         Type="TextInputType.Password"
+                         Placeholder="Password for the store" />
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="error">@_error</div>
+        }
+
+        <div class="toolbar">
+            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SignUp">Sign up</FluentButton>
+            <FluentButton OnClick="@(() => Nav.NavigateTo("/"))">To Main Menu</FluentButton>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _password;
+    private string? _error;
+
+    private void SignUp()
+    {
+        var (success, message) = Session.Init(_password ?? string.Empty);
+
+        if (success)
+        {
+            _password = null;
+            Nav.NavigateTo("/store");
+            return;
+        }
+
+        _error = message;
+    }
+}

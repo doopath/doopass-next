@@ -1,0 +1,78 @@
+@page "/backups"
+@inject DoopassSession Session
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Doopass — Backups</PageTitle>
+
+<div class="toolbar">
+    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateBackup">Create backup</FluentButton>
+</div>
+
+<div class="card">
+    @if (_names.Count == 0)
+    {
+        <p class="muted">No backups</p>
+    }
+
+    @foreach (var name in _names)
+    {
+        <div class="row">
+            <span class="key mono">@name</span>
+            <FluentButton OnClick="@(() => RestoreAsync(name))">Restore</FluentButton>
+            <FluentButton OnClick="@(() => DeleteAsync(name))">Delete</FluentButton>
+        </div>
+    }
+</div>
+
+@code {
+    private List<string> _names = new();
+
+    private string Extension => Session.Settings.BackupExtension;
+
+    protected override void OnInitialized()
+    {
+        if (!Session.IsUnlocked)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        Refresh();
+    }
+
+    private void Refresh() => _names = Session.Backups.GetBackupNames().ToList();
+
+    private void CreateBackup()
+    {
+        Session.Backups.MakeBackup();
+        Refresh();
+    }
+
+    private async Task RestoreAsync(string name)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Restore backup '{name}'?");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        Session.Backups.SwapStoreWithBackup(name + Extension);
+        Session.Reload();
+        Refresh();
+    }
+
+    private async Task DeleteAsync(string name)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete backup '{name}'?");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        Session.Backups.DeleteBackup(name + Extension);
+        Refresh();
+    }
+}

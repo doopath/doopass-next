@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Doopass.Cli/Doopass.Cli.csproj" />
     <Project Path="src/Doopass.Core/Doopass.Core.csproj" />
+    <Project Path="src/Doopass.Tui/Doopass.Tui.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Doopass.Core.Tests/Doopass.Core.Tests.csproj" />

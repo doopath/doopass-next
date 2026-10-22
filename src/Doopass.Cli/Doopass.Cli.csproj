@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Doopass.Cli</RootNamespace>
+    <AssemblyName>Doopass</AssemblyName>
+    <Version>3.0.0</Version>
+    <UseAppHost>true</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.1" />
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Doopass.Core\Doopass.Core.csproj" />
+    <ProjectReference Include="..\Doopass.Tui\Doopass.Tui.csproj" />
+  </ItemGroup>
+
+</Project>

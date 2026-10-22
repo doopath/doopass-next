@@ -1,0 +1,28 @@
+@page "/help"
+
+<PageTitle>Doopass — Help</PageTitle>
+
+<div class="card">
+    <h2>Help</h2>
+
+    <h3>Hotkeys (TUI)</h3>
+    <div class="help-line"><span class="hotkey">Q, ESCAPE</span><span>quit the app</span></div>
+    <div class="help-line"><span class="hotkey">H, F1</span><span>open / close help screen</span></div>
+    <div class="help-line"><span class="hotkey">SPACE</span><span>leave help screen</span></div>
+    <div class="help-line"><span class="hotkey">DownArrow, TAB, J</span><span>focus next element</span></div>
+    <div class="help-line"><span class="hotkey">UpArrow, Shift+TAB, K</span><span>focus previous element</span></div>
+
+    <p class="muted">Register of the key pressed doesn't matter, but be sure you are using an English keyboard layout.</p>
+
+    <h3>About Doopass</h3>
+    <p>This software is ABSOLUTELY FREE and open-source. See the LICENSE file for more information.</p>
+    <p>Github: <a href="https://github.com/doopath/PasswordManager" target="_blank">https://github.com/doopath/PasswordManager</a></p>
+    <p>Contact me: <a href="mailto:doopath@gmail.com">doopath@gmail.com</a></p>
+    <p>Contact me: <a href="https://t.me/doopath" target="_blank">https://t.me/doopath</a></p>
+
+    <h3>Store format</h3>
+    <p class="muted">
+        Your data is encrypted with AES (Fernet) using a key derived from your master password
+        with PBKDF2-HMAC-SHA256. The store is fully compatible with the original Doopass.
+    </p>
+</div>

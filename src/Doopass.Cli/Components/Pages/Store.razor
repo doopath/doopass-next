@@ -1,0 +1,148 @@
+@page "/store"
+@inject DoopassSession Session
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Doopass — Store</PageTitle>
+
+<div class="toolbar">
+    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="BeginAdd">Add pair</FluentButton>
+    <FluentTextInput @bind-Value="_filter"
+                     Type="TextInputType.Search"
+                     Placeholder="Search" />
+    <FluentButton OnClick="Logout">Log out</FluentButton>
+</div>
+
+@if (_editing)
+{
+    <div class="card">
+        <div class="form-grid">
+            <FluentTextInput @bind-Value="_formKey" Placeholder="Key" />
+            <FluentTextInput @bind-Value="_formValue" Placeholder="Value" />
+
+            @if (!string.IsNullOrEmpty(_formError))
+            {
+                <div class="error">@_formError</div>
+            }
+
+            <div class="toolbar">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveForm">
+                    @(_editingKey is null ? "Add pair" : "Update")
+                </FluentButton>
+                <FluentButton OnClick="CancelForm">Back</FluentButton>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card">
+    @if (!FilteredKeys.Any())
+    {
+        <p class="muted">No store items</p>
+    }
+
+    @foreach (var key in FilteredKeys)
+    {
+        <div class="row">
+            <span class="key">@key</span>
+            <FluentButton OnClick="@(() => CopyAsync(key))">Copy</FluentButton>
+            <FluentButton OnClick="@(() => Edit(key))">Update</FluentButton>
+            <FluentButton OnClick="@(() => DeleteAsync(key))">Delete</FluentButton>
+        </div>
+    }
+</div>
+
+@code {
+    private string? _filter;
+    private bool _editing;
+    private string? _editingKey;
+    private string? _formKey;
+    private string? _formValue;
+    private string? _formError;
+
+    private IEnumerable<string> FilteredKeys =>
+        Session.GetKeys()
+            .Where(key => string.IsNullOrEmpty(_filter) || key.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(key => key, StringComparer.Ordinal);
+
+    protected override void OnInitialized()
+    {
+        if (!Session.IsUnlocked)
+        {
+            Nav.NavigateTo("/");
+        }
+    }
+
+    private void BeginAdd()
+    {
+        _editing = true;
+        _editingKey = null;
+        _formKey = string.Empty;
+        _formValue = string.Empty;
+        _formError = null;
+    }
+
+    private void Edit(string key)
+    {
+        _editing = true;
+        _editingKey = key;
+        _formKey = key;
+        _formValue = Session.GetValue(key);
+        _formError = null;
+    }
+
+    private void CancelForm()
+    {
+        _editing = false;
+        _formError = null;
+    }
+
+    private void SaveForm()
+    {
+        _formError = null;
+        var key = _formKey ?? string.Empty;
+        var value = _formValue ?? string.Empty;
+
+        try
+        {
+            if (_editingKey is null)
+            {
+                Session.Add(key, value);
+            }
+            else
+            {
+                Session.Update(_editingKey, key, value);
+            }
+
+            _editing = false;
+        }
+        catch (Exception ex) when (ex is Doopass.Core.PropertyAlreadyExistError or Doopass.Core.PropertyDoesNotExistError)
+        {
+            _formError = ex.Message;
+        }
+    }
+
+    private async Task CopyAsync(string key)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", Session.GetValue(key));
+    }
+
+    private async Task DeleteAsync(string key)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete '{key}'?");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        Session.Remove(key);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Logout()
+    {
+        Session.Logout();
+        Nav.NavigateTo("/");
+    }
+}

@@ -1,0 +1,17 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="topbar">
+        <span class="brand">Doopass</span>
+        <nav class="nav">
+            <NavLink href="/store" Match="NavLinkMatch.Prefix">Store</NavLink>
+            <NavLink href="/backups">Backups</NavLink>
+            <NavLink href="/settings">Settings</NavLink>
+            <NavLink href="/help">Help</NavLink>
+        </nav>
+    </header>
+
+    <main class="content">
+        @Body
+    </main>
+</div>
