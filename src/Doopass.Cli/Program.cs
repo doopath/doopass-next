@@ -38,6 +38,17 @@ static int Run(string[] args)
 
 static int RunWebServer(int port, bool openBrowser)
 {
+    // .NET 10 serves framework static assets (e.g. _framework/blazor.web.js) through the
+    // "development" static-web-assets handler when running from a non-published build.
+    // `dotnet run` enables Development via launchSettings.json; when the app is launched
+    // directly from the build output we default to Development so the browser UI works.
+    // Published builds have no runtime manifest and keep the configured environment.
+    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"))
+        && File.Exists(Path.Combine(AppContext.BaseDirectory, "Doopass.staticwebassets.runtime.json")))
+    {
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+    }
+
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
         Args = [],

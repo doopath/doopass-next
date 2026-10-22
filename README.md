@@ -46,6 +46,17 @@ dotnet run --project src/Doopass.Cli -- serve --port 7240
 The default port is `7240`; the browser opens automatically (use `--no-browser` to disable).
 Open <http://localhost:7240> and log in or initialize a store.
 
+> When running from source (non-published), the app uses the ASP.NET Core `Development`
+> environment so framework static assets (`_framework/blazor.web.js`) load correctly.
+> Published builds run in the configured environment.
+
+For a production build, publish first:
+
+```bash
+dotnet publish src/Doopass.Cli -c Release -o out
+./out/Doopass serve --port 7240
+```
+
 ## Data location
 
 By default the app uses `~/doopass/appdata` (the same location as the original Python
