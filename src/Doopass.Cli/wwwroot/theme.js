@@ -46,7 +46,7 @@
     // Apply as early as possible (avoids a flash of the wrong theme).
     apply(storedMode() || systemMode());
 
-    window.doapassTheme = {
+    window.doopassTheme = {
         toggle: function () {
             return set(current() === 'dark' ? 'light' : 'dark');
         },

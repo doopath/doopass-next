@@ -14,13 +14,27 @@
             return;
         }
 
-        _isDark = await JS.InvokeAsync<bool>("doopassTheme.isDark");
-        StateHasChanged();
+        try
+        {
+            _isDark = await JS.InvokeAsync<bool>("doopassTheme.isDark");
+            StateHasChanged();
+        }
+        catch (JSException)
+        {
+            // theme.js is not available; fall back to the default theme.
+        }
     }
 
     private async Task Toggle()
     {
-        var mode = await JS.InvokeAsync<string>("doopassTheme.toggle");
-        _isDark = mode == "dark";
+        try
+        {
+            var mode = await JS.InvokeAsync<string>("doopassTheme.toggle");
+            _isDark = mode == "dark";
+        }
+        catch (JSException)
+        {
+            // Ignore: theme switching is a progressive enhancement.
+        }
     }
 }
