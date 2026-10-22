@@ -9,9 +9,8 @@
 <p class="auth-sub">Unlock your encrypted vault to continue.</p>
 
 <div class="auth-form" @onkeydown="HandleKeyDown">
-    <FluentTextInput @bind-Value="_password"
-                     Type="TextInputType.Password"
-                     Placeholder="Master password" />
+    <input class="input" type="password" placeholder="Master password"
+           @bind="_password" @bind:event="oninput" autocomplete="current-password" />
 
     @if (!string.IsNullOrEmpty(_error))
     {
@@ -19,10 +18,8 @@
     }
 
     <div class="auth-actions">
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      Class="grow"
-                      OnClick="LogIn">Unlock vault</FluentButton>
-        <FluentButton OnClick="@(() => Nav.NavigateTo("/init"))">Init store</FluentButton>
+        <button type="button" class="btn btn-primary grow" @onclick="LogIn">Unlock vault</button>
+        <button type="button" class="btn btn-ghost" @onclick="@(() => Nav.NavigateTo("/init"))">Init store</button>
     </div>
 </div>
 

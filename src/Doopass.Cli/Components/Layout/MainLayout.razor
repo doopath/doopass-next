@@ -2,18 +2,13 @@
 @inject DoopassSession Session
 @inject NavigationManager Nav
 
-<FluentToastProvider />
-
 <div class="app-shell @(_sidebarOpen ? "sidebar-open" : string.Empty)">
     <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
 
     <aside class="sidebar">
         <div class="sidebar-brand">
             <div class="brand-mark">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="4" y="10" width="16" height="11" rx="2.5" />
-                    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-                </svg>
+                <Icon Name="lock" Size="20" />
             </div>
             <div class="brand-text">
                 <span class="brand-title">Doopass</span>
@@ -21,29 +16,26 @@
             </div>
         </div>
 
-        <div class="side-nav">
-            <FluentNav Width="100%">
-                <FluentNavItem Href="/store"
-                               Match="NavLinkMatch.Prefix"
-                               IconRest="@(new Icons.Regular.Size20.Key())"
-                               IconActive="@(new Icons.Regular.Size20.Key())">Store</FluentNavItem>
-                <FluentNavItem Href="/backups"
-                               IconRest="@(new Icons.Regular.Size20.History())"
-                               IconActive="@(new Icons.Regular.Size20.History())">Backups</FluentNavItem>
-                <FluentNavItem Href="/settings"
-                               IconRest="@(new Icons.Regular.Size20.Settings())"
-                               IconActive="@(new Icons.Regular.Size20.Settings())">Settings</FluentNavItem>
-                <FluentNavItem Href="/help"
-                               IconRest="@(new Icons.Regular.Size20.QuestionCircle())"
-                               IconActive="@(new Icons.Regular.Size20.QuestionCircle())">Help</FluentNavItem>
-            </FluentNav>
-        </div>
+        <nav class="nav">
+            <NavLink class="nav-link" href="/store" Match="NavLinkMatch.Prefix">
+                <Icon Name="key" Size="18" /><span>Store</span>
+            </NavLink>
+            <NavLink class="nav-link" href="/backups">
+                <Icon Name="history" Size="18" /><span>Backups</span>
+            </NavLink>
+            <NavLink class="nav-link" href="/settings">
+                <Icon Name="settings" Size="18" /><span>Settings</span>
+            </NavLink>
+            <NavLink class="nav-link" href="/help">
+                <Icon Name="help" Size="18" /><span>Help</span>
+            </NavLink>
+        </nav>
 
         <div class="sidebar-footer">
-            <FluentButton Appearance="ButtonAppearance.Subtle"
-                          Class="logout-btn"
-                          IconStart="@(new Icons.Regular.Size20.ArrowExit())"
-                          OnClick="Logout">Log out</FluentButton>
+            <button type="button" class="btn btn-ghost" @onclick="Logout">
+                <Icon Name="logout" Size="18" />
+                <span>Log out</span>
+            </button>
             <span class="version">Doopass v@(Doopass.Core.Constants.Version)</span>
         </div>
     </aside>
@@ -51,17 +43,12 @@
     <div class="main-col">
         <header class="topbar">
             <button type="button" class="icon-btn hamburger" @onclick="ToggleSidebar" aria-label="Open navigation">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <path d="M4 7h16M4 12h16M4 17h16" />
-                </svg>
+                <Icon Name="menu" Size="20" />
             </button>
 
             <span class="crumb">@Section</span>
             <span class="chip desktop-only">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="5" y="11" width="14" height="9" rx="2" />
-                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                </svg>
+                <Icon Name="lock" Size="13" />
                 Local &amp; encrypted
             </span>
 
@@ -71,10 +58,14 @@
         </header>
 
         <main class="content">
-            @Body
+            <div class="page">
+                @Body
+            </div>
         </main>
     </div>
 </div>
+
+<ToastHost />
 
 @code {
     private bool _sidebarOpen;

@@ -2,7 +2,7 @@
 @inject DoopassSession Session
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@inject INotificationService Toast
+@inject ToastService Toast
 
 <PageTitle>Doopass — Store</PageTitle>
 
@@ -11,16 +11,16 @@
         <h1 class="page-title">Your vault</h1>
         <p class="page-sub">@CountText</p>
     </div>
-    <FluentButton Appearance="ButtonAppearance.Primary"
-                  IconStart="@(new Icons.Regular.Size20.Add())"
-                  OnClick="BeginAdd">Add pair</FluentButton>
+    <button type="button" class="btn btn-primary" @onclick="BeginAdd">
+        <Icon Name="add" Size="18" />
+        <span>Add pair</span>
+    </button>
 </div>
 
 <div class="toolbar">
     <div class="search">
-        <FluentTextInput @bind-Value="_filter"
-                         Type="TextInputType.Search"
-                         Placeholder="Search keys..." />
+        <input class="input" type="search" placeholder="Search keys..."
+               @bind="_filter" @bind:event="oninput" />
     </div>
 </div>
 
@@ -38,7 +38,7 @@
                 <div class="item-value">
                     @if (IsRevealed(key))
                     {
-                        <span>@Session.GetValue(key)</span>
+                        <span class="plain">@Session.GetValue(key)</span>
                     }
                     else
                     {
@@ -47,27 +47,19 @@
                 </div>
 
                 <div class="item-actions">
-                    <FluentButton Appearance="ButtonAppearance.Subtle"
-                                  Class="icon-btn"
-                                  IconStart="@RevealIcon(key)"
-                                  Title="Show / hide value"
-                                  OnClick="@(() => ToggleReveal(key))" />
-                    <FluentButton Appearance="ButtonAppearance.Subtle"
-                                  Class="icon-btn"
-                                  IconStart="@(new Icons.Regular.Size20.Copy())"
-                                  Title="Copy value"
-                                  OnClick="@(() => CopyAsync(key))" />
+                    <button type="button" class="icon-btn" title="Show / hide value" @onclick="@(() => ToggleReveal(key))">
+                        <Icon Name="@(IsRevealed(key) ? "eye-off" : "eye")" Size="18" />
+                    </button>
+                    <button type="button" class="icon-btn" title="Copy value" @onclick="@(() => CopyAsync(key))">
+                        <Icon Name="copy" Size="18" />
+                    </button>
                     <span class="push"></span>
-                    <FluentButton Appearance="ButtonAppearance.Subtle"
-                                  Class="icon-btn"
-                                  IconStart="@(new Icons.Regular.Size20.Edit())"
-                                  Title="Edit"
-                                  OnClick="@(() => BeginEdit(key))" />
-                    <FluentButton Appearance="ButtonAppearance.Subtle"
-                                  Class="icon-btn"
-                                  IconStart="@(new Icons.Regular.Size20.Delete())"
-                                  Title="Delete"
-                                  OnClick="@(() => ConfirmDelete(key))" />
+                    <button type="button" class="icon-btn" title="Edit" @onclick="@(() => BeginEdit(key))">
+                        <Icon Name="edit" Size="18" />
+                    </button>
+                    <button type="button" class="icon-btn" title="Delete" @onclick="@(() => ConfirmDelete(key))">
+                        <Icon Name="delete" Size="18" />
+                    </button>
                 </div>
             </div>
         }
@@ -77,33 +69,31 @@ else
 {
     <div class="empty">
         <div class="empty-icon">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="8" cy="15" r="4" />
-                <path d="M11 12l8-8 3 3M16 6l2 2" />
-            </svg>
+            <Icon Name="key" Size="26" />
         </div>
         <div class="empty-title">@(string.IsNullOrEmpty(_filter) ? "No items yet" : "Nothing found")</div>
         <div>@(string.IsNullOrEmpty(_filter) ? "Add your first key / value pair to get started." : "Try a different search term.")</div>
         @if (string.IsNullOrEmpty(_filter))
         {
-            <FluentButton Appearance="ButtonAppearance.Primary"
-                          IconStart="@(new Icons.Regular.Size20.Add())"
-                          OnClick="BeginAdd">Add pair</FluentButton>
+            <button type="button" class="btn btn-primary" @onclick="BeginAdd">
+                <Icon Name="add" Size="18" />
+                <span>Add pair</span>
+            </button>
         }
     </div>
 }
 
-<Modal Visible="_showEditor"
-       Title="@(_editingKey is null ? "Add pair" : "Edit pair")"
-       OnClose="CloseEditor">
+<Modal Visible="_showEditor" Title="@(_editingKey is null ? "Add pair" : "Edit pair")" OnClose="CloseEditor">
     <ChildContent>
         <div class="field">
             <label class="field-label">Key</label>
-            <FluentTextInput @bind-Value="_formKey" Placeholder="e.g. github" />
+            <input class="input" type="text" placeholder="e.g. github"
+                   @bind="_formKey" @bind:event="oninput" />
         </div>
         <div class="field">
             <label class="field-label">Value</label>
-            <FluentTextInput @bind-Value="_formValue" Placeholder="Secret value" />
+            <input class="input" type="text" placeholder="Secret value"
+                   @bind="_formValue" @bind:event="oninput" />
         </div>
         @if (!string.IsNullOrEmpty(_formError))
         {
@@ -111,24 +101,24 @@ else
         }
     </ChildContent>
     <Footer>
-        <FluentButton OnClick="CloseEditor">Cancel</FluentButton>
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      IconStart="@(new Icons.Regular.Size20.Checkmark())"
-                      OnClick="SaveForm">@(_editingKey is null ? "Add pair" : "Save")</FluentButton>
+        <button type="button" class="btn btn-ghost" @onclick="CloseEditor">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveForm">
+            <Icon Name="check" Size="18" />
+            <span>@(_editingKey is null ? "Add pair" : "Save")</span>
+        </button>
     </Footer>
 </Modal>
 
 <Modal Visible="_showDelete" Title="Delete item?" OnClose="CancelDelete">
     <ChildContent>
-        <p style="margin:0;">
-            Delete <strong>@_deleteKey</strong> from your vault? This cannot be undone.
-        </p>
+        <p>Delete <strong>@_deleteKey</strong> from your vault? This cannot be undone.</p>
     </ChildContent>
     <Footer>
-        <FluentButton OnClick="CancelDelete">Cancel</FluentButton>
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      IconStart="@(new Icons.Regular.Size20.Delete())"
-                      OnClick="DeleteConfirmed">Delete</FluentButton>
+        <button type="button" class="btn btn-ghost" @onclick="CancelDelete">Cancel</button>
+        <button type="button" class="btn btn-danger" @onclick="DeleteConfirmed">
+            <Icon Name="delete" Size="18" />
+            <span>Delete</span>
+        </button>
     </Footer>
 </Modal>
 
@@ -184,10 +174,6 @@ else
         }
     }
 
-    private Icon RevealIcon(string key) => IsRevealed(key)
-        ? new Icons.Regular.Size20.EyeOff()
-        : new Icons.Regular.Size20.Eye();
-
     private void BeginAdd()
     {
         _editingKey = null;
@@ -212,7 +198,7 @@ else
         _formError = null;
     }
 
-    private async Task SaveForm()
+    private void SaveForm()
     {
         _formError = null;
         var key = (_formKey ?? string.Empty).Trim();
@@ -229,13 +215,13 @@ else
             if (_editingKey is null)
             {
                 Session.Add(key, value);
-                await Toast.ShowSuccessToastAsync("Added", $"'{key}' added to your vault");
+                Toast.Success("Added", $"'{key}' added to your vault");
             }
             else
             {
                 Session.Update(_editingKey, key, value);
                 _revealed.Remove(_editingKey);
-                await Toast.ShowSuccessToastAsync("Saved", $"'{key}' updated");
+                Toast.Success("Saved", $"'{key}' updated");
             }
 
             _showEditor = false;
@@ -249,7 +235,7 @@ else
     private async Task CopyAsync(string key)
     {
         await JS.InvokeVoidAsync("navigator.clipboard.writeText", Session.GetValue(key));
-        await Toast.ShowSuccessToastAsync("Copied", $"'{key}' copied to clipboard");
+        Toast.Success("Copied", $"'{key}' copied to clipboard");
     }
 
     private void ConfirmDelete(string key)
@@ -264,7 +250,7 @@ else
         _deleteKey = null;
     }
 
-    private async Task DeleteConfirmed()
+    private void DeleteConfirmed()
     {
         if (_deleteKey is null)
         {
@@ -277,6 +263,6 @@ else
         _showDelete = false;
         _deleteKey = null;
 
-        await Toast.ShowSuccessToastAsync("Deleted", $"'{key}' removed");
+        Toast.Success("Deleted", $"'{key}' removed");
     }
 }

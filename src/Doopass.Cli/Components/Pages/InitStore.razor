@@ -9,12 +9,10 @@
 <p class="auth-sub">Pick a strong master password. It encrypts everything and cannot be recovered.</p>
 
 <div class="auth-form" @onkeydown="HandleKeyDown">
-    <FluentTextInput @bind-Value="_password"
-                     Type="TextInputType.Password"
-                     Placeholder="Master password" />
-    <FluentTextInput @bind-Value="_confirm"
-                     Type="TextInputType.Password"
-                     Placeholder="Repeat password" />
+    <input class="input" type="password" placeholder="Master password"
+           @bind="_password" @bind:event="oninput" autocomplete="new-password" />
+    <input class="input" type="password" placeholder="Repeat password"
+           @bind="_confirm" @bind:event="oninput" autocomplete="new-password" />
 
     @if (!string.IsNullOrEmpty(_error))
     {
@@ -22,10 +20,8 @@
     }
 
     <div class="auth-actions">
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      Class="grow"
-                      OnClick="SignUp">Create vault</FluentButton>
-        <FluentButton OnClick="@(() => Nav.NavigateTo("/"))">Back</FluentButton>
+        <button type="button" class="btn btn-primary grow" @onclick="SignUp">Create vault</button>
+        <button type="button" class="btn btn-ghost" @onclick="@(() => Nav.NavigateTo("/"))">Back</button>
     </div>
 </div>
 

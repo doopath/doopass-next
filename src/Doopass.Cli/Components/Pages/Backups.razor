@@ -1,7 +1,7 @@
 @page "/backups"
 @inject DoopassSession Session
 @inject NavigationManager Nav
-@inject INotificationService Toast
+@inject ToastService Toast
 
 <PageTitle>Doopass — Backups</PageTitle>
 
@@ -10,9 +10,10 @@
         <h1 class="page-title">Backups</h1>
         <p class="page-sub">Create, restore or delete dated snapshots of your vault.</p>
     </div>
-    <FluentButton Appearance="ButtonAppearance.Primary"
-                  IconStart="@(new Icons.Regular.Size20.Add())"
-                  OnClick="CreateBackup">Create backup</FluentButton>
+    <button type="button" class="btn btn-primary" @onclick="CreateBackup">
+        <Icon Name="add" Size="18" />
+        <span>Create backup</span>
+    </button>
 </div>
 
 @if (_names.Count > 0)
@@ -23,10 +24,7 @@
             <div class="item-card">
                 <div class="item-head">
                     <div class="item-icon">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M12 7v5l3 2" />
-                        </svg>
+                        <Icon Name="clock" Size="20" />
                     </div>
                     <div style="min-width:0;">
                         <div class="item-title" title="@name">@name</div>
@@ -35,15 +33,14 @@
                 </div>
 
                 <div class="item-actions">
-                    <FluentButton Appearance="ButtonAppearance.Subtle"
-                                  IconStart="@(new Icons.Regular.Size20.ArrowReset())"
-                                  OnClick="@(() => ConfirmRestore(name))">Restore</FluentButton>
+                    <button type="button" class="btn btn-ghost btn-sm" @onclick="@(() => ConfirmRestore(name))">
+                        <Icon Name="restore" Size="16" />
+                        <span>Restore</span>
+                    </button>
                     <span class="push"></span>
-                    <FluentButton Appearance="ButtonAppearance.Subtle"
-                                  Class="icon-btn"
-                                  IconStart="@(new Icons.Regular.Size20.Delete())"
-                                  Title="Delete"
-                                  OnClick="@(() => ConfirmDelete(name))" />
+                    <button type="button" class="icon-btn" title="Delete" @onclick="@(() => ConfirmDelete(name))">
+                        <Icon Name="delete" Size="18" />
+                    </button>
                 </div>
             </div>
         }
@@ -53,43 +50,43 @@ else
 {
     <div class="empty">
         <div class="empty-icon">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 7v5l3 2" />
-            </svg>
+            <Icon Name="clock" Size="26" />
         </div>
         <div class="empty-title">No backups yet</div>
         <div>Create a snapshot before making big changes.</div>
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      IconStart="@(new Icons.Regular.Size20.Add())"
-                      OnClick="CreateBackup">Create backup</FluentButton>
+        <button type="button" class="btn btn-primary" @onclick="CreateBackup">
+            <Icon Name="add" Size="18" />
+            <span>Create backup</span>
+        </button>
     </div>
 }
 
 <Modal Visible="_showRestore" Title="Restore backup?" OnClose="CancelRestore">
     <ChildContent>
-        <p style="margin:0;">
+        <p>
             Replace your current vault with <strong>@_restoreName</strong>?
             A safety backup of the current vault is created first.
         </p>
     </ChildContent>
     <Footer>
-        <FluentButton OnClick="CancelRestore">Cancel</FluentButton>
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      IconStart="@(new Icons.Regular.Size20.ArrowReset())"
-                      OnClick="RestoreConfirmed">Restore</FluentButton>
+        <button type="button" class="btn btn-ghost" @onclick="CancelRestore">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="RestoreConfirmed">
+            <Icon Name="restore" Size="18" />
+            <span>Restore</span>
+        </button>
     </Footer>
 </Modal>
 
 <Modal Visible="_showDelete" Title="Delete backup?" OnClose="CancelDelete">
     <ChildContent>
-        <p style="margin:0;">Delete <strong>@_deleteName</strong>? This cannot be undone.</p>
+        <p>Delete <strong>@_deleteName</strong>? This cannot be undone.</p>
     </ChildContent>
     <Footer>
-        <FluentButton OnClick="CancelDelete">Cancel</FluentButton>
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      IconStart="@(new Icons.Regular.Size20.Delete())"
-                      OnClick="DeleteConfirmed">Delete</FluentButton>
+        <button type="button" class="btn btn-ghost" @onclick="CancelDelete">Cancel</button>
+        <button type="button" class="btn btn-danger" @onclick="DeleteConfirmed">
+            <Icon Name="delete" Size="18" />
+            <span>Delete</span>
+        </button>
     </Footer>
 </Modal>
 
@@ -117,11 +114,11 @@ else
 
     private void Refresh() => _names = Session.Backups.GetBackupNames().ToList();
 
-    private async Task CreateBackup()
+    private void CreateBackup()
     {
         Session.Backups.MakeBackup();
         Refresh();
-        await Toast.ShowSuccessToastAsync("Backup created", "A new snapshot of your vault is ready");
+        Toast.Success("Backup created", "A new snapshot of your vault is ready");
     }
 
     private void ConfirmRestore(string name)
@@ -136,7 +133,7 @@ else
         _restoreName = null;
     }
 
-    private async Task RestoreConfirmed()
+    private void RestoreConfirmed()
     {
         if (_restoreName is null)
         {
@@ -150,7 +147,7 @@ else
         _restoreName = null;
         Refresh();
 
-        await Toast.ShowSuccessToastAsync("Restored", $"Vault restored from '{name}'");
+        Toast.Success("Restored", $"Vault restored from '{name}'");
     }
 
     private void ConfirmDelete(string name)
@@ -165,7 +162,7 @@ else
         _deleteName = null;
     }
 
-    private async Task DeleteConfirmed()
+    private void DeleteConfirmed()
     {
         if (_deleteName is null)
         {
@@ -178,6 +175,6 @@ else
         _deleteName = null;
         Refresh();
 
-        await Toast.ShowSuccessToastAsync("Backup deleted", $"'{name}' removed");
+        Toast.Success("Backup deleted", $"'{name}' removed");
     }
 }

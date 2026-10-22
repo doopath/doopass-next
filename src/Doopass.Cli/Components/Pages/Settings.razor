@@ -1,7 +1,7 @@
 @page "/settings"
 @inject DoopassSession Session
 @inject NavigationManager Nav
-@inject INotificationService Toast
+@inject ToastService Toast
 
 <PageTitle>Doopass — Settings</PageTitle>
 
@@ -10,9 +10,10 @@
         <h1 class="page-title">Settings</h1>
         <p class="page-sub">Application configuration stored locally in settings.json.</p>
     </div>
-    <FluentButton Appearance="ButtonAppearance.Outline"
-                  IconStart="@(new Icons.Regular.Size20.ArrowReset())"
-                  OnClick="ConfirmRestoreDefaults">Restore defaults</FluentButton>
+    <button type="button" class="btn btn-secondary" @onclick="ConfirmRestoreDefaults">
+        <Icon Name="restore" Size="18" />
+        <span>Restore defaults</span>
+    </button>
 </div>
 
 @foreach (var section in Session.Settings.Sections)
@@ -26,11 +27,9 @@
             <div class="setting-row">
                 <span class="setting-key">@pair.Key</span>
                 <span class="setting-value">@pair.Value</span>
-                <FluentButton Appearance="ButtonAppearance.Subtle"
-                              Class="icon-btn"
-                              IconStart="@(new Icons.Regular.Size20.Edit())"
-                              Title="Change"
-                              OnClick="@(() => BeginEdit(section, pair.Key, pair.Value))" />
+                <button type="button" class="icon-btn" title="Change" @onclick="@(() => BeginEdit(section, pair.Key, pair.Value))">
+                    <Icon Name="edit" Size="18" />
+                </button>
             </div>
         }
     </div>
@@ -38,29 +37,31 @@
 
 <Modal Visible="_showEdit" Title="@($"Edit {_editKey}")" OnClose="CancelEdit">
     <ChildContent>
-        <p class="muted" style="margin:0;">@_editSection</p>
+        <p class="muted" style="font-size:.82rem;">@_editSection</p>
         <div class="field">
             <label class="field-label">@_editKey</label>
-            <FluentTextInput @bind-Value="_editValue" Placeholder="Value" />
+            <input class="input" type="text" placeholder="Value" @bind="_editValue" @bind:event="oninput" />
         </div>
     </ChildContent>
     <Footer>
-        <FluentButton OnClick="CancelEdit">Cancel</FluentButton>
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      IconStart="@(new Icons.Regular.Size20.Checkmark())"
-                      OnClick="SaveEdit">Save</FluentButton>
+        <button type="button" class="btn btn-ghost" @onclick="CancelEdit">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveEdit">
+            <Icon Name="check" Size="18" />
+            <span>Save</span>
+        </button>
     </Footer>
 </Modal>
 
 <Modal Visible="_showRestoreDefaults" Title="Restore defaults?" OnClose="CancelRestoreDefaults">
     <ChildContent>
-        <p style="margin:0;">Reset all settings to their default values? Your vault is not affected.</p>
+        <p>Reset all settings to their default values? Your vault is not affected.</p>
     </ChildContent>
     <Footer>
-        <FluentButton OnClick="CancelRestoreDefaults">Cancel</FluentButton>
-        <FluentButton Appearance="ButtonAppearance.Primary"
-                      IconStart="@(new Icons.Regular.Size20.ArrowReset())"
-                      OnClick="RestoreDefaults">Restore</FluentButton>
+        <button type="button" class="btn btn-ghost" @onclick="CancelRestoreDefaults">Cancel</button>
+        <button type="button" class="btn btn-primary" @onclick="RestoreDefaults">
+            <Icon Name="restore" Size="18" />
+            <span>Restore</span>
+        </button>
     </Footer>
 </Modal>
 
@@ -104,21 +105,21 @@
         _editValue = null;
     }
 
-    private async Task SaveEdit()
+    private void SaveEdit()
     {
         Session.Settings.ModifyProperty(_editSection, _editKey, _editValue ?? string.Empty);
         _showEdit = false;
-        await Toast.ShowSuccessToastAsync("Saved", $"'{_editKey}' updated");
+        Toast.Success("Saved", $"'{_editKey}' updated");
     }
 
     private void ConfirmRestoreDefaults() => _showRestoreDefaults = true;
 
     private void CancelRestoreDefaults() => _showRestoreDefaults = false;
 
-    private async Task RestoreDefaults()
+    private void RestoreDefaults()
     {
         Session.Settings.RestoreDefaults();
         _showRestoreDefaults = false;
-        await Toast.ShowSuccessToastAsync("Restored", "Default settings restored");
+        Toast.Success("Restored", "Default settings restored");
     }
 }

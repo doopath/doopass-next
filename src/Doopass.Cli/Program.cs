@@ -1,7 +1,6 @@
 using Doopass.Cli.Services;
 using Doopass.Core.Configuration;
 using Doopass.Tui;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 // Single entry point for Doopass.
 //   doopass                 -> run the terminal UI
@@ -59,9 +58,9 @@ static int RunWebServer(int port, bool openBrowser)
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
 
-    builder.Services.AddFluentUIComponents();
     builder.Services.AddSingleton(_ => new Settings());
     builder.Services.AddScoped<DoopassSession>();
+    builder.Services.AddScoped<ToastService>();
 
     var app = builder.Build();
 

@@ -3,7 +3,7 @@
 A cross-platform rewrite of the **Doopass** password manager in **.NET 10**, with:
 
 * a **TUI** front-end (Terminal.Gui v2) that mirrors the original Textual interface;
-* a **Fluent Design web** front-end (ASP.NET Core + Fluent UI Blazor) that runs as a local server.
+* a **modern, custom-styled web UI** (ASP.NET Core Blazor Server) with light/dark themes that runs as a local server.
 
 The encrypted store format is **fully compatible** with the original Python implementation
 (Fernet + PBKDF2-HMAC-SHA256), so existing `store.enc` files open without migration.
