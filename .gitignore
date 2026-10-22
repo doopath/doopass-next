@@ -1,0 +1,33 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+*.user
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.suo
+*.rcf
+
+# NuGet
+*.nupkg
+packages/
+
+# Test results
+[Tt]est[Rr]esults/
+*.trx
+coverage*.json
+.coverage/
+
+# .NET local tools / user secrets
+.dotnet/
+*.local.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
