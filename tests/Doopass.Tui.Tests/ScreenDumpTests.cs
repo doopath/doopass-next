@@ -104,11 +104,16 @@ public sealed class ScreenDumpTests : IDisposable
         var buffer = _app.Driver!.GetOutputBuffer();
         var text = new StringBuilder();
 
+        if (buffer?.Contents is not { } contents)
+        {
+            return string.Empty;
+        }
+
         for (var row = 0; row < buffer.Rows; row++)
         {
             for (var col = 0; col < buffer.Cols; col++)
             {
-                var cell = buffer.Contents[row, col];
+                var cell = contents[row, col];
                 text.Append(cell.Grapheme);
             }
 

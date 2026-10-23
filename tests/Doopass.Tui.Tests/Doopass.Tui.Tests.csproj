@@ -4,6 +4,8 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>Doopass.Tui.Tests</RootNamespace>
+    <!-- TextView is obsolete in 2.4.17 but is what the TUI (and these tests) use. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
