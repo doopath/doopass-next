@@ -34,8 +34,11 @@ dotnet test tests/Doopass.Core.Tests/Doopass.Core.Tests.csproj
 dotnet run --project src/Doopass.Cli
 ```
 
-Hotkeys: `Q`/`Esc` quit, `H`/`F1` help, `Tab`/`Shift+Tab` next/previous,
-`J`/`K`/arrows focus next/previous.
+Hotkeys: `J`/`K` (or `Up`/`Down`) move the selection, `H`/`L` move focus left/right
+between regions, `Enter` selects, `Tab`/`Shift+Tab` cycle all controls, `Esc` goes
+back one screen, `Q` quits, `F1` opens help. On the store screen `V` reveals the
+selected value, `E` edits, `D` deletes, `A` adds a pair; `PgUp`/`PgDn`/`Home`/`End`
+scroll lists and long values.
 
 ## Run the web interface
 
