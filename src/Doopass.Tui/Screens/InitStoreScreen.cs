@@ -46,7 +46,9 @@ internal sealed class InitStoreScreen : ScreenBase
 
     public override string ScreenTitle => "init store";
 
-    public override string FooterHint => "enter create   tab next field   esc back   q quit";
+    public override bool KeepInHistory => false;
+
+    public override string FooterHint => "h/j/k/l move   enter create   esc back   q quit";
 
     private void Submit()
     {

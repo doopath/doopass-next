@@ -54,5 +54,5 @@ internal sealed class MainMenuScreen : ScreenBase
 
     public override string ScreenTitle => "main menu";
 
-    public override string FooterHint => "j/k move   enter select   f1 help   q quit";
+    public override string FooterHint => "h/j/k/l move   enter select   f1 help   esc quit";
 }

@@ -38,5 +38,5 @@ internal sealed class ValueFormScreen : ScreenBase
 
     public override string ScreenTitle => "edit setting";
 
-    public override string FooterHint => "enter save   esc cancel   q quit";
+    public override string FooterHint => "h/j/k/l move   enter save   esc cancel   q quit";
 }

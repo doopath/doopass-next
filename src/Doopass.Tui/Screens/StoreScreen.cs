@@ -56,7 +56,7 @@ internal sealed class StoreScreen : ScreenBase
     public override string ScreenTitle => "store";
 
     public override string FooterHint =>
-        "enter copy   j/k move   h/l focus   v reveal   e edit   d delete   a add   esc back   q quit";
+        "h/j/k/l move   enter copy   v reveal   e edit   d delete   a add   esc back   q quit";
 
     /// <summary>Hotkeys routed from <see cref="DoopassWindow"/> while the list has focus.</summary>
     public void RunShortcut(char shortcut)

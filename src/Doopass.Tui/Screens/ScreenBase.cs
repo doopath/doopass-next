@@ -36,6 +36,13 @@ internal abstract class ScreenBase : View
     /// <summary>Contextual hotkeys for the footer bar.</summary>
     public abstract string FooterHint { get; }
 
+    /// <summary>
+    /// Whether this screen stays available as a back target when it is replaced.
+    /// Entry screens (sign in, init store) are transitional: going back to them is
+    /// meaningless, so they are dropped and the screen below them becomes "back".
+    /// </summary>
+    public virtual bool KeepInHistory => true;
+
     /// <summary>Controls in the order Tab/Shift+Tab should visit them.</summary>
     public IReadOnlyList<View> TabStops => _tabStops;
 

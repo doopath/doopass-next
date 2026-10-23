@@ -36,7 +36,7 @@ internal sealed class SettingsScreen : ScreenBase
 
     public override string ScreenTitle => "settings";
 
-    public override string FooterHint => "enter change value   j/k move   h/l focus   esc back   q quit";
+    public override string FooterHint => "h/j/k/l move   enter change value   esc back   q quit";
 
     private void Build()
     {

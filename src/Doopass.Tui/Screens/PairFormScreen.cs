@@ -46,7 +46,7 @@ internal sealed class PairFormScreen : ScreenBase
 
     public override string ScreenTitle => "pair";
 
-    public override string FooterHint => "enter save   tab next field   esc cancel   q quit";
+    public override string FooterHint => "h/j/k/l move   enter save   esc cancel   q quit";
 
     private void Submit() => _onSave(_key.Text ?? string.Empty, _value.Text ?? string.Empty);
 }

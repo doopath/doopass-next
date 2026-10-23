@@ -38,7 +38,7 @@ internal sealed class BackupScreen : ScreenBase
     public override string ScreenTitle => "backups";
 
     public override string FooterHint =>
-        "enter restore   c create   d delete   h/l focus   esc back   q quit";
+        "h/j/k/l move   enter restore   c create   d delete   esc back   q quit";
 
     private string? SelectedName =>
         _list.SelectedItem is { } index && index >= 0 && index < _names.Count ? _names[Math.Clamp(index, 0, _names.Count - 1)] : null;

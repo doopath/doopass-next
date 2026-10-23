@@ -88,12 +88,15 @@ internal sealed class DoopassWindow : Window
 
     private ScreenBase? Top => _stack.Count > 0 ? _stack.Peek() : null;
 
-    /// <summary>Replaces the current screen (the previous one is disposed).</summary>
+    /// <summary>
+    /// Navigates forward: the current screen becomes the back target (Esc returns
+    /// to it) unless it is a transitional entry screen such as sign-in.
+    /// </summary>
     public void Replace(ScreenBase screen)
     {
         DetachCurrent();
 
-        if (_stack.Count > 0)
+        if (_stack.Count > 0 && !_stack.Peek().KeepInHistory)
         {
             _stack.Pop().Dispose();
         }

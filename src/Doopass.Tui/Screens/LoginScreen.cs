@@ -39,7 +39,9 @@ internal sealed class LoginScreen : ScreenBase
 
     public override string ScreenTitle => "sign in";
 
-    public override string FooterHint => "enter unlock   tab password/unlock   esc back   q quit";
+    public override bool KeepInHistory => false;
+
+    public override string FooterHint => "h/j/k/l move   enter unlock   esc back   q quit";
 
     private void Submit()
     {

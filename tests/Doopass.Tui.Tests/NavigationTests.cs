@@ -151,6 +151,24 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void Esc_returns_to_main_menu_through_replace_history()
+    {
+        _window.Replace(new LoginScreen(_context, _window));
+        Settle();
+
+        // Sign-in is transitional: it must not become the back target.
+        _window.Replace(new StoreScreen(_context, _window));
+        Settle();
+
+        Press(Key.Esc);
+        Settle();
+
+        var rows = MenuRows();
+        Assert.True(rows.Count > 0, "expected the main menu after Esc");
+        Assert.True(rows[0].HasFocus, $"Esc should go back to the main menu, not leave the app ({Dump()})");
+    }
+
+    [Fact]
     public void Details_pane_does_not_trap_focus()
     {
         var storePath = _context.Settings.StoreFile;
