@@ -1,3 +1,5 @@
+using Doopass.Tui.Theme;
+using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -7,33 +9,32 @@ namespace Doopass.Tui.Screens;
 internal sealed class BackupScreen : ScreenBase
 {
     private readonly View _items;
-    private readonly string _extension;
     private readonly List<View> _rows = new();
+
+    private string Extension => Context.Settings.BackupExtension;
 
     public BackupScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        _extension = Context.Settings.BackupExtension;
+        var title = UiKit.Title("Backups", 0);
+        var subtitle = UiKit.Line("create, restore or delete vault snapshots", 1, dim: true);
 
-        var create = MakeButton("Create backup", 0, 0, 16, () =>
-        {
-            Context.Backups.MakeBackup();
-            Refresh();
-        });
-
-        var toMain = MakeButton("To Main Menu", 18, 0, 15, Shell.GotoMain);
-        var exit = MakeButton("Exit", 35, 0, 8, Shell.Quit);
+        var create = UiKit.InlineButton("Create backup", 1, 3, 16, CreateBackup);
+        var back = UiKit.InlineButton("Back", 19, 3, 8, Shell.GotoMain);
+        var exit = UiKit.InlineButton("Exit", 29, 3, 8, Shell.Quit);
 
         _items = new View
         {
             X = 0,
-            Y = 2,
+            Y = 5,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             CanFocus = true,
+            TabStop = TabBehavior.NoStop,
+            SchemeName = Monochrome.SchemeName,
         };
         _items.ViewportSettings |= ViewportSettingsFlags.HasVerticalScrollBar;
 
-        Add(create, toMain, exit, _items);
+        Add(title, subtitle, create, back, exit, _items);
 
         Refresh();
     }
@@ -49,54 +50,66 @@ internal sealed class BackupScreen : ScreenBase
         _rows.Clear();
 
         var names = Context.Backups.GetBackupNames();
-        var y = 0;
 
-        _items.Add(new Label
+        if (names.Count == 0)
         {
-            Text = names.Count > 0 ? "Your backups" : "No backups",
-            X = 0,
-            Y = y,
-            Width = Dim.Fill(),
-        });
-        y += 1;
-
-        foreach (var name in names)
-        {
-            var row = new BackupRow(
-                name,
-                () => Restore(name),
-                () => Delete(name))
+            var empty = new Label
             {
-                X = 0,
-                Y = y,
+                Text = "no backups yet",
+                X = Pos.Center(),
+                Y = 1,
+                Width = Dim.Auto(),
+                Height = 1,
+                SchemeName = Monochrome.DimSchemeName,
             };
 
-            _items.Add(row);
-            _rows.Add(row);
-            y += 1;
+            _items.Add(empty);
+            _rows.Add(empty);
+        }
+        else
+        {
+            var y = 0;
+
+            foreach (var name in names)
+            {
+                var row = new BackupRow(name, () => ConfirmRestore(name), () => ConfirmDelete(name))
+                {
+                    X = 0,
+                    Y = y,
+                };
+
+                _items.Add(row);
+                _rows.Add(row);
+                y++;
+            }
         }
 
         App?.LayoutAndDraw();
     }
 
-    private void Restore(string name)
+    private void CreateBackup()
     {
-        Context.Backups.SwapStoreWithBackup(name + _extension);
-        Context.ReloadStore();
+        Context.Backups.MakeBackup();
         Refresh();
     }
 
-    private void Delete(string name)
+    private void ConfirmRestore(string name)
     {
-        Context.Backups.DeleteBackup(name + _extension);
-        Refresh();
+        Shell.Confirm($"Restore vault from '{name}'?", () =>
+        {
+            Context.Backups.SwapStoreWithBackup(name + Extension);
+            Context.ReloadStore();
+            Shell.CloseAndReplace(new BackupScreen(Context, Shell));
+        });
     }
 
-    private static Button MakeButton(string text, int x, int y, int width, Action action)
+    private void ConfirmDelete(string name)
     {
-        var button = new Button { Text = text, X = x, Y = y, Width = width };
-        button.Accepted += (_, _) => action();
-        return button;
+        Shell.Confirm($"Delete backup '{name}'?", () =>
+        {
+            Context.Backups.DeleteBackup(name + Extension);
+            Shell.CloseAndReplace(new BackupScreen(Context, Shell));
+        });
     }
 
     private sealed class BackupRow : View
@@ -105,16 +118,24 @@ internal sealed class BackupScreen : ScreenBase
         {
             Width = Dim.Fill();
             Height = 1;
+            CanFocus = true;
+            TabStop = TabBehavior.NoStop;
+            SchemeName = Monochrome.SchemeName;
 
-            var label = new Label { Text = $" {name}", X = 0, Y = 0, Width = Dim.Fill(24) };
+            var label = new Label
+            {
+                Text = name,
+                X = 1,
+                Y = 0,
+                Width = Dim.Fill(17),
+                Height = 1,
+                SchemeName = Monochrome.SchemeName,
+            };
 
-            var restore = new Button { Text = "Restore", X = Pos.AnchorEnd(22), Y = 0, Width = 10 };
-            var delete = new Button { Text = "Delete", X = Pos.AnchorEnd(11), Y = 0, Width = 10 };
-
-            restore.Accepted += (_, _) => onRestore();
-            delete.Accepted += (_, _) => onDelete();
-
-            Add(label, restore, delete);
+            Add(
+                label,
+                UiKit.InlineButton("restore", Pos.AnchorEnd(16), 0, 9, onRestore),
+                UiKit.InlineButton("del", Pos.AnchorEnd(7), 0, 7, onDelete));
         }
     }
 }

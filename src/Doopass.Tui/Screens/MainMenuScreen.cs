@@ -1,4 +1,5 @@
 using Doopass.Core;
+using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -16,28 +17,18 @@ internal sealed class MainMenuScreen : ScreenBase
             Y = 1,
             Width = Dim.Auto(),
             Height = Dim.Auto(),
+            SchemeName = Theme.Monochrome.SchemeName,
         };
 
-        var logIn = MakeButton("Log in", 10, () => Shell.Replace(new LoginScreen(Context, Shell)));
-        var initStore = MakeButton("Init store", 12, () => Shell.Replace(new InitStoreScreen(Context, Shell)));
-        var backups = MakeButton("Backups", 14, () => Shell.Replace(new BackupScreen(Context, Shell)));
-        var settings = MakeButton("Settings", 16, () => Shell.Replace(new SettingsScreen(Context, Shell)));
-        var exit = MakeButton("Exit", 18, Shell.Quit);
+        const int top = 9;
+        const int step = 2;
 
-        Add(logo, logIn, initStore, backups, settings, exit);
-    }
-
-    private static Button MakeButton(string text, int y, Action action)
-    {
-        var button = new Button
-        {
-            Text = text,
-            X = Pos.Center(),
-            Y = y,
-            Width = 24,
-        };
-
-        button.Accepted += (_, _) => action();
-        return button;
+        Add(
+            logo,
+            UiKit.MenuButton("Log in", top, () => Shell.Replace(new LoginScreen(Context, Shell))),
+            UiKit.MenuButton("Init store", top + step, () => Shell.Replace(new InitStoreScreen(Context, Shell))),
+            UiKit.MenuButton("Backups", top + step * 2, () => Shell.Replace(new BackupScreen(Context, Shell))),
+            UiKit.MenuButton("Settings", top + step * 3, () => Shell.Replace(new SettingsScreen(Context, Shell))),
+            UiKit.MenuButton("Exit", top + step * 4, Shell.Quit));
     }
 }

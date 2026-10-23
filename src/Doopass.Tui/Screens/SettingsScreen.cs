@@ -1,3 +1,5 @@
+using Doopass.Tui.Theme;
+using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -10,26 +12,28 @@ internal sealed class SettingsScreen : ScreenBase
 
     public SettingsScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var restore = MakeButton("Restore", 0, 0, 12, () =>
-        {
-            Context.Settings.RestoreDefaults();
-            Shell.Replace(new SettingsScreen(Context, Shell));
-        });
-
-        var toMain = MakeButton("Main Menu", 14, 0, 13, Shell.GotoMain);
-        var exit = MakeButton("Exit", 29, 0, 8, Shell.Quit);
+        var title = UiKit.Title("Settings", 0);
+        var subtitle = UiKit.Line("application configuration", 1, dim: true);
+        var restore = UiKit.InlineButton("Restore defaults", 1, 3, 18, () =>
+            Shell.Confirm("Restore all settings to their defaults?", () =>
+            {
+                Context.Settings.RestoreDefaults();
+                Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
+            }));
 
         _items = new View
         {
             X = 0,
-            Y = 2,
+            Y = 5,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             CanFocus = true,
+            TabStop = TabBehavior.NoStop,
+            SchemeName = Monochrome.SchemeName,
         };
         _items.ViewportSettings |= ViewportSettingsFlags.HasVerticalScrollBar;
 
-        Add(restore, toMain, exit, _items);
+        Add(title, subtitle, restore, _items);
 
         BuildSections();
     }
@@ -42,52 +46,48 @@ internal sealed class SettingsScreen : ScreenBase
         {
             _items.Add(new Label
             {
-                Text = $" {char.ToUpper(section[0])}{section[1..]}",
+                Text = " " + SectionTitle(section),
                 X = 0,
                 Y = y,
                 Width = Dim.Fill(),
+                Height = 1,
+                SchemeName = Monochrome.SchemeName,
             });
-            y += 1;
+            y++;
 
-            foreach (var (key, value) in Context.Settings.GetSection(section))
+            foreach (var pair in Context.Settings.GetSection(section))
             {
-                var row = new SettingRow(section, key, value, EditSetting)
+                var row = new SettingRow(section, pair.Key, pair.Value, BeginEdit)
                 {
                     X = 0,
                     Y = y,
                 };
 
                 _items.Add(row);
-                y += 1;
+                y++;
             }
 
-            y += 1;
+            y++;
         }
     }
 
-    private void EditSetting(string section, string key, string value)
+    private void BeginEdit(string section, string key, string value)
     {
-        Shell.Push(new PairFormScreen(
+        Shell.Push(new ValueFormScreen(
             Context,
             Shell,
-            "Key",
-            "Value",
-            key,
+            "Edit setting",
+            $"{section}.{key}",
             value,
-            "Update",
-            (newKey, newValue) =>
+            newValue =>
             {
-                Context.Settings.ModifyProperty(section, newKey, newValue);
-                Shell.Replace(new SettingsScreen(Context, Shell));
+                Context.Settings.ModifyProperty(section, key, newValue);
+                Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
             }));
     }
 
-    private static Button MakeButton(string text, int x, int y, int width, Action action)
-    {
-        var button = new Button { Text = text, X = x, Y = y, Width = width };
-        button.Accepted += (_, _) => action();
-        return button;
-    }
+    private static string SectionTitle(string section) =>
+        section.Length == 0 ? section : char.ToUpper(section[0]) + section[1..];
 
     private sealed class SettingRow : View
     {
@@ -95,14 +95,34 @@ internal sealed class SettingsScreen : ScreenBase
         {
             Width = Dim.Fill();
             Height = 1;
+            CanFocus = true;
+            TabStop = TabBehavior.NoStop;
+            SchemeName = Monochrome.SchemeName;
 
-            var keyLabel = new Label { Text = $" {key}", X = 0, Y = 0, Width = 18 };
-            var valueLabel = new Label { Text = value, X = 20, Y = 0, Width = Dim.Fill(14) };
-            var change = new Button { Text = "Change", X = Pos.AnchorEnd(10), Y = 0, Width = 9 };
+            var keyLabel = new Label
+            {
+                Text = " " + key,
+                X = 0,
+                Y = 0,
+                Width = 20,
+                Height = 1,
+                SchemeName = Monochrome.SchemeName,
+            };
 
-            change.Accepted += (_, _) => onChange(section, key, value);
+            var valueLabel = new Label
+            {
+                Text = value,
+                X = 21,
+                Y = 0,
+                Width = Dim.Fill(9),
+                Height = 1,
+                SchemeName = Monochrome.DimSchemeName,
+            };
 
-            Add(keyLabel, valueLabel, change);
+            Add(
+                keyLabel,
+                valueLabel,
+                UiKit.InlineButton("change", Pos.AnchorEnd(8), 0, 8, () => onChange(section, key, value)));
         }
     }
 }

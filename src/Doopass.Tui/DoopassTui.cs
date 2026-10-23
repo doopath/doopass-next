@@ -1,6 +1,7 @@
 using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
+using Doopass.Tui.Theme;
 using Terminal.Gui.App;
 using Terminal.Gui.Configuration;
 
@@ -24,6 +25,7 @@ public static class DoopassTui
 
         using var app = Application.Create();
         app.Init();
+        Monochrome.Register();
 
         var window = new DoopassWindow(context);
         app.Run(window);

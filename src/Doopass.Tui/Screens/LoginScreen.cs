@@ -1,4 +1,4 @@
-using Terminal.Gui.ViewBase;
+using Doopass.Tui.Ui;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
@@ -7,23 +7,23 @@ namespace Doopass.Tui.Screens;
 internal sealed class LoginScreen : ScreenBase
 {
     private readonly TextField _password;
+    private readonly Label _error;
 
     public LoginScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var title = new Label { Text = "Log in", X = Pos.Center(), Y = 3 };
+        var title = UiKit.Title("Sign in", 1);
+        var subtitle = UiKit.Line("Unlock your encrypted vault", 2, dim: true);
+        var label = UiKit.FieldLabel("Password", 5);
+        _password = UiKit.Input(6, secret: true);
 
-        _password = new TextField
-        {
-            Secret = true,
-            X = Pos.Center(),
-            Y = 6,
-            Width = 40,
-        };
+        _error = UiKit.Line(string.Empty, 11);
 
-        var logIn = MakeButton("Log in", 9, Submit);
-        var back = MakeButton("To Main Menu", 11, Shell.GotoMain);
+        var unlock = UiKit.MenuButton("Unlock", 13, Submit);
+        var back = UiKit.MenuButton("Back to menu", 15, Shell.GotoMain);
 
-        Add(title, _password, logIn, back);
+        Add(title, subtitle, label, _password, _error, unlock, back);
+
+        _password.Accepted += (_, _) => Submit();
     }
 
     private void Submit()
@@ -36,19 +36,11 @@ internal sealed class LoginScreen : ScreenBase
                 Shell.Replace(new StoreScreen(Context, Shell));
                 break;
             case LoginStatus.NotInitialized:
-                MessageBox.Query(App!, "Doopass", "Store is not initialized. Please sign up.", "OK");
                 Shell.Replace(new InitStoreScreen(Context, Shell));
                 break;
             case LoginStatus.IncorrectPassword:
-                MessageBox.Query(App!, "Doopass", "Incorrect password!", "OK");
+                _error.Text = "Incorrect password";
                 break;
         }
-    }
-
-    private static Button MakeButton(string text, int y, Action action)
-    {
-        var button = new Button { Text = text, X = Pos.Center(), Y = y, Width = 24 };
-        button.Accepted += (_, _) => action();
-        return button;
     }
 }
