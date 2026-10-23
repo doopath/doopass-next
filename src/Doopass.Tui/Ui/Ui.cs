@@ -20,6 +20,7 @@ internal static class UiKit
             Y = y,
             Width = width,
             Height = 1,
+            ShadowStyle = null,
             SchemeName = Monochrome.SchemeName,
         };
 
@@ -37,6 +38,7 @@ internal static class UiKit
             Y = y,
             Width = width,
             Height = 1,
+            ShadowStyle = null,
             SchemeName = Monochrome.SchemeName,
         };
 

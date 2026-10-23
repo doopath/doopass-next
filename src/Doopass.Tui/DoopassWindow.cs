@@ -27,6 +27,7 @@ internal sealed class DoopassWindow : Window
 
         Title = "Doopass";
         BorderStyle = LineStyle.None;
+        ShadowStyle = null;
         SchemeName = Monochrome.SchemeName;
 
         _content = new View
