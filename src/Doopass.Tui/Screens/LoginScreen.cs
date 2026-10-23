@@ -10,6 +10,9 @@ internal sealed class LoginScreen : ScreenBase
     private readonly TextField _password;
     private readonly Label _error;
     private readonly Label _layout;
+    private const int ActionWidth = 14;
+
+    private View? _unlock;
 
     public LoginScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
@@ -25,20 +28,22 @@ internal sealed class LoginScreen : ScreenBase
         _error = UiKit.Hint(string.Empty, 5);
         _error.X = 2;
 
-        var unlock = AddStop(UiKit.Primary("Unlock", Pos.Center(), 7, Submit, width: 14));
+        var unlock = AddStop(UiKit.Primary("Unlock", Pos.Center(), 7, Submit, width: ActionWidth));
+        _unlock = unlock;
 
-        _layout = UiKit.Hint("layout: —", 9);
-        _layout.Width = Dim.Auto();
+        _layout = UiKit.Hint(string.Empty, 9);
 
-        // Centre it inside the panel after layout: Pos.Center() on a fixed-width
-        // FrameView is evaluated while the frame is still zero-wide and gets clipped.
-        panel.SubViewLayout += (_, _) =>
-            _layout.X = Math.Max(1, (panel.Viewport.Width - _layout.Text.Length) / 2);
+        // Same width and X as the Unlock action, with the text padded to the centre:
+        // that keeps the two captions on one vertical axis (Label does not centre text).
+        _layout.Width = ActionWidth;
+        panel.SubViewLayout += (_, _) => _layout.X = unlock.Frame.X;
 
         panel.Add(caption, _password, _error, unlock, _layout);
 
         // ValueChanged is not raised per keystroke on TextField; TextChanging is.
         _password.TextChanging += (_, e) => UpdateLayoutHint(e.Result ?? string.Empty);
+
+        UpdateLayoutHint(string.Empty);
 
         var foot = UiKit.Hint("no vault yet? use Init store from the main menu", 15);
         foot.X = Pos.Center();
@@ -51,6 +56,15 @@ internal sealed class LoginScreen : ScreenBase
 
     public override string ScreenTitle => "sign in";
 
+    public override void OnShown()
+    {
+        // Re-read the system layout every time the screen opens.
+        if (string.IsNullOrEmpty(_password.Text))
+        {
+            UpdateLayoutHint(string.Empty);
+        }
+    }
+
     public override bool KeepInHistory => false;
 
     public override string FooterHint => "h/j/k/l move   enter unlock   esc back   q quit";
@@ -61,21 +75,14 @@ internal sealed class LoginScreen : ScreenBase
     /// </summary>
     private void UpdateLayoutHint(string text)
     {
-        if (text.Length == 0)
+        _layout.Text = "layout: " + KeyboardLayout.ForText(text);
+
+        if (_unlock is not null)
         {
-            _layout.Text = "layout: —";
-            return;
+            _layout.X = _unlock.Frame.X;
         }
 
-        var last = text[^1];
-
-        _layout.Text = last switch
-        {
-            >= 'А' and <= 'я' => "layout: RU",
-            'Ё' or 'ё' => "layout: RU",
-            >= 'A' and <= 'z' => "layout: EN",
-            _ => _layout.Text,
-        };
+        _layout.SetNeedsDraw();
     }
 
     private void Submit()

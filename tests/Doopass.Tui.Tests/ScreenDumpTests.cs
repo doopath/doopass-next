@@ -105,6 +105,41 @@ public sealed class ScreenDumpTests : IDisposable
     }
 
     [Fact]
+    public void Edit_form_shows_the_value_and_centred_buttons()
+    {
+        _window.Push(new PairFormScreen(
+            _context,
+            _window,
+            "Key",
+            "Value",
+            "github",
+            "correct-horse-battery",
+            "Update",
+            (_, _) => { }));
+
+        Render();
+
+        var screen = Dump("pair-form");
+
+        Assert.Contains("correct-horse-battery", screen);
+        Assert.DoesNotContain("encrypted with the vault key", screen);
+        Assert.Contains("[ Update ]", screen);
+        Assert.Contains("[ Cancel ]", screen);
+    }
+
+    [Fact]
+    public void Login_shows_layout_immediately()
+    {
+        _window.Replace(new LoginScreen(_context, _window));
+        Render();
+
+        var screen = Dump("login-layout");
+
+        Assert.DoesNotContain("layout: —", screen);
+        Assert.Contains("layout: ", screen);
+    }
+
+    [Fact]
     public void Help_renders_hotkey_table()
     {
         _window.Push(new HelpScreen(_context, _window));
