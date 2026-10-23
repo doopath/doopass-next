@@ -39,6 +39,10 @@ public sealed class NavigationTests : IDisposable
         _app.Init();
 
         _window = new DoopassWindow(_context);
+
+        // Same wiring as DoopassTui.Run: the router sees every key first.
+        _app.Keyboard.KeyDown += (_, key) => _window.RouteKey(key, _app);
+
         _app.Driver!.SetScreenSize(100, 30);
         _app.Begin(_window);
         Settle();
@@ -182,8 +186,14 @@ public sealed class NavigationTests : IDisposable
         field.SetFocus();
         Assert.True(field.HasFocus, $"field did not take focus ({Dump()})");
 
-        _app.InjectKey(Key.J);
-        Assert.Equal("j", field.Text);
+        // Regression: H/J/K/L and Q are global hotkeys, but an editable field must
+        // receive them as text.
+        foreach (var key in new[] { Key.H, Key.J, Key.K, Key.L, Key.Q })
+        {
+            _app.InjectKey(key);
+        }
+
+        Assert.Equal("hjklq", field.Text);
     }
 
     /// <summary>Feeds a key to the global entry point wired in <c>DoopassTui</c>.</summary>

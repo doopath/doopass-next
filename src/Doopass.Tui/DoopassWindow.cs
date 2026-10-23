@@ -212,7 +212,8 @@ internal sealed class DoopassWindow : Window
         var context = new KeyRouteContext(
             IsTextInput: focused is TextField or TextView,
             IsList: focused is ListView,
-            CanGoBack: _stack.Count > 1);
+            CanGoBack: _stack.Count > 1,
+            IsReadOnlyText: focused is TextView);
 
         // Terminal.Gui 2.4.17 routes arrow / J-K keys into ListView's "Activate" path,
         // which leaves the selection where it is. Drive list and detail scrolling
@@ -250,7 +251,7 @@ internal sealed class DoopassWindow : Window
             }
         }
 
-        if (!context.IsTextInput && Top is StoreScreen store)
+        if (!context.IsEditableText && Top is StoreScreen store)
         {
             foreach (var (shortcut, action) in StoreShortcuts)
             {

@@ -14,8 +14,20 @@ internal enum TuiAction
     Help,
 }
 
-/// <summary>Everything the mapping needs to know about the current focus.</summary>
-internal readonly record struct KeyRouteContext(bool IsTextInput, bool IsList, bool CanGoBack);
+/// <summary>
+/// Everything the mapping needs to know about the current focus.
+/// <paramref name="IsReadOnlyText"/> is a scrollable pane (the secret details):
+/// it keeps page keys for scrolling but must still be left with H/L.
+/// </summary>
+internal readonly record struct KeyRouteContext(
+    bool IsTextInput,
+    bool IsList,
+    bool CanGoBack,
+    bool IsReadOnlyText = false)
+{
+    /// <summary>An editable field: every printable letter belongs to it.</summary>
+    public bool IsEditableText => IsTextInput && !IsReadOnlyText;
+}
 
 /// <summary>
 /// Pure key mapping. Global hotkeys are resolved here so they can be unit tested
@@ -41,8 +53,20 @@ internal static class TuiKeyMap
             return TuiAction.Help;
         }
 
+        // An editable field owns every other printable key: typing "hjkl" in a
+        // password or key field must not move focus.
+        if (ctx.IsEditableText)
+        {
+            return TuiAction.None;
+        }
+
+        if (Is(key, Key.Q))
+        {
+            return TuiAction.Quit;
+        }
+
         // Horizontal movement between regions (list <-> details, field <-> buttons).
-        // Handled before the text-input guard so a focused text pane can be left.
+        // A read-only text pane reaches this point, so H/L can always leave it.
         if (Is(key, Key.H))
         {
             return TuiAction.FocusPrevious;
@@ -51,17 +75,6 @@ internal static class TuiKeyMap
         if (Is(key, Key.L))
         {
             return TuiAction.FocusNext;
-        }
-
-        // Everything below would steal keystrokes from an editor.
-        if (ctx.IsTextInput)
-        {
-            return TuiAction.None;
-        }
-
-        if (Is(key, Key.Q))
-        {
-            return TuiAction.Quit;
         }
 
         // A ListView owns its own arrows and its own J/K bindings.

@@ -9,6 +9,7 @@ public class TuiKeyMapTests
     private static readonly KeyRouteContext Plain = new(IsTextInput: false, IsList: false, CanGoBack: true);
     private static readonly KeyRouteContext InList = new(IsTextInput: false, IsList: true, CanGoBack: true);
     private static readonly KeyRouteContext InText = new(IsTextInput: true, IsList: false, CanGoBack: true);
+    private static readonly KeyRouteContext InReadOnlyText = new(IsTextInput: true, IsList: false, CanGoBack: true, IsReadOnlyText: true);
 
     [Fact]
     public void Tab_cycles_forward() => Assert.Equal(TuiAction.FocusNext, TuiKeyMap.Resolve(Key.Tab, Plain));
@@ -54,8 +55,21 @@ public class TuiKeyMapTests
         Assert.Equal(TuiAction.FocusPrevious, TuiKeyMap.Resolve(Key.H, Plain));
 
     [Fact]
-    public void H_leaves_a_text_pane() =>
-        Assert.Equal(TuiAction.FocusPrevious, TuiKeyMap.Resolve(Key.H, InText));
+    public void H_leaves_a_read_only_text_pane() =>
+        Assert.Equal(TuiAction.FocusPrevious, TuiKeyMap.Resolve(Key.H, InReadOnlyText));
+
+    [Theory]
+    [InlineData('h')]
+    [InlineData('l')]
+    [InlineData('j')]
+    [InlineData('k')]
+    [InlineData('q')]
+    public void Hotkey_letters_are_typed_in_an_editable_field(char letter) =>
+        Assert.Equal(TuiAction.None, TuiKeyMap.Resolve(new Key(letter), InText));
+
+    [Fact]
+    public void Q_still_quits_from_a_list_and_a_pane() =>
+        Assert.Equal(TuiAction.Quit, TuiKeyMap.Resolve(Key.Q, InList));
 
     [Fact]
     public void L_moves_focus_forward() =>
