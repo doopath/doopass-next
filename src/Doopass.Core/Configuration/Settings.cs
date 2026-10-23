@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Doopass.Core.Diagnostics;
 
 namespace Doopass.Core.Configuration;
 
@@ -62,6 +63,7 @@ public sealed class Settings
 
         pairs[key] = value;
         Save();
+        AppLogger.Info($"Setting changed: {section}.{key}");
     }
 
     /// <summary>Restores the embedded default configuration.</summary>
@@ -70,9 +72,10 @@ public sealed class Settings
         Directory.CreateDirectory(AppDir);
         Directory.CreateDirectory(AppDataDir);
 
-        File.WriteAllText(SettingsFile, ReadEmbeddedDefault(), System.Text.Encoding.UTF8);
+        File.WriteAllText(SettingsFile, ReadEmbeddedDefault(), TextFile.Utf8NoBom);
 
         Load();
+        AppLogger.Info("Settings restored to defaults");
     }
 
     private void Initialize()
@@ -131,7 +134,7 @@ public sealed class Settings
         }
 
         var json = JsonSerializer.Serialize(raw, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(SettingsFile, json, System.Text.Encoding.UTF8);
+        File.WriteAllText(SettingsFile, json, TextFile.Utf8NoBom);
     }
 
     private string SubstituteAppData(string value)

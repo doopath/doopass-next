@@ -3,7 +3,7 @@
   <PropertyGroup>
     <RootNamespace>Doopass.Core</RootNamespace>
     <AssemblyName>Doopass.Core</AssemblyName>
-    <Version>3.0.0</Version>
+    <Version>5.0.0</Version>
     <Description>Cross-platform password manager core: Fernet-compatible store, settings, backups.</Description>
   </PropertyGroup>
 

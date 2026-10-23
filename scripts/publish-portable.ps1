@@ -60,10 +60,10 @@ foreach ($rid in $RuntimeIdentifiers) {
 Write-Host ""
 Write-Host "Done. Portable executables:" -ForegroundColor Green
 Get-ChildItem -Path $OutputRoot -Recurse -File |
-    Where-Object { $_.Name -eq 'Doopass' -or $_.Name -eq 'Doopass.exe' } |
+    Where-Object { $_.Name -eq 'doopass' -or $_.Name -eq 'doopass.exe' } |
     ForEach-Object {
         Write-Host ("  {0}  ({1:N1} MB)" -f $_.FullName, ($_.Length / 1MB))
     }
 
 Write-Host ""
-Write-Host "On Linux run: chmod +x ./Doopass" -ForegroundColor DarkGray
+Write-Host "On Linux run: chmod +x ./doopass" -ForegroundColor DarkGray

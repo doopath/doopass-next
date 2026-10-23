@@ -1,10 +1,10 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Removes Doopass autostart and (optionally) its installed files.
+    Removes the Doopass autostart entry and shortcuts.
 
 .PARAMETER KeepFiles
-    Do not delete %LOCALAPPDATA%\Doopass.
+    Keep %USERPROFILE%\.local\bin\doopass.exe and the launcher.
 
 .PARAMETER DryRun
     Print what would be done without changing anything.
@@ -17,27 +17,30 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$installDir = Join-Path $env:LOCALAPPDATA 'Doopass'
+$binDir = Join-Path $HOME '.local\bin'
+$targetExe = Join-Path $binDir 'doopass.exe'
+$launchVbs = Join-Path $binDir 'doopass-launch.vbs'
+
 $startupDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Startup)
-$startupLink = Join-Path $startupDir 'Doopass.lnk'
+$startupLink = Join-Path $startupDir 'doopass.lnk'
 $desktopDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
 $programsDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
-$desktopUrl = Join-Path $desktopDir 'Doopass.url'
-$programsUrl = Join-Path $programsDir 'Doopass.url'
+$desktopUrl = Join-Path $desktopDir 'doopass.url'
+$programsUrl = Join-Path $programsDir 'doopass.url'
 
-Write-Host "Doopass autostart removal" -ForegroundColor Cyan
+Write-Host "Doopass autostart removal (Windows)" -ForegroundColor Cyan
 
 if ($DryRun) {
-    Write-Host "[dry-run] Would stop the Doopass process" -ForegroundColor Yellow
+    Write-Host "[dry-run] Would stop the doopass process" -ForegroundColor Yellow
     Write-Host "[dry-run] Would remove $startupLink" -ForegroundColor Yellow
     Write-Host "[dry-run] Would remove $programsUrl and $desktopUrl" -ForegroundColor Yellow
     if (-not $KeepFiles) {
-        Write-Host "[dry-run] Would remove $installDir" -ForegroundColor Yellow
+        Write-Host "[dry-run] Would remove $targetExe and $launchVbs" -ForegroundColor Yellow
     }
     return
 }
 
-Get-Process -Name Doopass -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name doopass -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 foreach ($path in @($startupLink, $programsUrl, $desktopUrl)) {
     if (Test-Path $path) {
@@ -46,9 +49,13 @@ foreach ($path in @($startupLink, $programsUrl, $desktopUrl)) {
     }
 }
 
-if (-not $KeepFiles -and (Test-Path $installDir)) {
-    Remove-Item -Recurse -Force $installDir
-    Write-Host "Removed $installDir"
+if (-not $KeepFiles) {
+    foreach ($path in @($targetExe, $launchVbs)) {
+        if (Test-Path $path) {
+            Remove-Item -Force $path
+            Write-Host "Removed $path"
+        }
+    }
 }
 
 Write-Host "Done." -ForegroundColor Green

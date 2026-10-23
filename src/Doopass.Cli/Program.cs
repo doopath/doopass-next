@@ -1,5 +1,7 @@
 using Doopass.Cli.Services;
+using Doopass.Core;
 using Doopass.Core.Configuration;
+using Doopass.Core.Diagnostics;
 using Doopass.Tui;
 
 // Single entry point for Doopass.
@@ -42,22 +44,29 @@ static int Run(string[] args)
 
 static int RunWebServer(int port, bool openBrowser, bool lan)
 {
+    var settings = new Settings();
+    AppLogger.Initialize(settings.LogFile);
+
+    var host = lan ? "0.0.0.0" : "localhost";
+    AppLogger.Info($"Doopass web server starting (v{Constants.Version}, bind {host}, port {port})");
+
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
         Args = [],
     });
 
-    var host = lan ? "0.0.0.0" : "localhost";
     builder.WebHost.UseUrls($"http://{host}:{port}");
 
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
 
-    builder.Services.AddSingleton(_ => new Settings());
+    builder.Services.AddSingleton(settings);
     builder.Services.AddScoped<DoopassSession>();
     builder.Services.AddScoped<ToastService>();
 
     var app = builder.Build();
+
+    app.Lifetime.ApplicationStopping.Register(() => AppLogger.Info("Doopass web server stopped"));
 
     if (!app.Environment.IsDevelopment())
     {

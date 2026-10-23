@@ -1,4 +1,5 @@
 using System.Text;
+using Doopass.Core.Diagnostics;
 
 namespace Doopass.Core.Storage;
 
@@ -68,7 +69,8 @@ public sealed class StoreBackup
             backupPath = $"{basePath}_{lastNumber + 1}{_extension}";
         }
 
-        File.WriteAllText(backupPath, storeContent, Encoding.UTF8);
+        File.WriteAllText(backupPath, storeContent, TextFile.Utf8NoBom);
+        AppLogger.Info($"Backup created: {Path.GetFileName(backupPath)}");
     }
 
     /// <summary>Replaces the current store with a backup (making a backup first).</summary>
@@ -77,7 +79,8 @@ public sealed class StoreBackup
         var backupContent = GetBackupContent(backupName);
         MakeBackup();
 
-        File.WriteAllText(_storePath, backupContent, Encoding.UTF8);
+        File.WriteAllText(_storePath, backupContent, TextFile.Utf8NoBom);
+        AppLogger.Info($"Store restored from backup: {backupName}");
     }
 
     /// <summary>Deletes a backup by name (including extension).</summary>
@@ -88,6 +91,7 @@ public sealed class StoreBackup
         if (File.Exists(path))
         {
             File.Delete(path);
+            AppLogger.Info($"Backup deleted: {backupName}");
         }
     }
 

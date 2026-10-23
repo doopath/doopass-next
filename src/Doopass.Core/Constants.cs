@@ -4,7 +4,7 @@ namespace Doopass.Core;
 public static class Constants
 {
     /// <summary>Application version.</summary>
-    public const string Version = "3.0.0";
+    public const string Version = "5.0.0";
 
     /// <summary>Default PBKDF2 iteration count used when encrypting the store.</summary>
     public const int DefaultIterations = 100_000;

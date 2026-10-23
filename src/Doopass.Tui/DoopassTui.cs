@@ -1,3 +1,4 @@
+using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
 using Terminal.Gui.App;
@@ -17,6 +18,7 @@ public static class DoopassTui
 
         var settings = new Settings();
         AppLogger.Initialize(settings.LogFile);
+        AppLogger.Info($"Doopass TUI started (v{Constants.Version})");
 
         var context = new DoopassContext(settings);
 
@@ -26,6 +28,7 @@ public static class DoopassTui
         var window = new DoopassWindow(context);
         app.Run(window);
 
+        AppLogger.Info("Doopass TUI exited");
         return 0;
     }
 }

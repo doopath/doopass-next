@@ -60,34 +60,53 @@ scripts\publish-portable            # or: powershell -File scripts\publish-porta
 
 Produces one self-contained executable per platform (no .NET install required):
 
-* `dist/portable/win-x64/Doopass.exe`
-* `dist/portable/linux-x64/Doopass`
+* `dist/portable/win-x64/doopass.exe`
+* `dist/portable/linux-x64/doopass`
 
 Run it directly:
 
 ```bash
-dist\portable\win-x64\Doopass.exe serve --port 7240     # Windows
-chmod +x dist/portable/linux-x64/Doopass                # Linux
-./dist/portable/linux-x64/Doopass serve                 # Linux
+dist\portable\win-x64\doopass.exe serve --port 7240     # Windows
+chmod +x dist/portable/linux-x64/doopass                # Linux
+./dist/portable/linux-x64/doopass serve                 # Linux
 ```
 
-## Autostart on Windows (web server at sign-in)
+## Release packaging
 
 ```powershell
-scripts\install-autostart -Bind localhost     # or -Bind lan
-scripts\uninstall-autostart
+scripts\package-release             # after publish-portable
 ```
 
-`install-autostart` copies `Doopass.exe` to `%LOCALAPPDATA%\Doopass`, creates a hidden
-launcher (VBS) and adds it to the Startup folder, and places a shortcut that opens the
-web interface.
+Builds archives ready for GitHub Releases:
 
-Options:
+* `dist/release/doopass-5.0.0-win-x64.zip` (exe + install/uninstall scripts + README)
+* `dist/release/doopass-5.0.0-linux-x64.tar.gz` (exe + install/uninstall scripts + systemd unit + README)
 
-* `-Port 7240`
-* `-Bind localhost|lan` (default `localhost`)
-* `-DryRun` — preview what would be done without changing anything
-* `-NoDesktopShortcut` — skip the desktop shortcut
+## Autostart (web server at sign-in)
+
+The installers take the executable path as the first argument and copy it to
+`~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows).
+
+**Windows**
+
+```powershell
+powershell -File scripts\install-autostart-win.ps1 .\doopass.exe            # localhost
+powershell -File scripts\install-autostart-win.ps1 .\doopass.exe lan        # LAN
+powershell -File scripts\uninstall-autostart-win.ps1
+```
+
+Options: `-Port 7240`, `-DryRun`, `-NoDesktopShortcut`.
+
+**Linux**
+
+```bash
+scripts\install-autostart-linux.sh ./doopass                 # localhost
+scripts\install-autostart-linux.sh ./doopass lan [--linger]  # LAN
+scripts\uninstall-autostart-linux.sh
+```
+
+Installs a `systemd` user service (`~/.config/systemd/user/doopass.service`) started
+with `enable --now`.
 
 > `lan` mode listens on all network interfaces over plain HTTP and is only appropriate
 > on a trusted network.
@@ -106,6 +125,9 @@ Override the root with the `DOOPASS_HOME` environment variable.
     ├── backups/         # dated store backups
     └── doopass.log      # log file
 ```
+
+Application events (start/stop, store and backup operations, settings changes, errors)
+are appended to `doopass.log` and it rotates at 5 MB. Secrets are never written to the log.
 
 ## Store format
 

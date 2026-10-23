@@ -128,4 +128,18 @@ public sealed class StoreTests : IDisposable
 
         Assert.Equal("b", reopened.GetValue("a"));
     }
+
+    [Fact]
+    public void StoreFile_HasNoUtf8Bom()
+    {
+        var store = new Store("secret", _storePath);
+        store.AddProperty("github", "token123");
+
+        var bytes = File.ReadAllBytes(_storePath);
+
+        Assert.False(StartsWithBom(bytes));
+    }
+
+    private static bool StartsWithBom(byte[] bytes) =>
+        bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
 }

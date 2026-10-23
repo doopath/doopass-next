@@ -99,4 +99,32 @@ public sealed class SettingsTests : IDisposable
 
         Assert.Equal(custom, reloaded.StoreFile);
     }
+
+    [Fact]
+    public void SettingsFile_HasNoUtf8Bom()
+    {
+        var settings = new Settings();
+        settings.ModifyProperty("local", "version", "5.0.0");
+
+        var bytes = File.ReadAllBytes(settings.SettingsFile);
+
+        Assert.False(StartsWithBom(bytes));
+    }
+
+    [Fact]
+    public void SettingsFile_WithBom_StillLoads()
+    {
+        var settings = new Settings();
+        var path = settings.SettingsFile;
+        var original = File.ReadAllBytes(path);
+
+        File.WriteAllBytes(path, new byte[] { 0xEF, 0xBB, 0xBF }.Concat(original).ToArray());
+
+        var reloaded = new Settings();
+
+        Assert.Contains("local", reloaded.Sections);
+    }
+
+    private static bool StartsWithBom(byte[] bytes) =>
+        bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
 }

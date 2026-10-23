@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Doopass.Cli</RootNamespace>
-    <AssemblyName>Doopass</AssemblyName>
-    <Version>3.0.0</Version>
+    <AssemblyName>doopass</AssemblyName>
+    <Version>5.0.0</Version>
     <UseAppHost>true</UseAppHost>
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>

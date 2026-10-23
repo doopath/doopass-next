@@ -1,0 +1,13 @@
+[Unit]
+Description=Doopass web server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/doopass serve --port 7240 --no-browser
+Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=%h/.cache/doopass
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

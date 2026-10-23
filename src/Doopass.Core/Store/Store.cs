@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Doopass.Core.Crypto;
+using Doopass.Core.Diagnostics;
 
 namespace Doopass.Core.Storage;
 
@@ -28,10 +29,12 @@ public sealed class Store
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllText(storePath, Encrypt(password, []));
+            File.WriteAllText(storePath, Encrypt(password, []), TextFile.Utf8NoBom);
+            AppLogger.Info($"Store initialized: {storePath}");
         }
 
         Load();
+        AppLogger.Info($"Store opened: {storePath} ({_entries.Count} entries)");
     }
 
     /// <summary>The master password for this store (kept in memory only).</summary>
@@ -72,6 +75,7 @@ public sealed class Store
 
         _entries.Add(new Entry(name, value));
         Save();
+        AppLogger.Info($"Property added: {name}");
     }
 
     /// <summary>Updates the value of an existing key.</summary>
@@ -86,6 +90,7 @@ public sealed class Store
 
         _entries[index] = new Entry(name, value);
         Save();
+        AppLogger.Info($"Property updated: {name}");
     }
 
     /// <summary>Removes an existing key.</summary>
@@ -100,6 +105,7 @@ public sealed class Store
 
         _entries.RemoveAt(index);
         Save();
+        AppLogger.Info($"Property removed: {name}");
     }
 
     /// <summary>Encrypts plaintext bytes with the store password.</summary>
@@ -145,6 +151,7 @@ public sealed class Store
         }
         catch (IncorrectPasswordError)
         {
+            AppLogger.Debug($"Store open failed (incorrect password): {storePath}");
             return null;
         }
     }
@@ -194,7 +201,7 @@ public sealed class Store
     {
         var plaintext = string.Join("\n", _entries.Select(e => $"{e.Key} = {e.Value}"));
         var encrypted = Encrypt(Password, Encoding.UTF8.GetBytes(plaintext));
-        File.WriteAllText(StorePath, encrypted, Encoding.UTF8);
+        File.WriteAllText(StorePath, encrypted, TextFile.Utf8NoBom);
     }
 
     private int FindIndex(string name) => _entries.FindIndex(e => e.Key == name);
