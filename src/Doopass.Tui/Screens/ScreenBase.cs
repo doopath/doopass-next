@@ -63,6 +63,11 @@ internal abstract class ScreenBase : View
         SubViewLayout += (_, _) => view.X = Math.Max(0, (Viewport.Width - width) / 2);
     }
 
+    /// <summary>Called every time this screen becomes the visible one.</summary>
+    public virtual void OnShown()
+    {
+    }
+
     /// <summary>Gives focus to the first tab stop on this screen.</summary>
     public void FocusInitial()
     {

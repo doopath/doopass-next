@@ -166,6 +166,69 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void Esc_from_the_store_keeps_the_vault_unlocked()
+    {
+        OpenStore();
+
+        Press(Key.Esc);
+        Settle();
+
+        Assert.NotNull(_context.CurrentStore);
+        Assert.Contains("Open store", MenuRows()[0].Text?.ToString());
+    }
+
+    [Fact]
+    public void Reopening_the_store_does_not_ask_for_the_password_again()
+    {
+        OpenStore();
+
+        Press(Key.Esc);
+        Settle();
+
+        // First menu row is "Open store" when a session is already unlocked.
+        // Enter is not a global key, so it goes to the focused row itself.
+        MenuRows()[0].InvokeCommand(Command.Accept);
+        Settle();
+
+        Assert.NotNull(_context.CurrentStore);
+        Assert.True(FindAll<TextView>(_window).Count == 1, $"Enter should reopen the store ({Dump()})");
+    }
+
+    [Fact]
+    public void Cyrillic_ch_locks_the_vault_and_returns_to_the_menu()
+    {
+        OpenStore();
+
+        // The hotkey belongs to the list, not to the search field (where it is text).
+        FindAll<ListView>(_window).Single().SetFocus();
+        Press(new Key('ч'));
+        Settle();
+
+        Assert.Null(_context.CurrentStore);
+        Assert.Contains("Log in", MenuRows()[0].Text?.ToString());
+    }
+
+    /// <summary>Creates a store on disk and lands on the store screen, logged in.</summary>
+    private void OpenStore()
+    {
+        var storePath = _context.Settings.StoreFile;
+        Directory.CreateDirectory(Path.GetDirectoryName(storePath)!);
+
+        if (!File.Exists(storePath))
+        {
+            var store = new Store("Passw0rd!x", storePath);
+            store.AddProperty("github", "correct horse battery staple");
+        }
+
+        Assert.Equal(LoginStatus.Success, _context.Login("Passw0rd!x"));
+
+        _window.Replace(new LoginScreen(_context, _window));
+        Settle();
+        _window.Replace(new StoreScreen(_context, _window));
+        Settle();
+    }
+
+    [Fact]
     public void Tab_cycles_only_search_and_list_on_the_store_screen()
     {
         var storePath = _context.Settings.StoreFile;
@@ -216,7 +279,7 @@ public sealed class NavigationTests : IDisposable
     /// <summary>Feeds a key to the global entry point wired in <c>DoopassTui</c>.</summary>
     private void Press(Key key)
     {
-        _window.RouteKey(new Key(key.KeyCode), _app);
+        _window.RouteKey(key, _app);
         _app.LayoutAndDraw();
     }
 

@@ -9,16 +9,8 @@ namespace Doopass.Tui.Screens;
 /// <summary>The main menu: log in, init store, backups, settings, exit.</summary>
 internal sealed class MainMenuScreen : ScreenBase
 {
-    private static readonly (string Label, Action<MainMenuScreen> Run)[] Items =
-    [
-        ("Log in         unlock an existing vault", s => s.Shell.Replace(new LoginScreen(s.Context, s.Shell))),
-        ("Init store     create a new encrypted vault", s => s.Shell.Replace(new InitStoreScreen(s.Context, s.Shell))),
-        ("Backups        create, restore or delete snapshots", s => s.Shell.Replace(new BackupScreen(s.Context, s.Shell))),
-        ("Settings       application configuration", s => s.Shell.Replace(new SettingsScreen(s.Context, s.Shell))),
-        ("Exit           close doopass", s => s.Shell.Quit()),
-    ];
-
     private readonly List<Label> _rows = new();
+    private Label? _primaryRow;
 
     public MainMenuScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
@@ -36,13 +28,29 @@ internal sealed class MainMenuScreen : ScreenBase
         hint.X = Pos.Center();
         hint.Width = Dim.Auto();
 
-        for (var i = 0; i < Items.Length; i++)
+        // Row 0 opens the store directly when the vault is already unlocked, so
+        // going back from the store never asks for the password again.
+        var items = new List<(string Label, Action Run)>
         {
-            var item = Items[i];
-            var row = UiKit.MenuItem(item.Label, Pos.Center(), 9 + i, () => item.Run(this), width: 54);
+            (PrimaryLabel(), OpenPrimary),
+            ("Init store     create a new encrypted vault", () => Shell.Replace(new InitStoreScreen(Context, Shell))),
+            ("Backups        create, restore or delete snapshots", () => Shell.Replace(new BackupScreen(Context, Shell))),
+            ("Settings       application configuration", () => Shell.Replace(new SettingsScreen(Context, Shell))),
+            ("Exit           close doopass", Shell.Quit),
+        };
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            var row = UiKit.MenuItem(item.Label, Pos.Center(), 9 + i, item.Run, width: 54);
 
             _rows.Add(AddStop(row));
             Add(row);
+
+            if (i == 0)
+            {
+                _primaryRow = row;
+            }
         }
 
         var tagline = UiKit.Hint("local encrypted password store · doopass", 15);
@@ -55,4 +63,27 @@ internal sealed class MainMenuScreen : ScreenBase
     public override string ScreenTitle => "main menu";
 
     public override string FooterHint => "h/j/k/l move   enter select   f1 help   esc quit";
+
+    public override void OnShown()
+    {
+        if (_primaryRow is not null)
+        {
+            _primaryRow.Text = "  " + PrimaryLabel();
+        }
+    }
+
+    private string PrimaryLabel() => Context.CurrentStore is not null
+        ? "Open store     unlocked - no password needed"
+        : "Log in         unlock an existing vault";
+
+    private void OpenPrimary()
+    {
+        if (Context.CurrentStore is not null)
+        {
+            Shell.Replace(new StoreScreen(Context, Shell));
+            return;
+        }
+
+        Shell.Replace(new LoginScreen(Context, Shell));
+    }
 }

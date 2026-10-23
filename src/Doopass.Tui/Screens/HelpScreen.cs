@@ -20,6 +20,7 @@ internal sealed class HelpScreen : ScreenBase
         ("v", "reveal or hide the selected value (store)"),
         ("e / d / a", "edit, delete or add a pair (store)"),
         ("c / r / d", "create, restore or delete a backup"),
+        ("ч  (or x)", "lock the vault: forget the password, back to the menu"),
         ("esc", "go back one screen"),
         ("q", "quit doopass"),
         ("f1", "open or close this help"),

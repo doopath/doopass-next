@@ -221,6 +221,15 @@ internal sealed class DoopassWindow : Window
         // Terminal.Gui 2.4.17 routes arrow / J-K keys into ListView's "Activate" path,
         // which leaves the selection where it is. Drive list and detail scrolling
         // explicitly instead of relying on view key bindings.
+        // Lock the vault from anywhere: "ч" (Russian layout) or "x" (latin alias).
+        if (!context.IsEditableText && Context.CurrentStore is not null && IsLogoutKey(key))
+        {
+            Context.Logout();
+            GotoMain();
+            key.Handled = true;
+            return;
+        }
+
         if (focused is ListView list && TryListNavigation(list, key))
         {
             key.Handled = true;
@@ -386,6 +395,10 @@ internal sealed class DoopassWindow : Window
 
     private static bool IsKey(Key key, Key expected) => StripModifiers(key.KeyCode) == expected.KeyCode;
 
+    // U+0447 'ч' and U+0427 'Ч': the key that sits where X is on a Russian layout.
+    private static bool IsLogoutKey(Key key) =>
+        IsKey(key, Key.X) || key.AsRune.Value is 0x0447 or 0x0427;
+
     /// <summary>
     /// The deepest view that has focus. <see cref="IApplication.Navigation"/> can
     /// report the focused container instead of the focused control, which would make
@@ -470,6 +483,7 @@ internal sealed class DoopassWindow : Window
 
         _current = top;
         _content.Add(top);
+        top.OnShown();
 
         RefreshChrome();
 
