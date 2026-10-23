@@ -6,7 +6,23 @@
     <AssemblyName>Doopass</AssemblyName>
     <Version>3.0.0</Version>
     <UseAppHost>true</UseAppHost>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Static assets are served from embedded resources so the app can be published,
+         self-contained, as a single file with no wwwroot folder next to it. -->
+    <EmbeddedResource Include="wwwroot\app.css" LogicalName="Doopass.Cli.wwwroot.app.css" />
+    <EmbeddedResource Include="wwwroot\theme.js" LogicalName="Doopass.Cli.wwwroot.theme.js" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)microsoft.aspnetcore.app.internal.assets/*/_framework/blazor.web.js"
+                       LogicalName="Doopass.Cli.wwwroot.blazor.web.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Don't publish wwwroot as loose files; assets are embedded and served from resources. -->
+    <Content Remove="wwwroot\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Doopass.Core\Doopass.Core.csproj" />

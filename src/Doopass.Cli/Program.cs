@@ -4,7 +4,7 @@ using Doopass.Tui;
 
 // Single entry point for Doopass.
 //   doopass                 -> run the terminal UI
-//   doopass serve [--port N] [--no-browser] -> run the Fluent web interface
+//   doopass serve [--port N] [--no-browser] [--lan] -> run the web interface
 return Run(args);
 
 static int Run(string[] args)
@@ -18,6 +18,7 @@ static int Run(string[] args)
 
     var port = 7240;
     var openBrowser = true;
+    var lan = false;
 
     for (var i = 1; i < args.Length; i++)
     {
@@ -30,30 +31,24 @@ static int Run(string[] args)
         {
             openBrowser = false;
         }
+        else if (args[i] is "--lan" or "--network")
+        {
+            lan = true;
+        }
     }
 
-    return RunWebServer(port, openBrowser);
+    return RunWebServer(port, openBrowser, lan);
 }
 
-static int RunWebServer(int port, bool openBrowser)
+static int RunWebServer(int port, bool openBrowser, bool lan)
 {
-    // .NET 10 serves framework static assets (e.g. _framework/blazor.web.js) through the
-    // "development" static-web-assets handler when running from a non-published build.
-    // `dotnet run` enables Development via launchSettings.json; when the app is launched
-    // directly from the build output we default to Development so the browser UI works.
-    // Published builds have no runtime manifest and keep the configured environment.
-    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"))
-        && File.Exists(Path.Combine(AppContext.BaseDirectory, "Doopass.staticwebassets.runtime.json")))
-    {
-        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
-    }
-
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
         Args = [],
     });
 
-    builder.WebHost.UseUrls($"http://localhost:{port}");
+    var host = lan ? "0.0.0.0" : "localhost";
+    builder.WebHost.UseUrls($"http://{host}:{port}");
 
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
@@ -71,12 +66,17 @@ static int RunWebServer(int port, bool openBrowser)
 
     app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
     app.UseAntiforgery();
-    app.MapStaticAssets();
+
+    // Serve the web assets from embedded resources (works in single-file deployments too).
+    app.MapGet("/app.css", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.app.css", "text/css; charset=utf-8"));
+    app.MapGet("/theme.js", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.theme.js", "text/javascript; charset=utf-8"));
+    app.MapGet("/_framework/blazor.web.js", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.blazor.web.js", "text/javascript; charset=utf-8"));
+
     app.MapRazorComponents<Doopass.Cli.Components.App>()
         .AddInteractiveServerRenderMode();
 
     var url = $"http://localhost:{port}";
-    app.Logger.LogInformation("Doopass web interface: {Url}", url);
+    app.Logger.LogInformation("Doopass web interface: {Url} (bind: {Host})", url, host);
 
     if (openBrowser)
     {
@@ -98,4 +98,17 @@ static int RunWebServer(int port, bool openBrowser)
 
     app.Run();
     return 0;
+}
+
+static IResult ServeAsset(HttpContext ctx, string resourceName, string contentType)
+{
+    var stream = typeof(Doopass.Cli.Components.App).Assembly.GetManifestResourceStream(resourceName);
+
+    if (stream is null)
+    {
+        return Results.NotFound();
+    }
+
+    ctx.Response.Headers["Cache-Control"] = "public, max-age=3600";
+    return Results.Stream(stream, contentType);
 }

@@ -43,19 +43,54 @@ Hotkeys: `Q`/`Esc` quit, `H`/`F1` help, `Tab`/`Shift+Tab` next/previous,
 dotnet run --project src/Doopass.Cli -- serve --port 7240
 ```
 
-The default port is `7240`; the browser opens automatically (use `--no-browser` to disable).
-Open <http://localhost:7240> and log in or initialize a store.
+`serve` options:
 
-> When running from source (non-published), the app uses the ASP.NET Core `Development`
-> environment so framework static assets (`_framework/blazor.web.js`) load correctly.
-> Published builds run in the configured environment.
+* `--port N` — HTTP port (default `7240`)
+* `--no-browser` — don't open the browser automatically
+* `--lan` / `--network` — listen on `0.0.0.0` instead of `localhost` (LAN access)
 
-For a production build, publish first:
+The default binds to `localhost` only. Open <http://localhost:7240> and log in or
+initialize a store. The web assets are embedded, so the app alone is enough to run.
+
+## Portable single-file build
+
+```powershell
+scripts\publish-portable            # or: powershell -File scripts\publish-portable.ps1
+```
+
+Produces one self-contained executable per platform (no .NET install required):
+
+* `dist/portable/win-x64/Doopass.exe`
+* `dist/portable/linux-x64/Doopass`
+
+Run it directly:
 
 ```bash
-dotnet publish src/Doopass.Cli -c Release -o out
-./out/Doopass serve --port 7240
+dist\portable\win-x64\Doopass.exe serve --port 7240     # Windows
+chmod +x dist/portable/linux-x64/Doopass                # Linux
+./dist/portable/linux-x64/Doopass serve                 # Linux
 ```
+
+## Autostart on Windows (web server at sign-in)
+
+```powershell
+scripts\install-autostart -Bind localhost     # or -Bind lan
+scripts\uninstall-autostart
+```
+
+`install-autostart` copies `Doopass.exe` to `%LOCALAPPDATA%\Doopass`, creates a hidden
+launcher (VBS) and adds it to the Startup folder, and places a shortcut that opens the
+web interface.
+
+Options:
+
+* `-Port 7240`
+* `-Bind localhost|lan` (default `localhost`)
+* `-DryRun` — preview what would be done without changing anything
+* `-NoDesktopShortcut` — skip the desktop shortcut
+
+> `lan` mode listens on all network interfaces over plain HTTP and is only appropriate
+> on a trusted network.
 
 ## Data location
 

@@ -26,9 +26,6 @@
             <NavLink class="nav-link" href="/settings">
                 <Icon Name="settings" Size="18" /><span>Settings</span>
             </NavLink>
-            <NavLink class="nav-link" href="/help">
-                <Icon Name="help" Size="18" /><span>Help</span>
-            </NavLink>
         </nav>
 
         <div class="sidebar-footer">
@@ -74,7 +71,6 @@
     {
         var path when path.StartsWith("backups", StringComparison.OrdinalIgnoreCase) => "Backups",
         var path when path.StartsWith("settings", StringComparison.OrdinalIgnoreCase) => "Settings",
-        var path when path.StartsWith("help", StringComparison.OrdinalIgnoreCase) => "Help",
         _ => "Store",
     };
 
