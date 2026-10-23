@@ -1,4 +1,5 @@
 using Doopass.Tui.Ui;
+using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
@@ -11,15 +12,14 @@ internal sealed class LoginScreen : ScreenBase
 
     public LoginScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var title = UiKit.Title("Sign in", 1);
-        var subtitle = UiKit.Line("Unlock your encrypted vault", 2, dim: true);
-        var label = UiKit.FieldLabel("Password", 5);
-        _password = UiKit.Input(6, secret: true);
+        var title = UiKit.Title("Sign in", 0);
+        var subtitle = UiKit.Line("Unlock your encrypted vault", 1, dim: true);
+        var label = UiKit.FieldLabel("Password", 4);
+        _password = UiKit.Input(5, secret: true);
+        _error = UiKit.Line(string.Empty, 9);
 
-        _error = UiKit.Line(string.Empty, 11);
-
-        var unlock = UiKit.MenuButton("Unlock", 13, Submit);
-        var back = UiKit.MenuButton("Back to menu", 15, Shell.GotoMain);
+        var unlock = UiKit.Tile("Unlock", Pos.Center(), 11, Submit);
+        var back = UiKit.Tile("Back to menu", Pos.Center(), 14, Shell.GotoMain);
 
         Add(title, subtitle, label, _password, _error, unlock, back);
 

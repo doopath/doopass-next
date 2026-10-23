@@ -1,35 +1,74 @@
 using Doopass.Tui.Theme;
+using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Ui;
 
-/// <summary>Small factories that keep every screen visually consistent.</summary>
+/// <summary>
+/// Visual building blocks plus an explicit focus order.
+/// Terminal.Gui's <c>AdvanceFocus</c> does not descend into nested containers, so every
+/// screen registers its controls here in visual order and navigation walks this list.
+/// </summary>
 internal static class UiKit
 {
-    public const int WideButtonWidth = 40;
+    public const int TileWidth = 46;
+    public const int TileHeight = 3;
+    public const int SmallTileWidth = 12;
 
-    /// <summary>A full-width, borderless menu entry (inverts when focused).</summary>
-    public static Button MenuButton(string text, int y, Action action, int width = WideButtonWidth)
+    private static readonly Dictionary<View, List<View>> Screens = new();
+    private static List<View> _active = new();
+
+    public static void BeginScreen(View screen)
     {
-        var button = new Button
-        {
-            Text = text,
-            X = Pos.Center(),
-            Y = y,
-            Width = width,
-            Height = 1,
-            ShadowStyle = null,
-            SchemeName = Monochrome.SchemeName,
-        };
-
-        button.Accepted += (_, _) => action();
-        return button;
+        _active = new List<View>();
+        Screens[screen] = _active;
     }
 
-    /// <summary>A compact borderless button used inside toolbars and rows.</summary>
-    public static Button InlineButton(string text, Pos x, int y, int width, Action action)
+    public static void ActivateScreen(View screen)
+    {
+        if (Screens.TryGetValue(screen, out var list))
+        {
+            _active = list;
+        }
+    }
+
+    public static void RegisterFocusable(View view) => _active.Add(view);
+
+    /// <summary>Number of controls currently registered on the active screen.</summary>
+    public static int RegisteredCount() => _active.Count;
+
+    /// <summary>Drops dynamically rebuilt controls (list rows) from the focus order.</summary>
+    public static void TrimRegistered(int count)
+    {
+        if (_active.Count > count)
+        {
+            _active.RemoveRange(count, _active.Count - count);
+        }
+    }
+
+    public static void FocusInitial() => _active.FirstOrDefault()?.SetFocus();
+
+    public static void AdvanceFocus(IApplication? app, bool forward)
+    {
+        if (app is null || _active.Count == 0)
+        {
+            return;
+        }
+
+        var current = app.Navigation?.GetFocused();
+        var index = current is null ? -1 : _active.IndexOf(current);
+
+        var next = forward
+            ? (index < 0 ? 0 : (index + 1) % _active.Count)
+            : (index <= 0 ? _active.Count - 1 : index - 1);
+
+        _active[next].SetFocus();
+    }
+
+    /// <summary>A wide bordered tile (3 rows tall).</summary>
+    public static Button Tile(string text, Pos x, int y, Action action, int width = TileWidth)
     {
         var button = new Button
         {
@@ -37,17 +76,21 @@ internal static class UiKit
             X = x,
             Y = y,
             Width = width,
-            Height = 1,
+            Height = TileHeight,
             ShadowStyle = null,
             SchemeName = Monochrome.SchemeName,
         };
 
         button.Accepted += (_, _) => action();
+        RegisterFocusable(button);
         return button;
     }
 
-    /// <summary>A centered, bold-ish screen title.</summary>
-    public static Label Title(string text, int y = 1) => new()
+    /// <summary>A compact bordered tile used inside list rows and toolbars.</summary>
+    public static Button SmallTile(string text, Pos x, int y, Action action, int width = SmallTileWidth)
+        => Tile(text, x, y, action, width);
+
+    public static Label Title(string text, int y = 0) => new()
     {
         Text = text,
         X = Pos.Center(),
@@ -57,7 +100,6 @@ internal static class UiKit
         SchemeName = Monochrome.SchemeName,
     };
 
-    /// <summary>A centered single-line label; dim for secondary information.</summary>
     public static Label Line(string text, int y, bool dim = false) => new()
     {
         Text = text,
@@ -68,7 +110,6 @@ internal static class UiKit
         SchemeName = dim ? Monochrome.DimSchemeName : Monochrome.SchemeName,
     };
 
-    /// <summary>A left-aligned label, aligned to a centered form column.</summary>
     public static Label FieldLabel(string text, int y, int fieldWidth = 44) => new()
     {
         Text = text,
@@ -79,16 +120,21 @@ internal static class UiKit
         SchemeName = Monochrome.DimSchemeName,
     };
 
-    /// <summary>A bordered, single-line text input (height 3 including the frame).</summary>
-    public static TextField Input(int y, bool secret = false, string text = "", int width = 44) => new()
+    public static TextField Input(int y, bool secret = false, string text = "", int width = 44)
     {
-        Secret = secret,
-        Text = text,
-        X = Pos.Center(),
-        Y = y,
-        Width = width,
-        Height = 3,
-        BorderStyle = LineStyle.Rounded,
-        SchemeName = Monochrome.SchemeName,
-    };
+        var field = new TextField
+        {
+            Secret = secret,
+            Text = text,
+            X = Pos.Center(),
+            Y = y,
+            Width = width,
+            Height = 3,
+            BorderStyle = LineStyle.Rounded,
+            SchemeName = Monochrome.SchemeName,
+        };
+
+        RegisterFocusable(field);
+        return field;
+    }
 }

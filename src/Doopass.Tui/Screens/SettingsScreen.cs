@@ -8,23 +8,25 @@ namespace Doopass.Tui.Screens;
 /// <summary>The settings screen: list sections with changeable values.</summary>
 internal sealed class SettingsScreen : ScreenBase
 {
+    private const int RowHeight = 3;
+
     private readonly View _items;
 
     public SettingsScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
         var title = UiKit.Title("Settings", 0);
         var subtitle = UiKit.Line("application configuration", 1, dim: true);
-        var restore = UiKit.InlineButton("Restore defaults", 1, 3, 20, () =>
+        var restore = UiKit.Tile("Restore defaults", 1, 3, () =>
             Shell.Confirm("Restore all settings to their defaults?", () =>
             {
                 Context.Settings.RestoreDefaults();
                 Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
-            }));
+            }), width: 20);
 
         _items = new View
         {
             X = 0,
-            Y = 5,
+            Y = 7,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             CanFocus = true,
@@ -64,7 +66,7 @@ internal sealed class SettingsScreen : ScreenBase
                 };
 
                 _items.Add(row);
-                y++;
+                y += RowHeight;
             }
 
             y++;
@@ -94,7 +96,7 @@ internal sealed class SettingsScreen : ScreenBase
         public SettingRow(string section, string key, string value, Action<string, string, string> onChange)
         {
             Width = Dim.Fill();
-            Height = 1;
+            Height = RowHeight;
             CanFocus = true;
             TabStop = TabBehavior.NoStop;
             SchemeName = Monochrome.SchemeName;
@@ -103,7 +105,7 @@ internal sealed class SettingsScreen : ScreenBase
             {
                 Text = " " + key,
                 X = 0,
-                Y = 0,
+                Y = 1,
                 Width = 20,
                 Height = 1,
                 SchemeName = Monochrome.SchemeName,
@@ -113,8 +115,8 @@ internal sealed class SettingsScreen : ScreenBase
             {
                 Text = value,
                 X = 21,
-                Y = 0,
-                Width = Dim.Fill(10),
+                Y = 1,
+                Width = Dim.Fill(12),
                 Height = 1,
                 SchemeName = Monochrome.DimSchemeName,
             };
@@ -122,7 +124,7 @@ internal sealed class SettingsScreen : ScreenBase
             Add(
                 keyLabel,
                 valueLabel,
-                UiKit.InlineButton("change", Pos.AnchorEnd(10), 0, 10, () => onChange(section, key, value)));
+                UiKit.SmallTile("change", Pos.AnchorEnd(11), 0, () => onChange(section, key, value), width: 10));
         }
     }
 }

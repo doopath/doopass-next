@@ -1,6 +1,7 @@
 using Doopass.Core;
 using Doopass.Tui.Screens;
 using Doopass.Tui.Theme;
+using Doopass.Tui.Ui;
 using Terminal.Gui.App;
 using Terminal.Gui.Drivers;
 using Terminal.Gui.Drawing;
@@ -174,6 +175,7 @@ internal sealed class DoopassWindow : Window
         _content.Add(top);
 
         App?.LayoutAndDraw();
+        UiKit.ActivateScreen(top);
         top.FocusInitial();
         App?.LayoutAndDraw();
     }
@@ -216,6 +218,13 @@ internal sealed class DoopassWindow : Window
             return true;
         }
 
+        // Shift+Tab moves backwards; plain Tab forwards.
+        if (key.KeyCode == KeyCode.Tab)
+        {
+            AdvanceFocus(key.IsShift ? NavigationDirection.Backward : NavigationDirection.Forward);
+            return true;
+        }
+
         if (isTyping)
         {
             return base.OnKeyDown(key);
@@ -249,7 +258,7 @@ internal sealed class DoopassWindow : Window
     }
 
     private void AdvanceFocus(NavigationDirection direction) =>
-        App?.Navigation?.AdvanceFocus(direction, TabBehavior.TabStop);
+        UiKit.AdvanceFocus(App, direction == NavigationDirection.Forward);
 
     private void ToggleHelp()
     {

@@ -1,4 +1,5 @@
 using Doopass.Tui.Theme;
+using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 
 namespace Doopass.Tui.Screens;
@@ -19,40 +20,14 @@ internal abstract class ScreenBase : View
         CanFocus = true;
         TabStop = TabBehavior.NoStop;
         SchemeName = Monochrome.SchemeName;
+
+        UiKit.BeginScreen(this);
     }
 
     protected DoopassContext Context { get; }
 
     protected DoopassWindow Shell { get; }
 
-    /// <summary>Gives focus to the first focusable control on this screen.</summary>
-    public void FocusInitial()
-    {
-        var view = FindFocusableStop(this);
-
-        if (view is not null)
-        {
-            view.SetFocus();
-        }
-    }
-
-    private static View? FindFocusableStop(View parent)
-    {
-        foreach (var child in parent.SubViews)
-        {
-            if (child.CanFocus && child.TabStop != TabBehavior.NoStop)
-            {
-                return child;
-            }
-
-            var found = FindFocusableStop(child);
-
-            if (found is not null)
-            {
-                return found;
-            }
-        }
-
-        return null;
-    }
+    /// <summary>Gives focus to the first control on this screen.</summary>
+    public void FocusInitial() => UiKit.FocusInitial();
 }

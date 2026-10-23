@@ -6,38 +6,43 @@ using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
 
-/// <summary>The store screen: search plus a list of key/value pairs with actions.</summary>
+/// <summary>The store screen: search plus a list of key tiles with actions.</summary>
 internal sealed class StoreScreen : ScreenBase
 {
+    private const int RowHeight = 3;
+
     private readonly TextField _search;
     private readonly View _items;
     private readonly Label _count;
     private readonly Label _status;
     private readonly List<View> _rows = new();
+    private readonly int _baseFocusCount;
 
     public StoreScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
         var title = UiKit.Title("Store", 0);
         _count = UiKit.Line(string.Empty, 1, dim: true);
+
         _search = UiKit.Input(3);
+
+        var add = UiKit.Tile("Add pair", 1, 7, BeginAdd, width: 14);
+        var back = UiKit.Tile("Back", 16, 7, Shell.GotoMain, width: 9);
+        var exit = UiKit.Tile("Exit", 27, 7, Shell.Quit, width: 9);
+
         _status = new Label
         {
             Text = string.Empty,
             X = 1,
-            Y = 8,
+            Y = 11,
             Width = Dim.Fill(),
             Height = 1,
             SchemeName = Monochrome.DimSchemeName,
         };
 
-        var add = UiKit.InlineButton("Add pair", 1, 7, 14, BeginAdd);
-        var back = UiKit.InlineButton("Back", 16, 7, 9, Shell.GotoMain);
-        var exit = UiKit.InlineButton("Exit", 27, 7, 9, Shell.Quit);
-
         _items = new View
         {
             X = 0,
-            Y = 9,
+            Y = 12,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             CanFocus = true,
@@ -46,7 +51,9 @@ internal sealed class StoreScreen : ScreenBase
         };
         _items.ViewportSettings |= ViewportSettingsFlags.HasVerticalScrollBar;
 
-        Add(title, _count, _search, _status, add, back, exit, _items);
+        Add(title, _count, _search, add, back, exit, _status, _items);
+
+        _baseFocusCount = UiKit.RegisteredCount();
 
         _search.Accepted += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
         _search.ValueChanged += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
@@ -56,6 +63,8 @@ internal sealed class StoreScreen : ScreenBase
 
     private void ApplyFilter(string filter)
     {
+        UiKit.TrimRegistered(_baseFocusCount);
+
         foreach (var row in _rows)
         {
             _items.Remove(row);
@@ -99,7 +108,7 @@ internal sealed class StoreScreen : ScreenBase
 
                 _items.Add(row);
                 _rows.Add(row);
-                y++;
+                y += RowHeight;
             }
         }
 
@@ -184,7 +193,7 @@ internal sealed class StoreScreen : ScreenBase
         public StoreRow(string key, Action onCopy, Action onEdit, Action onDelete)
         {
             Width = Dim.Fill();
-            Height = 1;
+            Height = RowHeight;
             CanFocus = true;
             TabStop = TabBehavior.NoStop;
             SchemeName = Monochrome.SchemeName;
@@ -192,18 +201,18 @@ internal sealed class StoreScreen : ScreenBase
             var label = new Label
             {
                 Text = key,
-                X = 1,
-                Y = 0,
-                Width = Dim.Fill(24),
+                X = 2,
+                Y = 1,
+                Width = Dim.Fill(26),
                 Height = 1,
                 SchemeName = Monochrome.SchemeName,
             };
 
             Add(
                 label,
-                UiKit.InlineButton("copy", Pos.AnchorEnd(24), 0, 8, onCopy),
-                UiKit.InlineButton("edit", Pos.AnchorEnd(16), 0, 8, onEdit),
-                UiKit.InlineButton("del", Pos.AnchorEnd(8), 0, 8, onDelete));
+                UiKit.SmallTile("copy", Pos.AnchorEnd(25), 0, onCopy, width: 8),
+                UiKit.SmallTile("edit", Pos.AnchorEnd(17), 0, onEdit, width: 8),
+                UiKit.SmallTile("del", Pos.AnchorEnd(9), 0, onDelete, width: 8));
         }
     }
 }

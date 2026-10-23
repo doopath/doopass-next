@@ -12,7 +12,7 @@ internal sealed class HelpScreen : ScreenBase
     {
         var title = UiKit.Title("Help", 0);
 
-        int y = 2;
+        var y = 2;
 
         void AddLine(string text, bool dim = false)
         {
@@ -38,7 +38,7 @@ internal sealed class HelpScreen : ScreenBase
         AddLine("  Doopass is free and open-source.", dim: true);
         AddLine("  github.com/doopath/PasswordManager", dim: true);
 
-        var back = UiKit.MenuButton("Back", y + 2, Shell.Back);
+        var back = UiKit.Tile("Back", Pos.Center(), y + 1, Shell.Back);
 
         Add(title, back);
     }

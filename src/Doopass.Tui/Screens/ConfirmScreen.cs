@@ -1,4 +1,5 @@
 using Doopass.Tui.Ui;
+using Terminal.Gui.ViewBase;
 
 namespace Doopass.Tui.Screens;
 
@@ -10,8 +11,8 @@ internal sealed class ConfirmScreen : ScreenBase
     {
         var title = UiKit.Title("Confirm", 2);
         var text = UiKit.Line(message, 5);
-        var no = UiKit.MenuButton("No", 9, Shell.Back);
-        var yes = UiKit.MenuButton("Yes", 11, onYes);
+        var no = UiKit.Tile("No", Pos.Center(), 9, Shell.Back);
+        var yes = UiKit.Tile("Yes", Pos.Center(), 12, onYes);
 
         Add(title, text, no, yes);
     }

@@ -1,4 +1,5 @@
 using Doopass.Tui.Ui;
+using Terminal.Gui.ViewBase;
 
 namespace Doopass.Tui.Screens;
 
@@ -10,7 +11,7 @@ internal sealed class MessageScreen : ScreenBase
     {
         var title = UiKit.Title("Notice", 2);
         var text = UiKit.Line(message, 5);
-        var ok = UiKit.MenuButton("OK", 9, onOk);
+        var ok = UiKit.Tile("OK", Pos.Center(), 8, onOk);
 
         Add(title, text, ok);
     }

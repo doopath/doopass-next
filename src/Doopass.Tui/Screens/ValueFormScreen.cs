@@ -1,4 +1,5 @@
 using Doopass.Tui.Ui;
+using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
@@ -16,12 +17,12 @@ internal sealed class ValueFormScreen : ScreenBase
         string value,
         Action<string> onSave) : base(context, shell)
     {
-        var titleView = UiKit.Title(title, 1);
-        var labelView = UiKit.FieldLabel(label, 4);
-        _value = UiKit.Input(5, text: value);
+        var titleView = UiKit.Title(title, 0);
+        var labelView = UiKit.FieldLabel(label, 3);
+        _value = UiKit.Input(4, text: value);
 
-        var save = UiKit.MenuButton("Save", 10, () => onSave(_value.Text ?? string.Empty));
-        var back = UiKit.MenuButton("Back", 12, Shell.Back);
+        var save = UiKit.Tile("Save", Pos.Center(), 8, () => onSave(_value.Text ?? string.Empty));
+        var back = UiKit.Tile("Back", Pos.Center(), 11, Shell.Back);
 
         Add(titleView, labelView, _value, save, back);
 

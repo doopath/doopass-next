@@ -14,21 +14,21 @@ internal sealed class MainMenuScreen : ScreenBase
         {
             Text = Constants.Logo,
             X = Pos.Center(),
-            Y = 1,
+            Y = 0,
             Width = Dim.Auto(),
             Height = Dim.Auto(),
             SchemeName = Theme.Monochrome.SchemeName,
         };
 
-        const int top = 9;
-        const int step = 2;
+        const int top = 7;
+        const int step = 3;
 
         Add(
             logo,
-            UiKit.MenuButton("Log in", top, () => Shell.Replace(new LoginScreen(Context, Shell))),
-            UiKit.MenuButton("Init store", top + step, () => Shell.Replace(new InitStoreScreen(Context, Shell))),
-            UiKit.MenuButton("Backups", top + step * 2, () => Shell.Replace(new BackupScreen(Context, Shell))),
-            UiKit.MenuButton("Settings", top + step * 3, () => Shell.Replace(new SettingsScreen(Context, Shell))),
-            UiKit.MenuButton("Exit", top + step * 4, Shell.Quit));
+            UiKit.Tile("Log in", Pos.Center(), top, () => Shell.Replace(new LoginScreen(Context, Shell))),
+            UiKit.Tile("Init store", Pos.Center(), top + step, () => Shell.Replace(new InitStoreScreen(Context, Shell))),
+            UiKit.Tile("Backups", Pos.Center(), top + step * 2, () => Shell.Replace(new BackupScreen(Context, Shell))),
+            UiKit.Tile("Settings", Pos.Center(), top + step * 3, () => Shell.Replace(new SettingsScreen(Context, Shell))),
+            UiKit.Tile("Exit", Pos.Center(), top + step * 4, Shell.Quit));
     }
 }

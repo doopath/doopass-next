@@ -1,4 +1,5 @@
 using Doopass.Tui.Ui;
+using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
@@ -19,14 +20,14 @@ internal sealed class PairFormScreen : ScreenBase
         string buttonText,
         Action<string, string> onSave) : base(context, shell)
     {
-        var title = UiKit.Title(buttonText, 1);
-        var keyLabelView = UiKit.FieldLabel(keyLabel, 4);
-        _key = UiKit.Input(5, text: key);
-        var valueLabelView = UiKit.FieldLabel(valueLabel, 10);
-        _value = UiKit.Input(11, text: value);
+        var title = UiKit.Title(buttonText, 0);
+        var keyLabelView = UiKit.FieldLabel(keyLabel, 3);
+        _key = UiKit.Input(4, text: key);
+        var valueLabelView = UiKit.FieldLabel(valueLabel, 8);
+        _value = UiKit.Input(9, text: value);
 
-        var save = UiKit.MenuButton(buttonText, 16, () => onSave(_key.Text ?? string.Empty, _value.Text ?? string.Empty));
-        var back = UiKit.MenuButton("Back", 18, Shell.Back);
+        var save = UiKit.Tile(buttonText, Pos.Center(), 13, () => onSave(_key.Text ?? string.Empty, _value.Text ?? string.Empty));
+        var back = UiKit.Tile("Back", Pos.Center(), 16, Shell.Back);
 
         Add(title, keyLabelView, _key, valueLabelView, _value, save, back);
 
