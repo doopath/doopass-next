@@ -75,6 +75,10 @@ internal sealed class DoopassWindow : Window
 
         Add(_header, _divider, _content, _footer);
 
+        // Width is only known after layout; recompute the centred bars then, so the
+        // first paint is already correct (Window.App is still null in the ctor).
+        SubViewLayout += (_, _) => RefreshChrome();
+
         // The application focuses the first focusable element when the runnable is
         // started (which is this window's content container). Re-assert the screen's
         // own tab order as soon as the window is initialized.
@@ -186,9 +190,22 @@ internal sealed class DoopassWindow : Window
             return;
         }
 
-        var width = App?.Driver?.GetOutputBuffer().Cols ?? 0;
-        _header.Text = Center($"DOOPASS   ▸   {top.ScreenTitle}", width);
-        _footer.Text = Center(top.FooterHint, width);
+        var width = Viewport.Width > 0
+            ? Viewport.Width
+            : App?.Driver?.GetOutputBuffer().Cols ?? 0;
+
+        var header = Center($"DOOPASS   ▸   {top.ScreenTitle}", width);
+        var footer = Center(top.FooterHint, width);
+
+        if (_header.Text != header)
+        {
+            _header.Text = header;
+        }
+
+        if (_footer.Text != footer)
+        {
+            _footer.Text = footer;
+        }
     }
 
     /// <summary>Shows a message screen; the callback runs when OK is pressed.</summary>
@@ -221,7 +238,7 @@ internal sealed class DoopassWindow : Window
         // Terminal.Gui 2.4.17 routes arrow / J-K keys into ListView's "Activate" path,
         // which leaves the selection where it is. Drive list and detail scrolling
         // explicitly instead of relying on view key bindings.
-        // Lock the vault from anywhere: "ч" (Russian layout) or "x" (latin alias).
+        // Lock the vault from anywhere: G.
         if (!context.IsEditableText && Context.CurrentStore is not null && IsLogoutKey(key))
         {
             Context.Logout();
@@ -261,6 +278,13 @@ internal sealed class DoopassWindow : Window
                 key.Handled = true;
                 return;
             }
+        }
+
+        if (!context.IsEditableText && Top is SettingsScreen settings && IsKey(key, Key.D0))
+        {
+            settings.RestoreDefaults();
+            key.Handled = true;
+            return;
         }
 
         if (!context.IsEditableText && Top is BackupScreen backups)
@@ -395,9 +419,7 @@ internal sealed class DoopassWindow : Window
 
     private static bool IsKey(Key key, Key expected) => StripModifiers(key.KeyCode) == expected.KeyCode;
 
-    // U+0447 'ч' and U+0427 'Ч': the key that sits where X is on a Russian layout.
-    private static bool IsLogoutKey(Key key) =>
-        IsKey(key, Key.X) || key.AsRune.Value is 0x0447 or 0x0427;
+    private static bool IsLogoutKey(Key key) => IsKey(key, Key.G);
 
     /// <summary>
     /// The deepest view that has focus. <see cref="IApplication.Navigation"/> can

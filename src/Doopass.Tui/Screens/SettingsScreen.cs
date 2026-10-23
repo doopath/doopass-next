@@ -15,28 +15,29 @@ internal sealed class SettingsScreen : ScreenBase
 
     public SettingsScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var restore = AddStop(UiKit.Primary("Restore defaults", 0, 0, () =>
-            Shell.Confirm("Restore all settings to their defaults?", () =>
-            {
-                Context.Settings.RestoreDefaults();
-                Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
-            }), width: 19));
+        _status = UiKit.Hint(string.Empty, 0);
 
-        _status = UiKit.Hint(string.Empty, 3);
-
-        var panel = UiKit.Panel("configuration", 0, 4, Dim.Fill(), Dim.Fill(4));
+        var panel = UiKit.Panel("configuration", 0, 2, Dim.Fill(), Dim.Fill(2));
         _list = AddStop(UiKit.List([]));
         _list.Accepted += (_, _) => BeginEdit();
         panel.Add(_list);
 
-        Add(restore, _status, panel);
+        Add(_status, panel);
 
         Build();
     }
 
     public override string ScreenTitle => "settings";
 
-    public override string FooterHint => "h/j/k/l move   enter edit   esc back   q quit";
+    public override string FooterHint => "h/j/k/l move   enter edit   0 restore defaults   esc back   q quit";
+
+    /// <summary>Hotkey routed from <see cref="DoopassWindow"/>: 0 restores defaults.</summary>
+    public void RestoreDefaults() =>
+        Shell.Confirm("Restore all settings to their defaults?", () =>
+        {
+            Context.Settings.RestoreDefaults();
+            Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
+        });
 
     private void Build()
     {

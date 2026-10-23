@@ -9,6 +9,7 @@ internal sealed class LoginScreen : ScreenBase
 {
     private readonly TextField _password;
     private readonly Label _error;
+    private readonly Label _layout;
 
     public LoginScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
@@ -26,7 +27,15 @@ internal sealed class LoginScreen : ScreenBase
 
         var unlock = AddStop(UiKit.Primary("Unlock", Pos.Center(), 7, Submit, width: 14));
 
-        panel.Add(caption, _password, _error, unlock);
+        _layout = UiKit.Hint("layout: —", 9);
+        _layout.Width = Dim.Auto();
+
+        // Centre it inside the panel after layout: Pos.Center() on a fixed-width
+        // FrameView is evaluated while the frame is still zero-wide and gets clipped.
+        panel.SubViewLayout += (_, _) =>
+            _layout.X = Math.Max(1, (panel.Viewport.Width - _layout.Text.Length) / 2);
+
+        panel.Add(caption, _password, _error, unlock, _layout);
 
         var foot = UiKit.Hint("no vault yet? use Init store from the main menu", 15);
         foot.X = Pos.Center();
@@ -42,6 +51,31 @@ internal sealed class LoginScreen : ScreenBase
     public override bool KeepInHistory => false;
 
     public override string FooterHint => "h/j/k/l move   enter unlock   esc back   q quit";
+
+    /// <summary>
+    /// Shows which keyboard layout produced the last typed character, so a user who
+    /// typed the password in the wrong layout can see why it fails.
+    /// </summary>
+    private void UpdateLayoutHint()
+    {
+        var text = _password.Text ?? string.Empty;
+
+        if (text.Length == 0)
+        {
+            _layout.Text = "layout: —";
+            return;
+        }
+
+        var last = text[^1];
+
+        _layout.Text = last switch
+        {
+            >= 'А' and <= 'я' => "layout: RU",
+            'Ё' or 'ё' => "layout: RU",
+            >= 'A' and <= 'z' => "layout: EN",
+            _ => _layout.Text,
+        };
+    }
 
     private void Submit()
     {

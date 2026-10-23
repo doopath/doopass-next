@@ -44,6 +44,17 @@ internal static class UiKit
         SchemeName = Monochrome.SchemeName,
     };
 
+    /// <summary>A bare single-line input, used inline (e.g. the store filter row).</summary>
+    public static TextField PlainInput(Pos x, Pos y, int width, string text = "") => new()
+    {
+        Text = text,
+        X = x,
+        Y = y,
+        Width = width,
+        Height = 1,
+        SchemeName = Monochrome.SchemeName,
+    };
+
     /// <summary>
     /// A flat, one-line action item. Terminal.Gui's Button draws decorative glyph
     /// boxes that do not fit a dense monochrome layout, so actions are focusable

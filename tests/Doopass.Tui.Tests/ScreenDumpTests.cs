@@ -52,6 +52,10 @@ public sealed class ScreenDumpTests : IDisposable
 
         Assert.Contains("DOOPASS", screen);
         Assert.Contains("main menu", screen);
+
+        // Header must be centred from the very first paint, not pushed to the left.
+        var headerLine = screen.Split('\n').First(line => line.Contains("DOOPASS"));
+        Assert.True(headerLine.TakeWhile(c => c == ' ').Count() > 20, $"header not centred: '{headerLine}'");
         Assert.Contains("Log in", screen);
         Assert.Contains("Settings", screen);
         Assert.Contains("enter select", screen);
@@ -66,7 +70,7 @@ public sealed class ScreenDumpTests : IDisposable
         var screen = Dump("store");
 
         Assert.Contains("store", screen);
-        Assert.Contains("search", screen);
+        Assert.Contains("search |", screen);
         Assert.Contains("secrets", screen);
         Assert.Contains("details", screen);
         Assert.Contains("no items yet", screen);
@@ -111,6 +115,7 @@ public sealed class ScreenDumpTests : IDisposable
         Assert.Contains("unlock vault", screen);
         Assert.Contains("Master password", screen);
         Assert.Contains("Unlock", screen);
+        Assert.Contains("layout:", screen);
     }
 
     private string Dump(string name)

@@ -1,4 +1,5 @@
 using Doopass.Core;
+using Doopass.Tui.Theme;
 using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -22,32 +23,57 @@ internal sealed class StoreScreen : ScreenBase
 
     public StoreScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        // The search field lives in its own framed panel, so its caption looks and
-        // behaves exactly like the "secrets" panel title.
-        var searchPanel = UiKit.Panel("search", 0, 0, 46, 6);
-        _search = AddStop(UiKit.Input(1, width: 42));
-        _search.X = 2;
-        searchPanel.Add(_search);
+        // Inline filter row: "search | field |" - no frame, matching the old UI.
+        var searchCaption = new Label
+        {
+            Text = "search",
+            X = 0,
+            Y = 1,
+            Width = 7,
+            Height = 1,
+            SchemeName = Monochrome.DimSchemeName,
+        };
 
-        _status = UiKit.Hint(string.Empty, 6);
+        var searchPipe = new Label
+        {
+            Text = "|",
+            X = 7,
+            Y = 1,
+            Width = 1,
+            Height = 1,
+            SchemeName = Monochrome.DimSchemeName,
+        };
+
+        var searchEnd = new Label
+        {
+            Text = "|",
+            X = 50,
+            Y = 1,
+            Width = 1,
+            Height = 1,
+            SchemeName = Monochrome.DimSchemeName,
+        };
+
+        _search = AddStop(UiKit.PlainInput(9, 1, 40));
+        _search.ValueChanged += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
+        _search.Accepted += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
+
+        _status = UiKit.Hint(string.Empty, 3);
         _reveal = UiKit.Hint("hidden", 1);
         _reveal.X = Pos.AnchorEnd(9);
         _reveal.Width = 8;
 
-        var listPanel = UiKit.Panel("secrets", 0, 8, Dim.Fill(46), Dim.Fill(1));
+        var listPanel = UiKit.Panel("secrets", 0, 5, Dim.Fill(46), Dim.Fill(4));
         _list = AddStop(UiKit.List([]));
         _list.Accepted += (_, _) => CopySelected();
         _list.ValueChanged += (_, _) => ShowSelected();
         listPanel.Add(_list);
 
-        var detailPanel = UiKit.Panel("details", Pos.AnchorEnd(45), 8, 45, Dim.Fill(1));
+        var detailPanel = UiKit.Panel("details", Pos.AnchorEnd(45), 5, 45, Dim.Fill(4));
         _detail = UiKit.Detail(0, 0, Dim.Fill(), Dim.Fill());
         detailPanel.Add(_detail);
 
-        Add(searchPanel, _status, _reveal, listPanel, detailPanel);
-
-        _search.ValueChanged += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
-        _search.Accepted += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
+        Add(searchCaption, searchPipe, _search, searchEnd, _status, _reveal, listPanel, detailPanel);
 
         ApplyFilter(string.Empty);
     }
@@ -55,7 +81,7 @@ internal sealed class StoreScreen : ScreenBase
     public override string ScreenTitle => "store";
 
     public override string FooterHint =>
-        "h/j/k/l move   enter copy   v reveal   e edit   d delete   a add   ч logout   esc back";
+        "h/j/k/l move   enter copy   v reveal   e edit   d delete   a add   g logout   esc back";
 
     /// <summary>Hotkeys routed from <see cref="DoopassWindow"/> while the list has focus.</summary>
     public void RunShortcut(char shortcut)

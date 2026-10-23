@@ -195,13 +195,13 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
-    public void Cyrillic_ch_locks_the_vault_and_returns_to_the_menu()
+    public void G_locks_the_vault_and_returns_to_the_menu()
     {
         OpenStore();
 
         // The hotkey belongs to the list, not to the search field (where it is text).
         FindAll<ListView>(_window).Single().SetFocus();
-        Press(new Key('ч'));
+        Press(Key.G);
         Settle();
 
         Assert.Null(_context.CurrentStore);
@@ -226,6 +226,22 @@ public sealed class NavigationTests : IDisposable
         Settle();
         _window.Replace(new StoreScreen(_context, _window));
         Settle();
+    }
+
+    [Fact]
+    public void Zero_opens_restore_defaults_from_the_settings_screen()
+    {
+        _window.Replace(new SettingsScreen(_context, _window));
+        Settle();
+
+        Press(Key.D0);
+        Settle();
+
+        var texts = FindAll<Label>(_window)
+            .Select(label => label.Text?.ToString() ?? string.Empty)
+            .ToList();
+
+        Assert.Contains(texts, text => text.Contains("Restore all settings"));
     }
 
     [Fact]
