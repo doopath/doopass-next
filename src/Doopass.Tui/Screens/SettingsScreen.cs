@@ -14,7 +14,7 @@ internal sealed class SettingsScreen : ScreenBase
     {
         var title = UiKit.Title("Settings", 0);
         var subtitle = UiKit.Line("application configuration", 1, dim: true);
-        var restore = UiKit.InlineButton("Restore defaults", 1, 3, 18, () =>
+        var restore = UiKit.InlineButton("Restore defaults", 1, 3, 20, () =>
             Shell.Confirm("Restore all settings to their defaults?", () =>
             {
                 Context.Settings.RestoreDefaults();
@@ -114,7 +114,7 @@ internal sealed class SettingsScreen : ScreenBase
                 Text = value,
                 X = 21,
                 Y = 0,
-                Width = Dim.Fill(9),
+                Width = Dim.Fill(10),
                 Height = 1,
                 SchemeName = Monochrome.DimSchemeName,
             };
@@ -122,7 +122,7 @@ internal sealed class SettingsScreen : ScreenBase
             Add(
                 keyLabel,
                 valueLabel,
-                UiKit.InlineButton("change", Pos.AnchorEnd(8), 0, 8, () => onChange(section, key, value)));
+                UiKit.InlineButton("change", Pos.AnchorEnd(10), 0, 10, () => onChange(section, key, value)));
         }
     }
 }

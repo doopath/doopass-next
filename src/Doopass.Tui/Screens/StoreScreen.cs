@@ -30,9 +30,9 @@ internal sealed class StoreScreen : ScreenBase
             SchemeName = Monochrome.DimSchemeName,
         };
 
-        var add = UiKit.InlineButton("Add pair", 1, 7, 12, BeginAdd);
-        var back = UiKit.InlineButton("Back", 15, 7, 8, Shell.GotoMain);
-        var exit = UiKit.InlineButton("Exit", 25, 7, 8, Shell.Quit);
+        var add = UiKit.InlineButton("Add pair", 1, 7, 14, BeginAdd);
+        var back = UiKit.InlineButton("Back", 16, 7, 9, Shell.GotoMain);
+        var exit = UiKit.InlineButton("Exit", 27, 7, 9, Shell.Quit);
 
         _items = new View
         {
@@ -194,16 +194,16 @@ internal sealed class StoreScreen : ScreenBase
                 Text = key,
                 X = 1,
                 Y = 0,
-                Width = Dim.Fill(22),
+                Width = Dim.Fill(24),
                 Height = 1,
                 SchemeName = Monochrome.SchemeName,
             };
 
             Add(
                 label,
-                UiKit.InlineButton("copy", Pos.AnchorEnd(21), 0, 7, onCopy),
-                UiKit.InlineButton("edit", Pos.AnchorEnd(14), 0, 7, onEdit),
-                UiKit.InlineButton("del", Pos.AnchorEnd(7), 0, 7, onDelete));
+                UiKit.InlineButton("copy", Pos.AnchorEnd(24), 0, 8, onCopy),
+                UiKit.InlineButton("edit", Pos.AnchorEnd(16), 0, 8, onEdit),
+                UiKit.InlineButton("del", Pos.AnchorEnd(8), 0, 8, onDelete));
         }
     }
 }

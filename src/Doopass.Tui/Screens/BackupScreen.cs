@@ -18,9 +18,9 @@ internal sealed class BackupScreen : ScreenBase
         var title = UiKit.Title("Backups", 0);
         var subtitle = UiKit.Line("create, restore or delete vault snapshots", 1, dim: true);
 
-        var create = UiKit.InlineButton("Create backup", 1, 3, 16, CreateBackup);
-        var back = UiKit.InlineButton("Back", 19, 3, 8, Shell.GotoMain);
-        var exit = UiKit.InlineButton("Exit", 29, 3, 8, Shell.Quit);
+        var create = UiKit.InlineButton("Create backup", 1, 3, 18, CreateBackup);
+        var back = UiKit.InlineButton("Back", 20, 3, 9, Shell.GotoMain);
+        var exit = UiKit.InlineButton("Exit", 31, 3, 9, Shell.Quit);
 
         _items = new View
         {
@@ -127,15 +127,15 @@ internal sealed class BackupScreen : ScreenBase
                 Text = name,
                 X = 1,
                 Y = 0,
-                Width = Dim.Fill(17),
+                Width = Dim.Fill(18),
                 Height = 1,
                 SchemeName = Monochrome.SchemeName,
             };
 
             Add(
                 label,
-                UiKit.InlineButton("restore", Pos.AnchorEnd(16), 0, 9, onRestore),
-                UiKit.InlineButton("del", Pos.AnchorEnd(7), 0, 7, onDelete));
+                UiKit.InlineButton("restore", Pos.AnchorEnd(18), 0, 10, onRestore),
+                UiKit.InlineButton("del", Pos.AnchorEnd(8), 0, 8, onDelete));
         }
     }
 }
