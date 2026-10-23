@@ -37,7 +37,8 @@ dotnet run --project src/Doopass.Cli
 Hotkeys: `J`/`K` (or `Up`/`Down`) move the selection, `H`/`L` move focus left/right
 between regions, `Enter` selects, `Tab`/`Shift+Tab` cycle all controls, `Esc` goes
 back one screen, `Q` quits, `F1` opens help. On the store screen `V` reveals the
-selected value, `E` edits, `D` deletes, `A` adds a pair; `PgUp`/`PgDn`/`Home`/`End`
+selected value, `E` edits, `D` deletes, `A` adds a pair; on backups `C` creates,
+`R` restores, `D` deletes; `PgUp`/`PgDn`/`Home`/`End`
 scroll lists and long values.
 
 ## Run the web interface

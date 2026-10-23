@@ -66,11 +66,25 @@ public sealed class ScreenDumpTests : IDisposable
         var screen = Dump("store");
 
         Assert.Contains("store", screen);
+        Assert.Contains("search", screen);
         Assert.Contains("secrets", screen);
         Assert.Contains("details", screen);
-        Assert.Contains("Add pair", screen);
-        Assert.Contains("Lock", screen);
         Assert.Contains("no items yet", screen);
+        Assert.DoesNotContain("[ Add pair ]", screen);
+    }
+
+    [Fact]
+    public void Backups_renders_list_and_hotkey_footer()
+    {
+        _window.Replace(new BackupScreen(_context, _window));
+        Render();
+
+        var screen = Dump("backups");
+
+        Assert.Contains("snapshots", screen);
+        Assert.Contains("c create", screen);
+        Assert.Contains("r restore", screen);
+        Assert.DoesNotContain("Create backup", screen);
     }
 
     [Fact]

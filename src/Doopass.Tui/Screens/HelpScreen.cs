@@ -19,6 +19,7 @@ internal sealed class HelpScreen : ScreenBase
         ("tab / shift+tab", "move focus between the list, fields and buttons"),
         ("v", "reveal or hide the selected value (store)"),
         ("e / d / a", "edit, delete or add a pair (store)"),
+        ("c / r / d", "create, restore or delete a backup"),
         ("esc", "go back one screen"),
         ("q", "quit doopass"),
         ("f1", "open or close this help"),

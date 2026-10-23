@@ -73,21 +73,18 @@ public sealed class NavigationTests : IDisposable
     [Fact]
     public void Tab_moves_focus_forward_and_shift_tab_back()
     {
-        _window.Replace(new BackupScreen(_context, _window));
+        _window.Replace(new LoginScreen(_context, _window));
         Settle();
 
-        var buttons = FindAll<Label>(_window).Where(label => label.CanFocus).ToList();
-        Assert.True(buttons.Count >= 3, $"expected action items ({Dump()})");
-
-        var first = buttons[0];
-        first.SetFocus();
-        Assert.True(first.HasFocus, $"first button did not take focus ({Dump()})");
+        var field = FindAll<TextField>(_window).Single();
+        field.SetFocus();
+        Assert.True(field.HasFocus, $"password field did not take focus ({Dump()})");
 
         Press(Key.Tab);
-        Assert.False(first.HasFocus, $"Tab did not move focus ({Dump()})");
+        Assert.False(field.HasFocus, $"Tab did not move focus ({Dump()})");
 
         Press(Key.Tab.WithShift);
-        Assert.True(first.HasFocus, $"Shift+Tab did not move focus back ({Dump()})");
+        Assert.True(field.HasFocus, $"Shift+Tab did not move focus back ({Dump()})");
     }
 
     [Fact]
@@ -169,7 +166,7 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
-    public void Details_pane_does_not_trap_focus()
+    public void Tab_cycles_only_search_and_list_on_the_store_screen()
     {
         var storePath = _context.Settings.StoreFile;
         Directory.CreateDirectory(Path.GetDirectoryName(storePath)!);
@@ -182,16 +179,18 @@ public sealed class NavigationTests : IDisposable
         _window.Replace(new StoreScreen(_context, _window));
         Settle();
 
+        var search = FindAll<TextField>(_window).Single();
+        var list = FindAll<ListView>(_window).Single();
+        Assert.True(search.HasFocus, $"search should start focused ({Dump()})");
+
+        Press(Key.Tab);
+        Assert.True(list.HasFocus, $"Tab should move search -> list ({Dump()})");
+
+        Press(Key.Tab);
+        Assert.True(search.HasFocus, $"Tab should wrap list -> search, not details ({Dump()})");
+
         var details = FindAll<TextView>(_window).Single();
-        details.SetFocus();
-        Assert.True(details.HasFocus, $"details pane did not take focus ({Dump()})");
-
-        Press(Key.L);
-        Assert.False(details.HasFocus, $"L did not leave the details pane ({Dump()})");
-
-        details.SetFocus();
-        Press(Key.K);
-        Assert.False(details.HasFocus, $"K at the top did not leave the details pane ({Dump()})");
+        Assert.False(details.CanFocus, "the details pane must not be focusable");
     }
 
     [Fact]

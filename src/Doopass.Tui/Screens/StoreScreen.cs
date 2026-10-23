@@ -6,9 +6,9 @@ using Terminal.Gui.Views;
 namespace Doopass.Tui.Screens;
 
 /// <summary>
-/// The store screen: filter field, scrolling key list, detail pane for the
-/// selected secret, and an action bar. Scrolling is native: the list is a
-/// ListView and the value pane is a read-only TextView.
+/// The store screen: a search box, a scrolling list of keys and a details pane
+/// for the selected secret. Actions live on hotkeys; Tab only switches between
+/// search and the list.
 /// </summary>
 internal sealed class StoreScreen : ScreenBase
 {
@@ -22,30 +22,29 @@ internal sealed class StoreScreen : ScreenBase
 
     public StoreScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        _search = AddStop(UiKit.Input(0, width: 44));
+        // The search field lives in its own framed panel, so its caption looks and
+        // behaves exactly like the "secrets" panel title.
+        var searchPanel = UiKit.Panel("search", 0, 0, 46, 6);
+        _search = AddStop(UiKit.Input(1, width: 42));
+        _search.X = 2;
+        searchPanel.Add(_search);
 
-        _status = UiKit.Hint(string.Empty, 3);
-        _reveal = UiKit.Hint("hidden", 3);
+        _status = UiKit.Hint(string.Empty, 6);
+        _reveal = UiKit.Hint("hidden", 1);
         _reveal.X = Pos.AnchorEnd(9);
         _reveal.Width = 8;
 
-        var listPanel = UiKit.Panel("secrets", 0, 4, Dim.Fill(46), Dim.Fill(2));
+        var listPanel = UiKit.Panel("secrets", 0, 8, Dim.Fill(46), Dim.Fill(1));
         _list = AddStop(UiKit.List([]));
         _list.Accepted += (_, _) => CopySelected();
         _list.ValueChanged += (_, _) => ShowSelected();
         listPanel.Add(_list);
 
-        var detailPanel = UiKit.Panel("details", Pos.AnchorEnd(45), 4, 45, Dim.Fill(2));
-        _detail = AddStop(UiKit.Detail(0, 0, Dim.Fill(), Dim.Fill()));
+        var detailPanel = UiKit.Panel("details", Pos.AnchorEnd(45), 8, 45, Dim.Fill(1));
+        _detail = UiKit.Detail(0, 0, Dim.Fill(), Dim.Fill());
         detailPanel.Add(_detail);
 
-        var add = AddStop(UiKit.Primary("Add pair", 0, Pos.AnchorEnd(1), BeginAdd, width: 12));
-        var reveal = AddStop(UiKit.Primary("Reveal", 13, Pos.AnchorEnd(1), ToggleReveal, width: 10));
-        var edit = AddStop(UiKit.Primary("Edit", 24, Pos.AnchorEnd(1), () => BeginEdit(SelectedKey), width: 9));
-        var delete = AddStop(UiKit.Primary("Delete", 34, Pos.AnchorEnd(1), () => ConfirmDelete(SelectedKey), width: 10));
-        var lockVault = AddStop(UiKit.Primary("Lock", 45, Pos.AnchorEnd(1), LockVault, width: 8));
-
-        Add(_search, _status, _reveal, listPanel, detailPanel, add, reveal, edit, delete, lockVault);
+        Add(searchPanel, _status, _reveal, listPanel, detailPanel);
 
         _search.ValueChanged += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
         _search.Accepted += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
@@ -119,8 +118,7 @@ internal sealed class StoreScreen : ScreenBase
         var body = _revealed ? value : new string('•', Math.Min(value.Length, 40));
 
         _detail.Text =
-            $"\n  KEY\n  {key}\n\n  VALUE  ({value.Length} chars)\n  {body}\n\n" +
-            $"  [enter] copy   [v] {(_revealed ? "hide" : "reveal")}   [e] edit   [d] delete";
+            $"\n  KEY\n  {key}\n\n  VALUE  ({value.Length} chars)\n  {body}";
 
         _reveal.Text = _revealed ? "visible" : "hidden";
         _detail.SetNeedsDraw();
@@ -143,12 +141,6 @@ internal sealed class StoreScreen : ScreenBase
         var value = Context.CurrentStore?.GetValue(key) ?? string.Empty;
         _ = App?.Clipboard?.TrySetClipboardData(value);
         _status.Text = $"  copied '{key}' ({value.Length} chars) to clipboard";
-    }
-
-    private void LockVault()
-    {
-        Context.Logout();
-        Shell.GotoMain();
     }
 
     private void BeginAdd()

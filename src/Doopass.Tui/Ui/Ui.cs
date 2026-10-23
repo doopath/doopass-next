@@ -146,6 +146,7 @@ internal static class UiKit
         ReadOnly = true,
         WordWrap = true,
         ScrollBars = true,
+        CanFocus = false,
         SchemeName = Monochrome.SchemeName,
     };
 

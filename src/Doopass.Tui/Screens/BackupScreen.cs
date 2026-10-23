@@ -13,24 +13,15 @@ internal sealed class BackupScreen : ScreenBase
 
     public BackupScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var create = AddStop(UiKit.Primary("Create backup", 0, 0, () =>
-        {
-            Context.Backups.MakeBackup();
-            Refresh();
-        }, width: 16));
+        _status = UiKit.Hint(string.Empty, 0);
 
-        var restore = AddStop(UiKit.Primary("Restore", 18, 0, () => ConfirmRestore(SelectedName), width: 11));
-        var delete = AddStop(UiKit.Primary("Delete", 31, 0, () => ConfirmDelete(SelectedName), width: 10));
-
-        _status = UiKit.Hint(string.Empty, 3);
-
-        var panel = UiKit.Panel("snapshots", 0, 4, Dim.Fill(), Dim.Fill(4));
+        var panel = UiKit.Panel("snapshots", 0, 2, Dim.Fill(), Dim.Fill(2));
         _list = AddStop(UiKit.List([]));
         _list.Accepted += (_, _) => ConfirmRestore(SelectedName);
         _list.ValueChanged += (_, _) => UpdateStatus();
         panel.Add(_list);
 
-        Add(create, restore, delete, _status, panel);
+        Add(_status, panel);
 
         Refresh();
     }
@@ -38,7 +29,30 @@ internal sealed class BackupScreen : ScreenBase
     public override string ScreenTitle => "backups";
 
     public override string FooterHint =>
-        "h/j/k/l move   enter restore   c create   d delete   esc back   q quit";
+        "h/j/k/l move   c create   r restore   d delete   esc back   q quit";
+
+    /// <summary>Hotkeys routed from <see cref="DoopassWindow"/>: c create, r restore, d delete.</summary>
+    public void RunShortcut(char shortcut)
+    {
+        switch (shortcut)
+        {
+            case 'c':
+                CreateBackup();
+                break;
+            case 'r':
+                ConfirmRestore(SelectedName);
+                break;
+            case 'd':
+                ConfirmDelete(SelectedName);
+                break;
+        }
+    }
+
+    private void CreateBackup()
+    {
+        Context.Backups.MakeBackup();
+        Refresh();
+    }
 
     private string? SelectedName =>
         _list.SelectedItem is { } index && index >= 0 && index < _names.Count ? _names[Math.Clamp(index, 0, _names.Count - 1)] : null;
@@ -58,7 +72,7 @@ internal sealed class BackupScreen : ScreenBase
     {
         if (_names.Count == 0)
         {
-            _status.Text = "  press Create backup to make the first snapshot";
+            _status.Text = "  press c to create the first snapshot";
             return;
         }
 

@@ -254,6 +254,19 @@ internal sealed class DoopassWindow : Window
             }
         }
 
+        if (!context.IsEditableText && Top is BackupScreen backups)
+        {
+            foreach (var (shortcut, action) in BackupShortcuts)
+            {
+                if (IsKey(key, action))
+                {
+                    backups.RunShortcut(shortcut);
+                    key.Handled = true;
+                    return;
+                }
+            }
+        }
+
         if (!context.IsEditableText && Top is StoreScreen store)
         {
             foreach (var (shortcut, action) in StoreShortcuts)
@@ -355,6 +368,13 @@ internal sealed class DoopassWindow : Window
         code & ~(Terminal.Gui.Drivers.KeyCode.ShiftMask
                  | Terminal.Gui.Drivers.KeyCode.AltMask
                  | Terminal.Gui.Drivers.KeyCode.CtrlMask);
+
+    private static readonly (char Shortcut, Key Key)[] BackupShortcuts =
+    [
+        ('c', Key.C),
+        ('r', Key.R),
+        ('d', Key.D),
+    ];
 
     private static readonly (char Shortcut, Key Key)[] StoreShortcuts =
     [
