@@ -63,6 +63,21 @@ internal abstract class ScreenBase : View
         SubViewLayout += (_, _) => view.X = Math.Max(0, (Viewport.Width - width) / 2);
     }
 
+    /// <summary>Centres a fixed-size view on both axes (dialogs and forms).</summary>
+    protected void CenterView(View view, int width, int height)
+    {
+        SubViewLayout += (_, _) =>
+        {
+            view.X = Math.Max(0, (Viewport.Width - width) / 2);
+            view.Y = Math.Max(0, (Viewport.Height - height) / 2);
+        };
+    }
+
+    /// <summary>Called when the shell moves focus to a control on this screen.</summary>
+    public virtual void OnFocusMoved(View? focused)
+    {
+    }
+
     /// <summary>Called every time this screen becomes the visible one.</summary>
     public virtual void OnShown()
     {

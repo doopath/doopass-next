@@ -18,6 +18,9 @@ internal sealed class StoreScreen : ScreenBase
     private readonly TextView _detail;
     private readonly Label _status;
     private readonly Label _reveal;
+    private readonly Label _searchCaption;
+    private readonly Label _searchPipe;
+    private readonly Label _searchEnd;
     private List<string> _keys = new();
     private bool _revealed;
 
@@ -55,8 +58,13 @@ internal sealed class StoreScreen : ScreenBase
         };
 
         _search = AddStop(UiKit.PlainInput(9, 1, 40));
-        _search.ValueChanged += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
-        _search.Accepted += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
+
+        // ValueChanged is not raised per keystroke on TextField; TextChanging is.
+        _search.TextChanging += (_, e) => ApplyFilter(e.Result ?? string.Empty);
+
+        _searchCaption = searchCaption;
+        _searchPipe = searchPipe;
+        _searchEnd = searchEnd;
 
         _status = UiKit.Hint(string.Empty, 3);
         _reveal = UiKit.Hint("hidden", 1);
@@ -79,6 +87,18 @@ internal sealed class StoreScreen : ScreenBase
     }
 
     public override string ScreenTitle => "store";
+
+    public override void OnFocusMoved(View? focused)
+    {
+
+        var scheme = ReferenceEquals(focused, _search) ? Monochrome.ChromeSchemeName : Monochrome.DimSchemeName;
+
+        foreach (var label in new[] { _searchCaption, _searchPipe, _searchEnd })
+        {
+            label.SchemeName = scheme;
+            label.SetNeedsDraw();
+        }
+    }
 
     public override string FooterHint =>
         "h/j/k/l move   enter copy   v reveal   e edit   d delete   a add   g logout   esc back";

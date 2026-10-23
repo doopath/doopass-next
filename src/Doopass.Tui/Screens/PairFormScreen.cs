@@ -24,6 +24,7 @@ internal sealed class PairFormScreen : ScreenBase
         _onSave = onSave;
 
         var panel = UiKit.Panel(buttonText.ToLowerInvariant(), 0, 0, 62, 15);
+        CenterView(panel, 62, 15);
 
         var keyCaption = UiKit.Hint("  " + keyLabel, 0);
         _key = AddStop(UiKit.Input(1, text: key, width: 54));

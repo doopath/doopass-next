@@ -37,6 +37,9 @@ internal sealed class LoginScreen : ScreenBase
 
         panel.Add(caption, _password, _error, unlock, _layout);
 
+        // ValueChanged is not raised per keystroke on TextField; TextChanging is.
+        _password.TextChanging += (_, e) => UpdateLayoutHint(e.Result ?? string.Empty);
+
         var foot = UiKit.Hint("no vault yet? use Init store from the main menu", 15);
         foot.X = Pos.Center();
         foot.Width = Dim.Auto();
@@ -56,10 +59,8 @@ internal sealed class LoginScreen : ScreenBase
     /// Shows which keyboard layout produced the last typed character, so a user who
     /// typed the password in the wrong layout can see why it fails.
     /// </summary>
-    private void UpdateLayoutHint()
+    private void UpdateLayoutHint(string text)
     {
-        var text = _password.Text ?? string.Empty;
-
         if (text.Length == 0)
         {
             _layout.Text = "layout: —";

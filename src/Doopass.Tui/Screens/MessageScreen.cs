@@ -10,7 +10,8 @@ internal sealed class MessageScreen : ScreenBase
     public MessageScreen(DoopassContext context, DoopassWindow shell, string message, Action onOk)
         : base(context, shell)
     {
-        var panel = UiKit.Panel("notice", Pos.Center() - 30, 2, 60, 9);
+        var panel = UiKit.Panel("notice", 0, 0, 60, 9);
+        CenterView(panel, 60, 9);
 
         panel.Add(new Label
         {

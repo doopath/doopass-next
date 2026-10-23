@@ -92,6 +92,19 @@ public sealed class ScreenDumpTests : IDisposable
     }
 
     [Fact]
+    public void Confirm_dialog_is_centred()
+    {
+        _window.Push(new ConfirmScreen(_context, _window, "Delete 'github'?", () => { }));
+        Render();
+
+        var lines = Dump("confirm").Split((char)10);
+        var row = Array.FindIndex(lines, line => line.Contains("╭┤ confirm"));
+
+        Assert.True(row > 5, $"dialog is not vertically centred (row {row})");
+        Assert.True(lines[row].TakeWhile(c => c == ' ').Count() > 15, $"dialog is not horizontally centred: '{lines[row]}'");
+    }
+
+    [Fact]
     public void Help_renders_hotkey_table()
     {
         _window.Push(new HelpScreen(_context, _window));

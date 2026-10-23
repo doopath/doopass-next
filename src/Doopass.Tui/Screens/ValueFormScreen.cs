@@ -21,6 +21,7 @@ internal sealed class ValueFormScreen : ScreenBase
         _onSave = onSave;
 
         var panel = UiKit.Panel("edit setting", 0, 0, 62, 9);
+        CenterView(panel, 62, 9);
 
         var caption = UiKit.Hint("  " + label, 0);
         _value = AddStop(UiKit.Input(1, text: value, width: 54));

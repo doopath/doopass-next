@@ -10,7 +10,8 @@ internal sealed class ConfirmScreen : ScreenBase
     public ConfirmScreen(DoopassContext context, DoopassWindow shell, string message, Action onYes)
         : base(context, shell)
     {
-        var panel = UiKit.Panel("confirm", Pos.Center() - 30, 2, 60, 10);
+        var panel = UiKit.Panel("confirm", 0, 0, 60, 10);
+        CenterView(panel, 60, 10);
 
         panel.Add(new Label
         {

@@ -45,7 +45,9 @@ public sealed class NavigationTests : IDisposable
 
         _app.Driver!.SetScreenSize(100, 30);
         _app.Begin(_window);
-        Settle();
+        _app.LayoutAndDraw(true);
+        _window.FocusCurrent();
+        _app.LayoutAndDraw();
     }
 
     [Fact]
@@ -245,6 +247,80 @@ public sealed class NavigationTests : IDisposable
     }
 
     [Fact]
+    public void Layout_indicator_follows_typed_text()
+    {
+        _window.Replace(new LoginScreen(_context, _window));
+        Settle();
+
+        var field = FindAll<TextField>(_window).Single();
+        field.SetFocus();
+
+        _app.InjectKey(Key.A);
+        Assert.Equal("layout: EN", LayoutHint());
+
+        _app.InjectKey(new Key('ф'));
+        Assert.Equal("layout: RU", LayoutHint());
+    }
+
+    [Fact]
+    public void Typing_in_the_filter_narrows_the_store_list()
+    {
+        OpenStoreWith("alpha", "beta", "gamma");
+
+        var list = FindAll<ListView>(_window).Single();
+        Assert.Equal(3, list.Source?.Count);
+
+        var search = FindAll<TextField>(_window).Single();
+        search.SetFocus();
+
+        _app.InjectKey(Key.B);
+        _app.InjectKey(Key.E);
+        _app.InjectKey(Key.T);
+
+        Assert.Equal(1, list.Source?.Count);
+    }
+
+    [Fact]
+    public void Search_caption_highlights_while_the_field_has_focus()
+    {
+        OpenStoreWith("alpha");
+        Settle();
+
+        var caption = FindAll<Label>(_window).First(label => label.Text?.ToString() == "search");
+
+        Assert.Equal(Doopass.Tui.Theme.Monochrome.ChromeSchemeName, caption.SchemeName);
+
+        Press(Key.Tab);
+        Settle();
+
+        Assert.True(FindAll<ListView>(_window).Single().HasFocus, "Tab did not reach the list");
+        Assert.Equal(Doopass.Tui.Theme.Monochrome.DimSchemeName, caption.SchemeName);
+    }
+
+    /// <summary>Lands on the store screen with the given keys already stored.</summary>
+    private void OpenStoreWith(params string[] keys)
+    {
+        var storePath = _context.Settings.StoreFile;
+        Directory.CreateDirectory(Path.GetDirectoryName(storePath)!);
+
+        var store = new Store("Passw0rd!x", storePath);
+        foreach (var key in keys)
+        {
+            store.AddProperty(key, "value-" + key);
+        }
+
+        Assert.Equal(LoginStatus.Success, _context.Login("Passw0rd!x"));
+
+        _window.Replace(new StoreScreen(_context, _window));
+        Settle();
+    }
+
+    private string LayoutHint() =>
+        FindAll<Label>(_window)
+            .Select(label => label.Text?.ToString() ?? string.Empty)
+            .First(text => text.StartsWith("layout:"));
+
+    [Fact]
     public void Tab_cycles_only_search_and_list_on_the_store_screen()
     {
         var storePath = _context.Settings.StoreFile;
@@ -299,10 +375,10 @@ public sealed class NavigationTests : IDisposable
         _app.LayoutAndDraw();
     }
 
+    /// <summary>Lays out and draws without touching focus (which is under test).</summary>
     private void Settle()
     {
         _app.LayoutAndDraw(true);
-        _window.FocusCurrent();
         _app.LayoutAndDraw();
     }
 

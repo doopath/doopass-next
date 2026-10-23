@@ -23,6 +23,7 @@ internal sealed class DoopassWindow : Window
     private readonly Label _footer;
     private readonly Stack<ScreenBase> _stack = new();
     private ScreenBase? _current;
+    private View? _focusedStop;
 
     public DoopassWindow(DoopassContext context)
     {
@@ -178,7 +179,7 @@ internal sealed class DoopassWindow : Window
 
         if (Top is { TabStops.Count: > 0 } top)
         {
-            top.TabStops[0].SetFocus();
+            FocusStop(top.TabStops[0]);
         }
     }
 
@@ -432,6 +433,33 @@ internal sealed class DoopassWindow : Window
     /// </summary>
     internal View? FocusedViewForTests() => FocusedView();
 
+    /// <summary>
+    /// Focuses a control and clears the previous one. Views live in different
+    /// containers (the screen and framed panels), so SetFocus alone can leave two
+    /// controls marked as focused at the same time.
+    /// </summary>
+    private void FocusStop(View target)
+    {
+        // Clear every stop but the target: HasFocus can be set on views in different
+        // containers, and Terminal.Gui does not clear the old one across containers.
+        if (Top is { } top)
+        {
+            foreach (var stop in top.TabStops)
+            {
+                if (!ReferenceEquals(stop, target))
+                {
+                    stop.HasFocus = false;
+                }
+            }
+        }
+
+        target.SetFocus();
+        _focusedStop = target;
+        Top?.OnFocusMoved(target);
+    }
+
+
+
     private View? FocusedView()
     {
         View? found = null;
@@ -465,12 +493,14 @@ internal sealed class DoopassWindow : Window
             return;
         }
 
-        var focused = FocusedView();
+        // Use the stop we last focused: HasFocus can be stale on views in other
+        // containers, so querying the tree gives the wrong starting point.
         var current = -1;
+        var reference = _focusedStop ?? FocusedView();
 
         for (var i = 0; i < stops.Count; i++)
         {
-            if (ReferenceEquals(stops[i], focused))
+            if (ReferenceEquals(stops[i], reference))
             {
                 current = i;
                 break;
@@ -481,7 +511,7 @@ internal sealed class DoopassWindow : Window
 
         if (next >= 0)
         {
-            stops[next].SetFocus();
+            FocusStop(stops[next]);
         }
     }
 
@@ -504,6 +534,7 @@ internal sealed class DoopassWindow : Window
         }
 
         _current = top;
+        _focusedStop = null;
         _content.Add(top);
         top.OnShown();
 
@@ -513,7 +544,7 @@ internal sealed class DoopassWindow : Window
 
         if (top.TabStops.Count > 0)
         {
-            top.TabStops[0].SetFocus();
+            FocusStop(top.TabStops[0]);
         }
 
         App?.LayoutAndDraw();
