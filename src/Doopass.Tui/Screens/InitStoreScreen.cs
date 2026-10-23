@@ -13,24 +13,40 @@ internal sealed class InitStoreScreen : ScreenBase
 
     public InitStoreScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var title = UiKit.Title("Create a vault", 0);
-        var subtitle = UiKit.Line("Choose a strong master password", 1, dim: true);
+        var panel = UiKit.Panel("create vault", 0, 1, 60, 19);
+        CenterView(panel, 60);
 
-        var passwordLabel = UiKit.FieldLabel("Password", 4);
-        _password = UiKit.Input(5, secret: true);
+        var caption = UiKit.Hint("Choose a strong master password", 0);
+        caption.X = Pos.Center();
+        caption.Width = Dim.Auto();
 
-        var confirmLabel = UiKit.FieldLabel("Repeat password", 9);
-        _confirm = UiKit.Input(10, secret: true);
+        var passwordLabel = UiKit.Hint("Password", 1);
+        _password = AddStop(UiKit.Input(2, secret: true, width: 52));
+        _password.X = 2;
 
-        _error = UiKit.Line(string.Empty, 14);
+        var confirmLabel = UiKit.Hint("Repeat password", 6);
+        _confirm = AddStop(UiKit.Input(7, secret: true, width: 52));
+        _confirm.X = 2;
 
-        var create = UiKit.Tile("Create vault", Pos.Center(), 16, Submit);
-        var back = UiKit.Tile("Back", Pos.Center(), 19, () => Shell.Replace(new LoginScreen(Context, Shell)));
+        _error = UiKit.Hint(string.Empty, 11);
+        _error.X = 2;
 
-        Add(title, subtitle, passwordLabel, _password, confirmLabel, _confirm, _error, create, back);
+        var create = AddStop(UiKit.Primary("Create vault", Pos.Center(), 13, Submit, width: 18));
+
+        panel.Add(caption, passwordLabel, _password, confirmLabel, _confirm, _error, create);
+
+        var foot = UiKit.Hint("stored under ~/doopass/appdata/store.enc", 21);
+        foot.X = Pos.Center();
+        foot.Width = Dim.Auto();
+
+        Add(panel, foot);
 
         _confirm.Accepted += (_, _) => Submit();
     }
+
+    public override string ScreenTitle => "init store";
+
+    public override string FooterHint => "enter create   tab next field   esc back   q quit";
 
     private void Submit()
     {

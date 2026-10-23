@@ -1,0 +1,139 @@
+using System.Text;
+using Doopass.Core.Configuration;
+using Doopass.Tui;
+using Doopass.Tui.Screens;
+using Terminal.Gui.App;
+using Terminal.Gui.Time;
+using Xunit;
+
+namespace Doopass.Tui.Tests;
+
+/// <summary>
+/// Renders actual screens through the driver's output buffer and asserts on the
+/// visible text. This is the only way to catch layout regressions (chrome rows,
+/// panel borders, empty states) without a human at a terminal.
+/// </summary>
+public sealed class ScreenDumpTests : IDisposable
+{
+    private readonly string _home;
+    private readonly IApplication _app;
+    private readonly DoopassContext _context;
+    private readonly DoopassWindow _window;
+
+    public ScreenDumpTests()
+    {
+        _home = Path.Combine(Path.GetTempPath(), "doopass-tui-dump-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_home);
+        Environment.SetEnvironmentVariable("DOOPASS_HOME", _home);
+
+        _context = new DoopassContext(new Settings());
+
+        _app = Application.Create(new VirtualTimeProvider());
+        _app.Init();
+
+        _window = new DoopassWindow(_context);
+        _app.Driver!.SetScreenSize(100, 30);
+        _app.Begin(_window);
+
+        Render();
+    }
+
+    private void Render()
+    {
+        _app.LayoutAndDraw(true);
+        _window.FocusCurrent();
+        _app.LayoutAndDraw();
+    }
+
+    [Fact]
+    public void Main_menu_renders_chrome_logo_and_menu()
+    {
+        var screen = Dump("main-menu");
+
+        Assert.Contains("DOOPASS", screen);
+        Assert.Contains("main menu", screen);
+        Assert.Contains("Log in", screen);
+        Assert.Contains("Settings", screen);
+        Assert.Contains("enter select", screen);
+    }
+
+    [Fact]
+    public void Store_renders_panels_empty_state_and_action_bar()
+    {
+        _window.Replace(new StoreScreen(_context, _window));
+        Render();
+
+        var screen = Dump("store");
+
+        Assert.Contains("store", screen);
+        Assert.Contains("secrets", screen);
+        Assert.Contains("details", screen);
+        Assert.Contains("Add pair", screen);
+        Assert.Contains("Lock", screen);
+        Assert.Contains("no items yet", screen);
+    }
+
+    [Fact]
+    public void Help_renders_hotkey_table()
+    {
+        _window.Push(new HelpScreen(_context, _window));
+        Render();
+
+        var screen = Dump("help");
+
+        Assert.Contains("keyboard", screen);
+        Assert.Contains("move the selection", screen);
+        Assert.Contains("esc", screen);
+    }
+
+    [Fact]
+    public void Login_renders_form()
+    {
+        _window.Replace(new LoginScreen(_context, _window));
+        Render();
+
+        var screen = Dump("login");
+
+        Assert.Contains("unlock vault", screen);
+        Assert.Contains("Master password", screen);
+        Assert.Contains("Unlock", screen);
+    }
+
+    private string Dump(string name)
+    {
+        var buffer = _app.Driver!.GetOutputBuffer();
+        var text = new StringBuilder();
+
+        for (var row = 0; row < buffer.Rows; row++)
+        {
+            for (var col = 0; col < buffer.Cols; col++)
+            {
+                var cell = buffer.Contents[row, col];
+                text.Append(cell.Grapheme);
+            }
+
+            text.Append('\n');
+        }
+
+        var dir = "C:/Users/doopa/AppData/Local/hermes/cache/scratch/tui-dumps";
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, name + ".txt");
+        File.WriteAllText(path, text.ToString());
+        return text.ToString();
+    }
+
+    public void Dispose()
+    {
+        _app.Dispose();
+        Environment.SetEnvironmentVariable("DOOPASS_HOME", null);
+
+        try
+        {
+            Directory.Delete(_home, recursive: true);
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+}

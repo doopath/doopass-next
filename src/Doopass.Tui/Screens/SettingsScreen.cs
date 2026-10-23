@@ -1,130 +1,86 @@
-using Doopass.Tui.Theme;
 using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
 
-/// <summary>The settings screen: list sections with changeable values.</summary>
+/// <summary>Settings: every section is a group of "key = value" rows.</summary>
 internal sealed class SettingsScreen : ScreenBase
 {
-    private const int RowHeight = 3;
+    private readonly ListView _list;
+    private readonly Label _status;
 
-    private readonly View _items;
+    /// <summary>Maps a visible list row to a setting; null for section headers.</summary>
+    private readonly List<(string Section, string Key, string Value)?> _rows = new();
 
     public SettingsScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var title = UiKit.Title("Settings", 0);
-        var subtitle = UiKit.Line("application configuration", 1, dim: true);
-        var restore = UiKit.Tile("Restore defaults", 1, 3, () =>
+        var restore = AddStop(UiKit.Primary("Restore defaults", 0, 0, () =>
             Shell.Confirm("Restore all settings to their defaults?", () =>
             {
                 Context.Settings.RestoreDefaults();
                 Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
-            }), width: 20);
+            }), width: 19));
 
-        _items = new View
-        {
-            X = 0,
-            Y = 7,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(),
-            CanFocus = true,
-            TabStop = TabBehavior.NoStop,
-            SchemeName = Monochrome.SchemeName,
-        };
-        _items.ViewportSettings |= ViewportSettingsFlags.HasVerticalScrollBar;
+        _status = UiKit.Hint(string.Empty, 3);
 
-        Add(title, subtitle, restore, _items);
+        var panel = UiKit.Panel("configuration", 0, 4, Dim.Fill(), Dim.Fill(4));
+        _list = AddStop(UiKit.List([]));
+        _list.Accepted += (_, _) => BeginEdit();
+        panel.Add(_list);
 
-        BuildSections();
+        Add(restore, _status, panel);
+
+        Build();
     }
 
-    private void BuildSections()
+    public override string ScreenTitle => "settings";
+
+    public override string FooterHint => "enter change value   j/k move   h/l focus   esc back   q quit";
+
+    private void Build()
     {
-        var y = 0;
+        _rows.Clear();
+        var lines = new List<string>();
 
         foreach (var section in Context.Settings.Sections)
         {
-            _items.Add(new Label
-            {
-                Text = " " + SectionTitle(section),
-                X = 0,
-                Y = y,
-                Width = Dim.Fill(),
-                Height = 1,
-                SchemeName = Monochrome.SchemeName,
-            });
-            y++;
+            lines.Add("  " + SectionTitle(section).ToUpperInvariant());
+            _rows.Add(null);
 
             foreach (var pair in Context.Settings.GetSection(section))
             {
-                var row = new SettingRow(section, pair.Key, pair.Value, BeginEdit)
-                {
-                    X = 0,
-                    Y = y,
-                };
-
-                _items.Add(row);
-                y += RowHeight;
+                lines.Add($"    {pair.Key,-26}{pair.Value}");
+                _rows.Add((section, pair.Key, pair.Value));
             }
-
-            y++;
         }
+
+        _status.Text = $"  {_rows.Count(r => r is not null)} settings in {Context.Settings.Sections.Count()} sections";
+        UiKit.SetItems(_list, lines);
     }
 
-    private void BeginEdit(string section, string key, string value)
+    private void BeginEdit()
     {
-        Shell.Push(new ValueFormScreen(
-            Context,
-            Shell,
-            "Edit setting",
-            $"{section}.{key}",
-            value,
-            newValue =>
-            {
-                Context.Settings.ModifyProperty(section, key, newValue);
-                Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
-            }));
+        if (_list.SelectedItem is not { } index || index < 0 || index >= _rows.Count)
+        {
+            return;
+        }
+
+        if (_rows[index] is not { } row)
+        {
+            _status.Text = "  section header - move to a setting to change it";
+            return;
+        }
+
+        var (section, key, value) = row;
+
+        Shell.Push(new ValueFormScreen(Context, Shell, "Edit setting", $"{section}.{key}", value, newValue =>
+        {
+            Context.Settings.ModifyProperty(section, key, newValue);
+            Shell.CloseAndReplace(new SettingsScreen(Context, Shell));
+        }));
     }
 
     private static string SectionTitle(string section) =>
         section.Length == 0 ? section : char.ToUpper(section[0]) + section[1..];
-
-    private sealed class SettingRow : View
-    {
-        public SettingRow(string section, string key, string value, Action<string, string, string> onChange)
-        {
-            Width = Dim.Fill();
-            Height = RowHeight;
-            CanFocus = true;
-            TabStop = TabBehavior.NoStop;
-            SchemeName = Monochrome.SchemeName;
-
-            var keyLabel = new Label
-            {
-                Text = " " + key,
-                X = 0,
-                Y = 1,
-                Width = 20,
-                Height = 1,
-                SchemeName = Monochrome.SchemeName,
-            };
-
-            var valueLabel = new Label
-            {
-                Text = value,
-                X = 21,
-                Y = 1,
-                Width = Dim.Fill(12),
-                Height = 1,
-                SchemeName = Monochrome.DimSchemeName,
-            };
-
-            Add(
-                keyLabel,
-                valueLabel,
-                UiKit.SmallTile("change", Pos.AnchorEnd(11), 0, () => onChange(section, key, value), width: 10));
-        }
-    }
 }

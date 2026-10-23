@@ -1,148 +1,97 @@
-using Doopass.Tui.Theme;
 using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
 
-/// <summary>The backup management screen (create / restore / delete backups).</summary>
+/// <summary>Backup management: create, restore, delete.</summary>
 internal sealed class BackupScreen : ScreenBase
 {
-    private const int RowHeight = 3;
-
-    private readonly View _items;
-    private readonly List<View> _rows = new();
-    private readonly int _baseFocusCount;
-
-    private string Extension => Context.Settings.BackupExtension;
+    private readonly ListView _list;
+    private readonly Label _status;
+    private List<string> _names = new();
 
     public BackupScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var title = UiKit.Title("Backups", 0);
-        var subtitle = UiKit.Line("create, restore or delete vault snapshots", 1, dim: true);
-
-        var create = UiKit.Tile("Create backup", 1, 3, CreateBackup, width: 18);
-        var back = UiKit.Tile("Back", 20, 3, Shell.GotoMain, width: 9);
-        var exit = UiKit.Tile("Exit", 31, 3, Shell.Quit, width: 9);
-
-        _items = new View
+        var create = AddStop(UiKit.Primary("Create backup", 0, 0, () =>
         {
-            X = 0,
-            Y = 7,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(),
-            CanFocus = true,
-            TabStop = TabBehavior.NoStop,
-            SchemeName = Monochrome.SchemeName,
-        };
-        _items.ViewportSettings |= ViewportSettingsFlags.HasVerticalScrollBar;
+            Context.Backups.MakeBackup();
+            Refresh();
+        }, width: 16));
 
-        Add(title, subtitle, create, back, exit, _items);
+        var restore = AddStop(UiKit.Primary("Restore", 18, 0, () => ConfirmRestore(SelectedName), width: 11));
+        var delete = AddStop(UiKit.Primary("Delete", 31, 0, () => ConfirmDelete(SelectedName), width: 10));
 
-        _baseFocusCount = UiKit.RegisteredCount();
+        _status = UiKit.Hint(string.Empty, 3);
+
+        var panel = UiKit.Panel("snapshots", 0, 4, Dim.Fill(), Dim.Fill(4));
+        _list = AddStop(UiKit.List([]));
+        _list.Accepted += (_, _) => ConfirmRestore(SelectedName);
+        _list.ValueChanged += (_, _) => UpdateStatus();
+        panel.Add(_list);
+
+        Add(create, restore, delete, _status, panel);
 
         Refresh();
     }
+
+    public override string ScreenTitle => "backups";
+
+    public override string FooterHint =>
+        "enter restore   c create   d delete   h/l focus   esc back   q quit";
+
+    private string? SelectedName =>
+        _list.SelectedItem is { } index && index >= 0 && index < _names.Count ? _names[Math.Clamp(index, 0, _names.Count - 1)] : null;
 
     private void Refresh()
     {
-        UiKit.TrimRegistered(_baseFocusCount);
+        _names = Context.Backups.GetBackupNames().ToList();
 
-        foreach (var row in _rows)
-        {
-            _items.Remove(row);
-            row.Dispose();
-        }
+        UiKit.SetItems(_list, _names.Count == 0
+            ? [UiKit.Empty("no backups yet")]
+            : _names.Select(name => "  " + name).ToList());
 
-        _rows.Clear();
-
-        var names = Context.Backups.GetBackupNames();
-
-        if (names.Count == 0)
-        {
-            var empty = new Label
-            {
-                Text = "no backups yet",
-                X = Pos.Center(),
-                Y = 1,
-                Width = Dim.Auto(),
-                Height = 1,
-                SchemeName = Monochrome.DimSchemeName,
-            };
-
-            _items.Add(empty);
-            _rows.Add(empty);
-        }
-        else
-        {
-            var y = 0;
-
-            foreach (var name in names)
-            {
-                var row = new BackupRow(name, () => ConfirmRestore(name), () => ConfirmDelete(name))
-                {
-                    X = 0,
-                    Y = y,
-                };
-
-                _items.Add(row);
-                _rows.Add(row);
-                y += RowHeight;
-            }
-        }
-
-        App?.LayoutAndDraw();
+        UpdateStatus();
     }
 
-    private void CreateBackup()
+    private void UpdateStatus()
     {
-        Context.Backups.MakeBackup();
-        Refresh();
+        if (_names.Count == 0)
+        {
+            _status.Text = "  press Create backup to make the first snapshot";
+            return;
+        }
+
+        _status.Text = $"  {_names.Count} snapshot{(_names.Count == 1 ? string.Empty : "s")}" +
+                       (SelectedName is { } name ? $"   selected: {name}" : string.Empty);
     }
 
-    private void ConfirmRestore(string name)
+    private void ConfirmRestore(string? name)
     {
+        if (name is null)
+        {
+            return;
+        }
+
         Shell.Confirm($"Restore vault from '{name}'?", () =>
         {
-            Context.Backups.SwapStoreWithBackup(name + Extension);
+            Context.Backups.SwapStoreWithBackup(name + Context.Settings.BackupExtension);
             Context.ReloadStore();
             Shell.CloseAndReplace(new BackupScreen(Context, Shell));
         });
     }
 
-    private void ConfirmDelete(string name)
+    private void ConfirmDelete(string? name)
     {
+        if (name is null)
+        {
+            return;
+        }
+
         Shell.Confirm($"Delete backup '{name}'?", () =>
         {
-            Context.Backups.DeleteBackup(name + Extension);
+            Context.Backups.DeleteBackup(name + Context.Settings.BackupExtension);
             Shell.CloseAndReplace(new BackupScreen(Context, Shell));
         });
-    }
-
-    private sealed class BackupRow : View
-    {
-        public BackupRow(string name, Action onRestore, Action onDelete)
-        {
-            Width = Dim.Fill();
-            Height = RowHeight;
-            CanFocus = true;
-            TabStop = TabBehavior.NoStop;
-            SchemeName = Monochrome.SchemeName;
-
-            var label = new Label
-            {
-                Text = name,
-                X = 2,
-                Y = 1,
-                Width = Dim.Fill(20),
-                Height = 1,
-                SchemeName = Monochrome.SchemeName,
-            };
-
-            Add(
-                label,
-                UiKit.SmallTile("restore", Pos.AnchorEnd(19), 0, onRestore, width: 11),
-                UiKit.SmallTile("del", Pos.AnchorEnd(9), 0, onDelete, width: 8));
-        }
     }
 }

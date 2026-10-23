@@ -9,6 +9,7 @@ internal sealed class PairFormScreen : ScreenBase
 {
     private readonly TextField _key;
     private readonly TextField _value;
+    private readonly Action<string, string> _onSave;
 
     public PairFormScreen(
         DoopassContext context,
@@ -20,17 +21,32 @@ internal sealed class PairFormScreen : ScreenBase
         string buttonText,
         Action<string, string> onSave) : base(context, shell)
     {
-        var title = UiKit.Title(buttonText, 0);
-        var keyLabelView = UiKit.FieldLabel(keyLabel, 3);
-        _key = UiKit.Input(4, text: key);
-        var valueLabelView = UiKit.FieldLabel(valueLabel, 8);
-        _value = UiKit.Input(9, text: value);
+        _onSave = onSave;
 
-        var save = UiKit.Tile(buttonText, Pos.Center(), 13, () => onSave(_key.Text ?? string.Empty, _value.Text ?? string.Empty));
-        var back = UiKit.Tile("Back", Pos.Center(), 16, Shell.Back);
+        var panel = UiKit.Panel(buttonText.ToLowerInvariant(), 0, 0, 62, 15);
 
-        Add(title, keyLabelView, _key, valueLabelView, _value, save, back);
+        var keyCaption = UiKit.Hint("  " + keyLabel, 0);
+        _key = AddStop(UiKit.Input(1, text: key, width: 54));
+        _key.X = 2;
 
-        _value.Accepted += (_, _) => onSave(_key.Text ?? string.Empty, _value.Text ?? string.Empty);
+        var valueCaption = UiKit.Hint("  " + valueLabel, 5);
+        _value = AddStop(UiKit.Input(6, text: value, width: 54));
+        _value.X = 2;
+
+        var saveWidth = Math.Max(12, buttonText.Length + 6);
+        var save = AddStop(UiKit.Primary(buttonText, 2, 10, Submit, width: saveWidth));
+        var cancel = AddStop(UiKit.Primary("Cancel", 2 + saveWidth + 2, 10, Shell.Back, width: 12));
+
+        panel.Add(keyCaption, _key, valueCaption, _value, save, cancel);
+
+        Add(panel, UiKit.Hint("  the value is stored encrypted with the vault key", 16));
+
+        _value.Accepted += (_, _) => Submit();
     }
+
+    public override string ScreenTitle => "pair";
+
+    public override string FooterHint => "enter save   tab next field   esc cancel   q quit";
+
+    private void Submit() => _onSave(_key.Text ?? string.Empty, _value.Text ?? string.Empty);
 }

@@ -1,140 +1,154 @@
+using System.Collections.ObjectModel;
 using Doopass.Tui.Theme;
-using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Ui;
 
 /// <summary>
-/// Visual building blocks plus an explicit focus order.
-/// Terminal.Gui's <c>AdvanceFocus</c> does not descend into nested containers, so every
-/// screen registers its controls here in visual order and navigation walks this list.
+/// Stateless factory for the visual building blocks shared by all screens.
+/// Focus order is owned by each screen (see ScreenBase), never by a static registry.
 /// </summary>
 internal static class UiKit
 {
-    public const int TileWidth = 46;
-    public const int TileHeight = 3;
-    public const int SmallTileWidth = 12;
+    /// <summary>Rows reserved above the screen content (header bar).</summary>
+    public const int ContentTop = 2;
 
-    private static readonly Dictionary<View, List<View>> Screens = new();
-    private static List<View> _active = new();
+    /// <summary>Rows reserved below the screen content (footer bar + gap).</summary>
+    public const int FooterRows = 2;
 
-    public static void BeginScreen(View screen)
-    {
-        _active = new List<View>();
-        Screens[screen] = _active;
-    }
+    /// <summary>Width of the list column on the store screen.</summary>
+    public const int ListWidth = 38;
 
-    public static void ActivateScreen(View screen)
-    {
-        if (Screens.TryGetValue(screen, out var list))
-        {
-            _active = list;
-        }
-    }
-
-    public static void RegisterFocusable(View view) => _active.Add(view);
-
-    /// <summary>Number of controls currently registered on the active screen.</summary>
-    public static int RegisteredCount() => _active.Count;
-
-    /// <summary>Drops dynamically rebuilt controls (list rows) from the focus order.</summary>
-    public static void TrimRegistered(int count)
-    {
-        if (_active.Count > count)
-        {
-            _active.RemoveRange(count, _active.Count - count);
-        }
-    }
-
-    public static void FocusInitial() => _active.FirstOrDefault()?.SetFocus();
-
-    public static void AdvanceFocus(IApplication? app, bool forward)
-    {
-        if (app is null || _active.Count == 0)
-        {
-            return;
-        }
-
-        var current = app.Navigation?.GetFocused();
-        var index = current is null ? -1 : _active.IndexOf(current);
-
-        var next = forward
-            ? (index < 0 ? 0 : (index + 1) % _active.Count)
-            : (index <= 0 ? _active.Count - 1 : index - 1);
-
-        _active[next].SetFocus();
-    }
-
-    /// <summary>A wide bordered tile (3 rows tall).</summary>
-    public static Button Tile(string text, Pos x, int y, Action action, int width = TileWidth)
-    {
-        var button = new Button
-        {
-            Text = text,
-            X = x,
-            Y = y,
-            Width = width,
-            Height = TileHeight,
-            ShadowStyle = null,
-            SchemeName = Monochrome.SchemeName,
-        };
-
-        button.Accepted += (_, _) => action();
-        RegisterFocusable(button);
-        return button;
-    }
-
-    /// <summary>A compact bordered tile used inside list rows and toolbars.</summary>
-    public static Button SmallTile(string text, Pos x, int y, Action action, int width = SmallTileWidth)
-        => Tile(text, x, y, action, width);
-
-    public static Label Title(string text, int y = 0) => new()
+    public static Label Hint(string text, Pos y) => new()
     {
         Text = text,
-        X = Pos.Center(),
+        X = 0,
         Y = y,
-        Width = Dim.Auto(),
-        Height = 1,
-        SchemeName = Monochrome.SchemeName,
-    };
-
-    public static Label Line(string text, int y, bool dim = false) => new()
-    {
-        Text = text,
-        X = Pos.Center(),
-        Y = y,
-        Width = Dim.Auto(),
-        Height = 1,
-        SchemeName = dim ? Monochrome.DimSchemeName : Monochrome.SchemeName,
-    };
-
-    public static Label FieldLabel(string text, int y, int fieldWidth = 44) => new()
-    {
-        Text = text,
-        X = Pos.Center() - (fieldWidth / 2),
-        Y = y,
-        Width = Dim.Auto(),
+        Width = Dim.Fill(),
         Height = 1,
         SchemeName = Monochrome.DimSchemeName,
     };
 
-    public static TextField Input(int y, bool secret = false, string text = "", int width = 44)
+    public static TextField Input(int y, bool secret = false, string text = "", int width = 44) => new()
     {
-        var field = new TextField
+        Secret = secret,
+        Text = text,
+        X = 0,
+        Y = y,
+        Width = width,
+        Height = 3,
+        BorderStyle = LineStyle.Rounded,
+        SchemeName = Monochrome.SchemeName,
+    };
+
+    /// <summary>
+    /// A flat, one-line action item. Terminal.Gui's Button draws decorative glyph
+    /// boxes that do not fit a dense monochrome layout, so actions are focusable
+    /// labels: the focused one simply inverts.
+    /// </summary>
+    public static Label Primary(string text, Pos x, Pos y, Action action, int width = 0)
+    {
+        var label = new Label
         {
-            Secret = secret,
-            Text = text,
-            X = Pos.Center(),
+            Text = "[ " + text + " ]",
+            X = x,
             Y = y,
-            Width = width,
-            Height = 3,
-            BorderStyle = LineStyle.Rounded,
+            Width = width > 0 ? width : text.Length + 4,
+            Height = 1,
+            CanFocus = true,
             SchemeName = Monochrome.SchemeName,
         };
 
-        RegisterFocusable(field);
-        return field;
+        // Enter is already bound to Command.Accept by View; add Space as well.
+        label.KeyBindings.ReplaceCommands(Key.Space, [Command.Accept]);
+        label.Accepted += (_, _) => action();
+
+        return label;
     }
+
+    /// <summary>
+    /// A menu row: a focusable, full-width label. Used where a ListView's internal
+    /// horizontal scrolling would clip long, centered rows.
+    /// </summary>
+    public static Label MenuItem(string text, Pos x, Pos y, Action action, int width)
+    {
+        var label = new Label
+        {
+            Text = "  " + text,
+            X = x,
+            Y = y,
+            Width = width,
+            Height = 1,
+            CanFocus = true,
+            SchemeName = Monochrome.SchemeName,
+        };
+
+        label.KeyBindings.ReplaceCommands(Key.Space, [Command.Accept]);
+        label.Accepted += (_, _) => action();
+
+        return label;
+    }
+
+    /// <summary>A framed panel; children position themselves relative to the frame body.</summary>
+    public static FrameView Panel(string title, Pos x, Pos y, Dim width, Dim height) => new()
+    {
+        Title = " " + title + " ",
+        X = x,
+        Y = y,
+        Width = width,
+        Height = height,
+        BorderStyle = LineStyle.Rounded,
+        SchemeName = Monochrome.SchemeName,
+    };
+
+    /// <summary>
+    /// A scrolling list. Arrow keys, PgUp/PgDn and Home/End are handled natively
+    /// by ListView; J/K are bound per instance so they never collide with the
+    /// global key router.
+    /// </summary>
+    public static ListView List(IEnumerable<string> items)
+    {
+        var list = new ListView
+        {
+            Source = new ListWrapper<string>(new ObservableCollection<string>(items.ToList())),
+            X = 0,
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+            SchemeName = Monochrome.SchemeName,
+        };
+
+        list.KeyBindings.ReplaceCommands(Key.J, [Command.Down]);
+        list.KeyBindings.ReplaceCommands(Key.K, [Command.Up]);
+        list.KeyBindings.ReplaceCommands(Key.Enter, [Command.Accept]);
+        list.SelectedItem = list.Source?.Count > 0 ? 0 : null;
+
+        return list;
+    }
+
+    public static void SetItems(ListView list, IReadOnlyList<string> items, int select = 0)
+    {
+        list.Source = new ListWrapper<string>(new ObservableCollection<string>(items.ToList()));
+        list.SelectedItem = items.Count == 0 ? null : Math.Clamp(select, 0, items.Count - 1);
+        list.SetNeedsDraw();
+    }
+
+    /// <summary>Read-only, wrapped, scrollable text pane (the secret detail view).</summary>
+    public static TextView Detail(Pos x, Pos y, Dim width, Dim height) => new()
+    {
+        X = x,
+        Y = y,
+        Width = width,
+        Height = height,
+        ReadOnly = true,
+        WordWrap = true,
+        ScrollBars = true,
+        SchemeName = Monochrome.SchemeName,
+    };
+
+    /// <summary>Text for an empty list.</summary>
+    public static string Empty(string text) => "  " + text;
 }

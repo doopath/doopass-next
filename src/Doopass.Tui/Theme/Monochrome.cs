@@ -13,6 +13,8 @@ internal static class Monochrome
 {
     public const string SchemeName = "doopass";
     public const string DimSchemeName = "doopass-dim";
+    public const string ChromeSchemeName = "doopass-chrome";
+    public const string AccentSchemeName = "doopass-accent";
 
     private static bool _registered;
 
@@ -45,7 +47,26 @@ internal static class Monochrome
             Disabled = new GuiAttribute(StandardColor.DarkGray, StandardColor.Black),
         };
 
+        var chrome = new Scheme
+        {
+            Normal = new GuiAttribute(StandardColor.White, StandardColor.Black, TextStyle.Bold),
+            Focus = new GuiAttribute(StandardColor.White, StandardColor.Black, TextStyle.Bold),
+            Editable = new GuiAttribute(StandardColor.White, StandardColor.Black),
+            Disabled = new GuiAttribute(StandardColor.DarkGray, StandardColor.Black),
+        };
+
+        // Used for secondary chrome (panel titles, separators).
+        var accent = new Scheme
+        {
+            Normal = new GuiAttribute(StandardColor.Gray, StandardColor.Black),
+            Focus = new GuiAttribute(StandardColor.Black, StandardColor.Gray),
+            Editable = new GuiAttribute(StandardColor.Gray, StandardColor.Black),
+            Disabled = new GuiAttribute(StandardColor.DarkGray, StandardColor.Black),
+        };
+
         SchemeManager.AddScheme(SchemeName, normal);
         SchemeManager.AddScheme(DimSchemeName, dim);
+        SchemeManager.AddScheme(ChromeSchemeName, chrome);
+        SchemeManager.AddScheme(AccentSchemeName, accent);
     }
 }

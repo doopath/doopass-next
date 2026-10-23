@@ -28,6 +28,25 @@ public static class DoopassTui
         Monochrome.Register();
 
         var window = new DoopassWindow(context);
+
+        // Global hotkeys must win over application-scope Tab/arrow bindings and over
+        // whatever control currently has focus.
+        app.Keyboard.KeyDown += (_, key) => window.RouteKey(key, app);
+
+        // The first iteration runs after the application has laid the window out and
+        // focused its container; hand focus to the screen's own first control then.
+        var focusAsserted = false;
+        app.Iteration += (_, _) =>
+        {
+            if (focusAsserted)
+            {
+                return;
+            }
+
+            focusAsserted = true;
+            window.FocusCurrent();
+        };
+
         app.Run(window);
 
         AppLogger.Info("Doopass TUI exited");

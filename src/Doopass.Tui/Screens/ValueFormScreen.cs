@@ -8,6 +8,7 @@ namespace Doopass.Tui.Screens;
 internal sealed class ValueFormScreen : ScreenBase
 {
     private readonly TextField _value;
+    private readonly Action<string> _onSave;
 
     public ValueFormScreen(
         DoopassContext context,
@@ -17,15 +18,25 @@ internal sealed class ValueFormScreen : ScreenBase
         string value,
         Action<string> onSave) : base(context, shell)
     {
-        var titleView = UiKit.Title(title, 0);
-        var labelView = UiKit.FieldLabel(label, 3);
-        _value = UiKit.Input(4, text: value);
+        _onSave = onSave;
 
-        var save = UiKit.Tile("Save", Pos.Center(), 8, () => onSave(_value.Text ?? string.Empty));
-        var back = UiKit.Tile("Back", Pos.Center(), 11, Shell.Back);
+        var panel = UiKit.Panel("edit setting", 0, 0, 62, 9);
 
-        Add(titleView, labelView, _value, save, back);
+        var caption = UiKit.Hint("  " + label, 0);
+        _value = AddStop(UiKit.Input(1, text: value, width: 54));
+        _value.X = 2;
 
-        _value.Accepted += (_, _) => onSave(_value.Text ?? string.Empty);
+        var save = AddStop(UiKit.Primary("Save", 2, 5, () => _onSave(_value.Text ?? string.Empty), width: 12));
+        var cancel = AddStop(UiKit.Primary("Cancel", 16, 5, Shell.Back, width: 12));
+
+        panel.Add(caption, _value, save, cancel);
+
+        Add(panel, UiKit.Hint("  " + title, 10));
+
+        _value.Accepted += (_, _) => _onSave(_value.Text ?? string.Empty);
     }
+
+    public override string ScreenTitle => "edit setting";
+
+    public override string FooterHint => "enter save   esc cancel   q quit";
 }

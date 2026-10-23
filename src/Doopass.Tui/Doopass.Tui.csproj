@@ -4,6 +4,9 @@
     <RootNamespace>Doopass.Tui</RootNamespace>
     <AssemblyName>Doopass.Tui</AssemblyName>
     <Version>5.0.0</Version>
+    <!-- TextView is the built-in scrollable text pane; its replacement lives in an
+         external package we deliberately do not depend on. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

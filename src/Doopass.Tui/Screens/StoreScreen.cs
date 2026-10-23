@@ -1,125 +1,154 @@
 using Doopass.Core;
-using Doopass.Tui.Theme;
 using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
 
-/// <summary>The store screen: search plus a list of key tiles with actions.</summary>
+/// <summary>
+/// The store screen: filter field, scrolling key list, detail pane for the
+/// selected secret, and an action bar. Scrolling is native: the list is a
+/// ListView and the value pane is a read-only TextView.
+/// </summary>
 internal sealed class StoreScreen : ScreenBase
 {
-    private const int RowHeight = 3;
-
     private readonly TextField _search;
-    private readonly View _items;
-    private readonly Label _count;
+    private readonly ListView _list;
+    private readonly TextView _detail;
     private readonly Label _status;
-    private readonly List<View> _rows = new();
-    private readonly int _baseFocusCount;
+    private readonly Label _reveal;
+    private List<string> _keys = new();
+    private bool _revealed;
 
     public StoreScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var title = UiKit.Title("Store", 0);
-        _count = UiKit.Line(string.Empty, 1, dim: true);
+        _search = AddStop(UiKit.Input(0, width: 44));
 
-        _search = UiKit.Input(3);
+        _status = UiKit.Hint(string.Empty, 3);
+        _reveal = UiKit.Hint("hidden", 3);
+        _reveal.X = Pos.AnchorEnd(9);
+        _reveal.Width = 8;
 
-        var add = UiKit.Tile("Add pair", 1, 7, BeginAdd, width: 14);
-        var back = UiKit.Tile("Back", 16, 7, Shell.GotoMain, width: 9);
-        var exit = UiKit.Tile("Exit", 27, 7, Shell.Quit, width: 9);
+        var listPanel = UiKit.Panel("secrets", 0, 4, Dim.Fill(46), Dim.Fill(2));
+        _list = AddStop(UiKit.List([]));
+        _list.Accepted += (_, _) => CopySelected();
+        _list.ValueChanged += (_, _) => ShowSelected();
+        listPanel.Add(_list);
 
-        _status = new Label
-        {
-            Text = string.Empty,
-            X = 1,
-            Y = 11,
-            Width = Dim.Fill(),
-            Height = 1,
-            SchemeName = Monochrome.DimSchemeName,
-        };
+        var detailPanel = UiKit.Panel("details", Pos.AnchorEnd(45), 4, 45, Dim.Fill(2));
+        _detail = AddStop(UiKit.Detail(0, 0, Dim.Fill(), Dim.Fill()));
+        detailPanel.Add(_detail);
 
-        _items = new View
-        {
-            X = 0,
-            Y = 12,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(),
-            CanFocus = true,
-            TabStop = TabBehavior.NoStop,
-            SchemeName = Monochrome.SchemeName,
-        };
-        _items.ViewportSettings |= ViewportSettingsFlags.HasVerticalScrollBar;
+        var add = AddStop(UiKit.Primary("Add pair", 0, Pos.AnchorEnd(1), BeginAdd, width: 12));
+        var reveal = AddStop(UiKit.Primary("Reveal", 13, Pos.AnchorEnd(1), ToggleReveal, width: 10));
+        var edit = AddStop(UiKit.Primary("Edit", 24, Pos.AnchorEnd(1), () => BeginEdit(SelectedKey), width: 9));
+        var delete = AddStop(UiKit.Primary("Delete", 34, Pos.AnchorEnd(1), () => ConfirmDelete(SelectedKey), width: 10));
+        var lockVault = AddStop(UiKit.Primary("Lock", 45, Pos.AnchorEnd(1), LockVault, width: 8));
 
-        Add(title, _count, _search, add, back, exit, _status, _items);
+        Add(_search, _status, _reveal, listPanel, detailPanel, add, reveal, edit, delete, lockVault);
 
-        _baseFocusCount = UiKit.RegisteredCount();
-
-        _search.Accepted += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
         _search.ValueChanged += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
+        _search.Accepted += (_, _) => ApplyFilter(_search.Text ?? string.Empty);
 
         ApplyFilter(string.Empty);
     }
 
+    public override string ScreenTitle => "store";
+
+    public override string FooterHint =>
+        "enter copy   j/k move   h/l focus   v reveal   e edit   d delete   a add   esc back   q quit";
+
+    /// <summary>Hotkeys routed from <see cref="DoopassWindow"/> while the list has focus.</summary>
+    public void RunShortcut(char shortcut)
+    {
+        switch (shortcut)
+        {
+            case 'v':
+                ToggleReveal();
+                break;
+            case 'e':
+                BeginEdit(SelectedKey);
+                break;
+            case 'd':
+                ConfirmDelete(SelectedKey);
+                break;
+            case 'a':
+                BeginAdd();
+                break;
+        }
+    }
+
+    private string? SelectedKey =>
+        _list.SelectedItem is { } index && index >= 0 && index < _keys.Count ? _keys[index] : null;
+
     private void ApplyFilter(string filter)
     {
-        UiKit.TrimRegistered(_baseFocusCount);
+        var previous = SelectedKey;
 
-        foreach (var row in _rows)
-        {
-            _items.Remove(row);
-            row.Dispose();
-        }
-
-        _rows.Clear();
-
-        var keys = (Context.CurrentStore?.GetKeys() ?? [])
+        _keys = (Context.CurrentStore?.GetKeys() ?? [])
             .Where(key => filter.Length == 0 || key.Contains(filter, StringComparison.OrdinalIgnoreCase))
             .OrderBy(key => key, StringComparer.Ordinal)
             .ToList();
 
-        _count.Text = $"{keys.Count} item{(keys.Count == 1 ? string.Empty : "s")}";
+        var select = previous is null ? 0 : _keys.IndexOf(previous);
+        UiKit.SetItems(_list, _keys.Select(RowText).ToList(), Math.Max(0, select));
 
-        if (keys.Count == 0)
-        {
-            _rows.Add(new Label
-            {
-                Text = filter.Length == 0 ? "no items yet - press Add pair" : "no matches",
-                X = Pos.Center(),
-                Y = 1,
-                Width = Dim.Auto(),
-                Height = 1,
-                SchemeName = Monochrome.DimSchemeName,
-            });
+        _status.Text = _keys.Count == 0
+            ? (filter.Length == 0 ? "  no items yet - press a to add a pair" : "  no matches")
+            : $"  {_keys.Count} item{(_keys.Count == 1 ? string.Empty : "s")}";
 
-            _items.Add(_rows[0]);
-        }
-        else
-        {
-            var y = 0;
-
-            foreach (var key in keys)
-            {
-                var row = new StoreRow(key, () => CopyKey(key), () => BeginEdit(key), () => ConfirmDelete(key))
-                {
-                    X = 0,
-                    Y = y,
-                };
-
-                _items.Add(row);
-                _rows.Add(row);
-                y += RowHeight;
-            }
-        }
-
-        App?.LayoutAndDraw();
+        ShowSelected();
     }
 
-    private void CopyKey(string key)
+    private static string RowText(string key)
     {
+        var shown = key.Length <= 30 ? key : key[..29] + "…";
+        return " " + shown.PadRight(32) + "••••";
+    }
+
+    private void ShowSelected()
+    {
+        if (SelectedKey is not { } key)
+        {
+            _detail.Text = "\n  no selection\n\n  press [ a ] to add a pair";
+            _detail.SetNeedsDraw();
+            return;
+        }
+
+        var value = Context.CurrentStore?.GetValue(key) ?? string.Empty;
+        var body = _revealed ? value : new string('•', Math.Min(value.Length, 40));
+
+        _detail.Text =
+            $"\n  KEY\n  {key}\n\n  VALUE  ({value.Length} chars)\n  {body}\n\n" +
+            $"  [enter] copy   [v] {(_revealed ? "hide" : "reveal")}   [e] edit   [d] delete";
+
+        _reveal.Text = _revealed ? "visible" : "hidden";
+        _detail.SetNeedsDraw();
+        _reveal.SetNeedsDraw();
+    }
+
+    private void ToggleReveal()
+    {
+        _revealed = !_revealed;
+        ShowSelected();
+    }
+
+    private void CopySelected()
+    {
+        if (SelectedKey is not { } key)
+        {
+            return;
+        }
+
         var value = Context.CurrentStore?.GetValue(key) ?? string.Empty;
         _ = App?.Clipboard?.TrySetClipboardData(value);
-        _status.Text = $"copied '{key}'";
+        _status.Text = $"  copied '{key}' ({value.Length} chars) to clipboard";
+    }
+
+    private void LockVault()
+    {
+        Context.Logout();
+        Shell.GotoMain();
     }
 
     private void BeginAdd()
@@ -146,8 +175,13 @@ internal sealed class StoreScreen : ScreenBase
             }));
     }
 
-    private void BeginEdit(string key)
+    private void BeginEdit(string? key)
     {
+        if (key is null)
+        {
+            return;
+        }
+
         var store = Context.CurrentStore!;
         var value = store.GetValue(key);
 
@@ -179,40 +213,17 @@ internal sealed class StoreScreen : ScreenBase
             }));
     }
 
-    private void ConfirmDelete(string key)
+    private void ConfirmDelete(string? key)
     {
+        if (key is null)
+        {
+            return;
+        }
+
         Shell.Confirm($"Delete '{key}'?", () =>
         {
             Context.CurrentStore!.RemoveProperty(key);
             Shell.CloseAndReplace(new StoreScreen(Context, Shell));
         });
-    }
-
-    private sealed class StoreRow : View
-    {
-        public StoreRow(string key, Action onCopy, Action onEdit, Action onDelete)
-        {
-            Width = Dim.Fill();
-            Height = RowHeight;
-            CanFocus = true;
-            TabStop = TabBehavior.NoStop;
-            SchemeName = Monochrome.SchemeName;
-
-            var label = new Label
-            {
-                Text = key,
-                X = 2,
-                Y = 1,
-                Width = Dim.Fill(26),
-                Height = 1,
-                SchemeName = Monochrome.SchemeName,
-            };
-
-            Add(
-                label,
-                UiKit.SmallTile("copy", Pos.AnchorEnd(25), 0, onCopy, width: 8),
-                UiKit.SmallTile("edit", Pos.AnchorEnd(17), 0, onEdit, width: 8),
-                UiKit.SmallTile("del", Pos.AnchorEnd(9), 0, onDelete, width: 8));
-        }
     }
 }

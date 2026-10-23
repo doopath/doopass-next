@@ -12,25 +12,38 @@ internal sealed class LoginScreen : ScreenBase
 
     public LoginScreen(DoopassContext context, DoopassWindow shell) : base(context, shell)
     {
-        var title = UiKit.Title("Sign in", 0);
-        var subtitle = UiKit.Line("Unlock your encrypted vault", 1, dim: true);
-        var label = UiKit.FieldLabel("Password", 4);
-        _password = UiKit.Input(5, secret: true);
-        _error = UiKit.Line(string.Empty, 9);
+        var panel = UiKit.Panel("unlock vault", 0, 2, 60, 12);
+        CenterView(panel, 60);
 
-        var unlock = UiKit.Tile("Unlock", Pos.Center(), 11, Submit);
-        var back = UiKit.Tile("Back to menu", Pos.Center(), 14, Shell.GotoMain);
+        var caption = UiKit.Hint("Master password", 0);
+        caption.X = Pos.Center();
+        caption.Width = Dim.Auto();
+        _password = AddStop(UiKit.Input(1, secret: true, width: 52));
+        _password.X = 2;
 
-        Add(title, subtitle, label, _password, _error, unlock, back);
+        _error = UiKit.Hint(string.Empty, 5);
+        _error.X = 2;
+
+        var unlock = AddStop(UiKit.Primary("Unlock", Pos.Center(), 7, Submit, width: 14));
+
+        panel.Add(caption, _password, _error, unlock);
+
+        var foot = UiKit.Hint("no vault yet? use Init store from the main menu", 15);
+        foot.X = Pos.Center();
+        foot.Width = Dim.Auto();
+
+        Add(panel, foot);
 
         _password.Accepted += (_, _) => Submit();
     }
 
+    public override string ScreenTitle => "sign in";
+
+    public override string FooterHint => "enter unlock   tab password/unlock   esc back   q quit";
+
     private void Submit()
     {
-        var status = Context.Login(_password.Text ?? string.Empty);
-
-        switch (status)
+        switch (Context.Login(_password.Text ?? string.Empty))
         {
             case LoginStatus.Success:
                 Shell.Replace(new StoreScreen(Context, Shell));
@@ -39,7 +52,7 @@ internal sealed class LoginScreen : ScreenBase
                 Shell.Replace(new InitStoreScreen(Context, Shell));
                 break;
             case LoginStatus.IncorrectPassword:
-                _error.Text = "Incorrect password";
+                _error.Text = "incorrect password";
                 break;
         }
     }

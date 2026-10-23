@@ -1,5 +1,6 @@
 using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Doopass.Tui.Screens;
 
@@ -9,11 +10,27 @@ internal sealed class ConfirmScreen : ScreenBase
     public ConfirmScreen(DoopassContext context, DoopassWindow shell, string message, Action onYes)
         : base(context, shell)
     {
-        var title = UiKit.Title("Confirm", 2);
-        var text = UiKit.Line(message, 5);
-        var no = UiKit.Tile("No", Pos.Center(), 9, Shell.Back);
-        var yes = UiKit.Tile("Yes", Pos.Center(), 12, onYes);
+        var panel = UiKit.Panel("confirm", Pos.Center() - 30, 2, 60, 10);
 
-        Add(title, text, no, yes);
+        panel.Add(new Label
+        {
+            Text = "  " + message,
+            X = 0,
+            Y = 1,
+            Width = Dim.Fill(1),
+            Height = 2,
+            SchemeName = Theme.Monochrome.SchemeName,
+        });
+
+        var no = AddStop(UiKit.Primary("No", 2, 6, Shell.Back, width: 8));
+        var yes = AddStop(UiKit.Primary("Yes", 12, 6, onYes, width: 8));
+
+        panel.Add(no, yes);
+
+        Add(panel);
     }
+
+    public override string ScreenTitle => "confirm";
+
+    public override string FooterHint => "enter yes   esc cancel   q quit";
 }
