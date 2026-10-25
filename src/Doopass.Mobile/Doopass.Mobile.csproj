@@ -29,6 +29,15 @@
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <!-- Debug builds default to Fast Deployment via the SDK defaults (imported
+         before project evaluation), so a conditional override here is ignored.
+         Embed the assemblies unconditionally: plain 'adb install' of a
+         Fast-Deployment APK aborts at start with "No assemblies found in
+         '.override'". IDE fast deployments explicitly set this back to false. -->
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
     <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.0" />

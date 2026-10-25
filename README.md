@@ -203,7 +203,9 @@ Artifacts:
 > [!NOTE]
 > The first release builds run with AOT/trimming disabled (full IL) for stable
 > diagnostics; enabling them needs a `TrimmerRootDescriptor.xml` pass for the
-> System.Text.Json and SignalR reflection surfaces.
+> System.Text.Json and SignalR reflection surfaces. Debug APKs embed their
+> assemblies too (Fast Deployment is off), so they are directly installable
+> with `adb install` — no IDE staging required.
 
 ### Connecting
 
