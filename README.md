@@ -9,7 +9,7 @@
   [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=.net&logoColor=white)](https://dotnet.microsoft.com/)
   [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue)](#run-it)
   [![Frontends](https://img.shields.io/badge/frontends-TUI%20%2B%20Web%20(PWA)-4f46e5)](#run-it)
-  [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](https://github.com/doopath/PasswordManager/blob/master/LICENSE)
+  [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 </div>
 
@@ -237,4 +237,4 @@ on lock (<kbd>G</kbd>), exit or server shutdown.
 ---
 
 Doopass is a rewrite of the original [Doopass](https://github.com/doopath/PasswordManager/)
-and follows the same license (GPL-3.0).
+and follows the same license (GPL-3.0 — see the [LICENSE](LICENSE) file).
