@@ -1,6 +1,7 @@
 using Doopass.Core.Configuration;
 using Doopass.Core.Storage;
 using Doopass.Core.Validation;
+using Doopass.WebUi.Abstractions;
 
 namespace Doopass.Cli.Services;
 
@@ -8,7 +9,7 @@ namespace Doopass.Cli.Services;
 /// Per-circuit session holding the currently unlocked store. The store only
 /// lives in server memory while the user is logged in.
 /// </summary>
-public sealed class DoopassSession
+public sealed class DoopassSession : IVaultSession
 {
     private readonly object _gate = new();
     private readonly Settings _settings;
@@ -135,5 +136,99 @@ public sealed class DoopassSession
         {
             _store!.RemoveProperty(key);
         }
+    }
+
+    // IVaultSession: awaitable facade over the synchronous storage calls, so the
+    // same Razor components run against the local session or a remote API client.
+
+    public ValueTask<VaultState> GetStateAsync(CancellationToken ct = default) =>
+        ValueTask.FromResult(new VaultState(StoreExists, IsUnlocked, Doopass.Core.Constants.Version));
+
+    public ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default) =>
+        ValueTask.FromResult(Login(password));
+
+    public ValueTask<(bool Success, string Message)> InitAsync(string password, CancellationToken ct = default) =>
+        ValueTask.FromResult(Init(password));
+
+    public ValueTask LogoutAsync(CancellationToken ct = default)
+    {
+        Logout();
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask ReloadAsync(CancellationToken ct = default)
+    {
+        Reload();
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<IReadOnlyList<string>> GetKeysAsync(CancellationToken ct = default) =>
+        ValueTask.FromResult<IReadOnlyList<string>>(GetKeys());
+
+    public ValueTask<string> GetValueAsync(string key, CancellationToken ct = default) =>
+        ValueTask.FromResult(GetValue(key));
+
+    public ValueTask AddAsync(string key, string value, CancellationToken ct = default)
+    {
+        Add(key, value);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask UpdateAsync(string oldKey, string newKey, string newValue, CancellationToken ct = default)
+    {
+        Update(oldKey, newKey, newValue);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask RemoveAsync(string key, CancellationToken ct = default)
+    {
+        Remove(key);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Lists backup names without extension, newest first.</summary>
+    public ValueTask<IReadOnlyList<string>> GetBackupNamesAsync(CancellationToken ct = default) =>
+        ValueTask.FromResult<IReadOnlyList<string>>(_backups.GetBackupNames());
+
+    public ValueTask CreateBackupAsync(CancellationToken ct = default)
+    {
+        _backups.MakeBackup();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Restores a backup by extensionless name; a safety backup is written first, then the session re-reads the store.</summary>
+    public ValueTask RestoreBackupAsync(string backupName, CancellationToken ct = default)
+    {
+        _backups.SwapStoreWithBackup(backupName + _settings.BackupExtension);
+        Reload();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Deletes a backup by extensionless name.</summary>
+    public ValueTask DeleteBackupAsync(string backupName, CancellationToken ct = default)
+    {
+        _backups.DeleteBackup(backupName + _settings.BackupExtension);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<IReadOnlyList<(string Section, IReadOnlyDictionary<string, string> Pairs)>>
+        GetSettingsAsync(CancellationToken ct = default)
+    {
+        var sections = _settings.Sections
+            .Select(section => (Section: section, Pairs: _settings.GetSection(section)))
+            .ToList();
+        return ValueTask.FromResult<IReadOnlyList<(string Section, IReadOnlyDictionary<string, string> Pairs)>>(sections);
+    }
+
+    public ValueTask SetSettingAsync(string section, string key, string value, CancellationToken ct = default)
+    {
+        _settings.ModifyProperty(section, key, value);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask RestoreDefaultSettingsAsync(CancellationToken ct = default)
+    {
+        _settings.RestoreDefaults();
+        return ValueTask.CompletedTask;
     }
 }

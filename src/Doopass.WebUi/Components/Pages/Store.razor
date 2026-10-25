@@ -1,6 +1,6 @@
 @page "/store"
 @implements IDisposable
-@inject DoopassSession Session
+@inject IVaultSession Session
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject ToastService Toast
@@ -40,7 +40,7 @@
                 <div class="item-value">
                     @if (IsRevealed(key))
                     {
-                        <span class="plain">@Session.GetValue(key)</span>
+                        <span class="plain">@_revealedValues[key]</span>
                     }
                     else
                     {
@@ -129,7 +129,13 @@ else
 @code {
     private string? _filter;
     private CancellationTokenSource? _filterDebounce;
+    private List<string> _keys = new();
+
+    // Values are fetched lazily and cached only while a key is revealed, so a
+    // secret never sits in the DOM longer than the user asked for. The same
+    // pattern also keeps them off the wire on remote (API-driven) clients.
     private readonly HashSet<string> _revealed = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _revealedValues = new(StringComparer.Ordinal);
 
     private bool _showEditor;
     private string? _editingKey;
@@ -141,7 +147,7 @@ else
     private string? _deleteKey;
 
     private IEnumerable<string> FilteredKeys =>
-        Session.GetKeys()
+        _keys
             .Where(key => string.IsNullOrEmpty(_filter) || key.Contains(_filter, StringComparison.OrdinalIgnoreCase))
             .OrderBy(key => key, StringComparer.Ordinal);
 
@@ -149,7 +155,7 @@ else
     {
         get
         {
-            var total = Session.GetKeys().Count;
+            var total = _keys.Count;
             var shown = FilteredKeys.Count();
 
             return string.IsNullOrEmpty(_filter)
@@ -158,12 +164,15 @@ else
         }
     }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (!Session.IsUnlocked)
+        if (!(await Session.GetStateAsync()).IsUnlocked)
         {
             Nav.NavigateTo("/");
+            return;
         }
+
+        _keys = (await Session.GetKeysAsync()).ToList();
     }
 
     // Mobile-friendly search: every keystroke used to re-render the whole list
@@ -204,11 +213,24 @@ else
 
     private bool IsRevealed(string key) => _revealed.Contains(key);
 
-    private void ToggleReveal(string key)
+    private async Task ToggleReveal(string key)
     {
-        if (!_revealed.Add(key))
+        if (IsRevealed(key))
         {
             _revealed.Remove(key);
+            _revealedValues.Remove(key);
+            return;
+        }
+
+        try
+        {
+            _revealedValues[key] = await Session.GetValueAsync(key);
+            _revealed.Add(key);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Revealing the value of '{key}' failed", ex);
+            Toast.Error("Reveal failed", ex.Message);
         }
     }
 
@@ -221,13 +243,24 @@ else
         _showEditor = true;
     }
 
-    private void BeginEdit(string key)
+    private async Task BeginEdit(string key)
     {
         _editingKey = key;
         _formKey = key;
-        _formValue = Session.GetValue(key);
-        _formError = null;
         _showEditor = true;
+
+        try
+        {
+            _formValue = await Session.GetValueAsync(key);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Loading the value of '{key}' for editing failed", ex);
+            Toast.Error("Edit failed", ex.Message);
+            return;
+        }
+
+        _formError = null;
     }
 
     private void CloseEditor()
@@ -236,7 +269,7 @@ else
         _formError = null;
     }
 
-    private void SaveForm()
+    private async Task SaveForm()
     {
         _formError = null;
         var key = (_formKey ?? string.Empty).Trim();
@@ -252,13 +285,17 @@ else
         {
             if (_editingKey is null)
             {
-                Session.Add(key, value);
+                await Session.AddAsync(key, value);
+                _keys.Add(key);
                 Toast.Success("Added", $"'{key}' added to your vault");
             }
             else
             {
-                Session.Update(_editingKey, key, value);
+                await Session.UpdateAsync(_editingKey, key, value);
+                _keys.Remove(_editingKey);
                 _revealed.Remove(_editingKey);
+                _revealedValues.Remove(_editingKey);
+                _keys.Add(key);
                 Toast.Success("Saved", $"'{key}' updated");
             }
 
@@ -283,7 +320,7 @@ else
 
         try
         {
-            value = Session.GetValue(key);
+            value = await Session.GetValueAsync(key);
         }
         catch (Exception ex)
         {
@@ -321,7 +358,19 @@ else
 
         // Platform refused the copy (no user activation, insecure context):
         // reveal the value so it can be copied by hand instead of doing nothing.
-        _revealed.Add(key);
+        try
+        {
+            if (!_revealed.Contains(key))
+            {
+                _revealedValues[key] = await Session.GetValueAsync(key);
+                _revealed.Add(key);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Revealing the value of '{key}' before manual copy failed", ex);
+        }
+
         Toast.Error("Clipboard is blocked", $"'{key}' value shown — copy it manually");
     }
 
@@ -337,7 +386,7 @@ else
         _deleteKey = null;
     }
 
-    private void DeleteConfirmed()
+    private async Task DeleteConfirmed()
     {
         if (_deleteKey is null)
         {
@@ -345,12 +394,22 @@ else
         }
 
         var key = _deleteKey;
-        Session.Remove(key);
-        _revealed.Remove(key);
-        _showDelete = false;
-        _deleteKey = null;
 
-        Toast.Success("Deleted", $"'{key}' removed");
+        try
+        {
+            await Session.RemoveAsync(key);
+            _keys.Remove(key);
+            _revealed.Remove(key);
+            _revealedValues.Remove(key);
+            _showDelete = false;
+            _deleteKey = null;
+            Toast.Success("Deleted", $"'{key}' removed");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Deleting '{key}' failed", ex);
+            Toast.Error("Delete failed", ex.Message);
+        }
     }
 
     public void Dispose()

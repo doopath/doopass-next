@@ -11,11 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Static assets are served from embedded resources so the app can be published,
-         self-contained, as a single file with no wwwroot folder next to it. -->
-    <EmbeddedResource Include="wwwroot\app.css" LogicalName="Doopass.Cli.wwwroot.app.css" />
-    <EmbeddedResource Include="wwwroot\theme.js" LogicalName="Doopass.Cli.wwwroot.theme.js" />
-    <EmbeddedResource Include="wwwroot\app.js" LogicalName="Doopass.Cli.wwwroot.app.js" />
+    <!-- Root UI assets (app.css / theme.js / app.js) live in Doopass.WebUi and are
+         served from that assembly's embedded resources. PWA assets remain server
+         assets of the host: the manifest, the service worker and icons are
+         browser-only things, and blazor.web.js comes from the web host script. -->
     <EmbeddedResource Include="$(NuGetPackageRoot)microsoft.aspnetcore.app.internal.assets/*/_framework/blazor.web.js"
                        LogicalName="Doopass.Cli.wwwroot.blazor.web.js" />
 
@@ -39,6 +38,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Doopass.Core\Doopass.Core.csproj" />
     <ProjectReference Include="..\Doopass.Tui\Doopass.Tui.csproj" />
+    <ProjectReference Include="..\Doopass.WebUi\Doopass.WebUi.csproj" />
   </ItemGroup>
 
 </Project>

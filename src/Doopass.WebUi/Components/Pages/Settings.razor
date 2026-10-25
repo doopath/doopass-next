@@ -1,5 +1,5 @@
 @page "/settings"
-@inject DoopassSession Session
+@inject IVaultSession Session
 @inject NavigationManager Nav
 @inject ToastService Toast
 @inject IJSRuntime JS
@@ -17,18 +17,18 @@
     </button>
 </div>
 
-@foreach (var section in Session.Settings.Sections)
+@foreach (var section in _sections)
 {
     <div class="card" style="margin-bottom:16px;">
-        <h2 class="card-title">@SectionTitle(section)</h2>
-        <p class="card-sub">@SectionSubtitle(section)</p>
+        <h2 class="card-title">@SectionTitle(section.Section)</h2>
+        <p class="card-sub">@SectionSubtitle(section.Section)</p>
 
-        @foreach (var pair in Session.Settings.GetSection(section))
+        @foreach (var pair in section.Pairs)
         {
             <div class="setting-row">
                 <span class="setting-key">@pair.Key</span>
                 <span class="setting-value">@pair.Value</span>
-                <button type="button" class="icon-btn" title="Change" @onclick="@(() => BeginEdit(section, pair.Key, pair.Value))">
+                <button type="button" class="icon-btn" title="Change" @onclick="@(() => BeginEdit(section.Section, pair.Key, pair.Value))">
                     <Icon Name="edit" Size="18" />
                 </button>
             </div>
@@ -112,6 +112,8 @@
 </Modal>
 
 @code {
+    private List<(string Section, IReadOnlyDictionary<string, string> Pairs)> _sections = new();
+
     private bool _showEdit;
     private string _editSection = string.Empty;
     private string _editKey = string.Empty;
@@ -120,13 +122,18 @@
     private bool _showRestoreDefaults;
     private string? _installState;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (!Session.IsUnlocked)
+        if (!(await Session.GetStateAsync()).IsUnlocked)
         {
             Nav.NavigateTo("/");
+            return;
         }
+
+        await RefreshAsync();
     }
+
+    private async Task RefreshAsync() => _sections = (await Session.GetSettingsAsync()).ToList();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -199,11 +206,12 @@
         _editValue = null;
     }
 
-    private void SaveEdit()
+    private async Task SaveEdit()
     {
         try
         {
-            Session.Settings.ModifyProperty(_editSection, _editKey, _editValue ?? string.Empty);
+            await Session.SetSettingAsync(_editSection, _editKey, _editValue ?? string.Empty);
+            await RefreshAsync();
             _showEdit = false;
             Toast.Success("Saved", $"'{_editKey}' updated");
         }
@@ -218,11 +226,12 @@
 
     private void CancelRestoreDefaults() => _showRestoreDefaults = false;
 
-    private void RestoreDefaults()
+    private async Task RestoreDefaults()
     {
         try
         {
-            Session.Settings.RestoreDefaults();
+            await Session.RestoreDefaultSettingsAsync();
+            await RefreshAsync();
             _showRestoreDefaults = false;
             Toast.Success("Restored", "Default settings restored");
         }

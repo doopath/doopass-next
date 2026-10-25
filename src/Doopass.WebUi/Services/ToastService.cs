@@ -1,4 +1,4 @@
-namespace Doopass.Cli.Services;
+namespace Doopass.WebUi.Services;
 
 public enum ToastKind
 {

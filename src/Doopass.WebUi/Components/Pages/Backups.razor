@@ -1,5 +1,5 @@
 @page "/backups"
-@inject DoopassSession Session
+@inject IVaultSession Session
 @inject NavigationManager Nav
 @inject ToastService Toast
 
@@ -99,27 +99,25 @@ else
     private bool _showDelete;
     private string? _deleteName;
 
-    private string Extension => Session.Settings.BackupExtension;
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (!Session.IsUnlocked)
+        if (!(await Session.GetStateAsync()).IsUnlocked)
         {
             Nav.NavigateTo("/");
             return;
         }
 
-        Refresh();
+        await RefreshAsync();
     }
 
-    private void Refresh() => _names = Session.Backups.GetBackupNames().ToList();
+    private async Task RefreshAsync() => _names = (await Session.GetBackupNamesAsync()).ToList();
 
-    private void CreateBackup()
+    private async Task CreateBackup()
     {
         try
         {
-            Session.Backups.MakeBackup();
-            Refresh();
+            await Session.CreateBackupAsync();
+            await RefreshAsync();
             Toast.Success("Backup created", "A new snapshot of your vault is ready");
         }
         catch (Exception ex)
@@ -141,7 +139,7 @@ else
         _restoreName = null;
     }
 
-    private void RestoreConfirmed()
+    private async Task RestoreConfirmed()
     {
         if (_restoreName is null)
         {
@@ -152,8 +150,9 @@ else
 
         try
         {
-            Session.Backups.SwapStoreWithBackup(name + Extension);
-            Session.Reload();
+            // The host appends the backup extension itself and re-reads the
+            // store from disk after the swap (a safety backup is written first).
+            await Session.RestoreBackupAsync(name);
             Toast.Success("Restored", $"Vault restored from '{name}'");
         }
         catch (Exception ex)
@@ -165,7 +164,7 @@ else
         {
             _showRestore = false;
             _restoreName = null;
-            Refresh();
+            await RefreshAsync();
         }
     }
 
@@ -181,7 +180,7 @@ else
         _deleteName = null;
     }
 
-    private void DeleteConfirmed()
+    private async Task DeleteConfirmed()
     {
         if (_deleteName is null)
         {
@@ -192,7 +191,7 @@ else
 
         try
         {
-            Session.Backups.DeleteBackup(name + Extension);
+            await Session.DeleteBackupAsync(name);
             Toast.Success("Backup deleted", $"'{name}' removed");
         }
         catch (Exception ex)
@@ -204,7 +203,7 @@ else
         {
             _showDelete = false;
             _deleteName = null;
-            Refresh();
+            await RefreshAsync();
         }
     }
 }

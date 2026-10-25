@@ -1,6 +1,6 @@
 @page "/"
 @layout AuthLayout
-@inject DoopassSession Session
+@inject IVaultSession Session
 @inject NavigationManager Nav
 
 <PageTitle>Doopass — Log in</PageTitle>
@@ -29,9 +29,9 @@
     private string? _password;
     private string? _error;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (Session.IsUnlocked)
+        if ((await Session.GetStateAsync()).IsUnlocked)
         {
             Nav.NavigateTo("/store");
         }
@@ -41,15 +41,15 @@
     {
         if (args.Key == "Enter")
         {
-            LogIn();
+            _ = LogIn();
         }
     }
 
-    private void LogIn()
+    private async Task LogIn()
     {
         try
         {
-            var (success, message) = Session.Login(_password ?? string.Empty);
+            var (success, message) = await Session.LoginAsync(_password ?? string.Empty);
 
             if (success)
             {
@@ -58,7 +58,7 @@
                 return;
             }
 
-            if (!Session.StoreExists)
+            if (!(await Session.GetStateAsync()).StoreExists)
             {
                 Nav.NavigateTo("/init");
                 return;

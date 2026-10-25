@@ -1,6 +1,6 @@
 @page "/init"
 @layout AuthLayout
-@inject DoopassSession Session
+@inject IVaultSession Session
 @inject NavigationManager Nav
 
 <PageTitle>Doopass — Init store</PageTitle>
@@ -36,11 +36,11 @@
     {
         if (args.Key == "Enter")
         {
-            SignUp();
+            _ = SignUp();
         }
     }
 
-    private void SignUp()
+    private async Task SignUp()
     {
         _error = null;
 
@@ -52,7 +52,7 @@
 
         try
         {
-            var (success, message) = Session.Init(_password ?? string.Empty);
+            var (success, message) = await Session.InitAsync(_password ?? string.Empty);
 
             if (success)
             {

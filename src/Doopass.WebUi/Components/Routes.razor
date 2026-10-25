@@ -1,0 +1,13 @@
+<Router AppAssembly="typeof(Doopass.WebUi.Components.App).Assembly"
+        AdditionalAssemblies="@AdditionalAssemblies"
+        NotFoundPage="typeof(Doopass.WebUi.Components.Pages.NotFound)">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Doopass.WebUi.Components.Layout.MainLayout)" />
+    </Found>
+</Router>
+
+@code {
+    // Extra page assemblies can be registered by the host (e.g. the MAUI thin
+    // client adds its own Connect page); the web host runs with none.
+    [Parameter] public IEnumerable<Assembly>? AdditionalAssemblies { get; set; }
+}

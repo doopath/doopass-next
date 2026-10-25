@@ -1,6 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
-@inject DoopassSession Session
+@inject IVaultSession Session
 @inject NavigationManager Nav
 
 <div class="app-shell @(_sidebarOpen ? "sidebar-open" : string.Empty)">
@@ -111,9 +111,9 @@
 
     private void CloseSidebar() => _sidebarOpen = false;
 
-    private void Logout()
+    private async Task Logout()
     {
-        Session.Logout();
+        await Session.LogoutAsync();
         Nav.NavigateTo("/");
     }
 
