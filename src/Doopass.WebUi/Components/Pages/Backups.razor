@@ -1,5 +1,7 @@
 @page "/backups"
+@implements IDisposable
 @inject IVaultSession Session
+@inject IVaultEvents Events
 @inject NavigationManager Nav
 @inject ToastService Toast
 
@@ -108,7 +110,13 @@ else
         }
 
         await RefreshAsync();
+        Events.BackupsChanged += OnBackupsChanged;
+        Events.VaultChanged += OnBackupsChanged;
     }
+
+    // Restores and deletes from any client converge here; a restore also fires
+    // VaultChanged, and the subscription keeps a second open page in sync too.
+    private void OnBackupsChanged() => _ = InvokeAsync(RefreshAsync);
 
     private async Task RefreshAsync() => _names = (await Session.GetBackupNamesAsync()).ToList();
 
@@ -205,5 +213,11 @@ else
             _deleteName = null;
             await RefreshAsync();
         }
+    }
+
+    public void Dispose()
+    {
+        Events.BackupsChanged -= OnBackupsChanged;
+        Events.VaultChanged -= OnBackupsChanged;
     }
 }

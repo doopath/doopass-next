@@ -1,6 +1,7 @@
 @page "/store"
 @implements IDisposable
 @inject IVaultSession Session
+@inject IVaultEvents Events
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject ToastService Toast
@@ -173,6 +174,40 @@ else
         }
 
         _keys = (await Session.GetKeysAsync()).ToList();
+        Events.VaultChanged += OnVaultChanged;
+    }
+
+    // Cross-client pushes (REST API tokens in other apps, other circuits) re-read
+    // the vault here so every open Store page mirrors the host without reloads.
+    private void OnVaultChanged() => _ = InvokeAsync(RefreshFromEventAsync);
+
+    private async Task RefreshFromEventAsync()
+    {
+        try
+        {
+            await Session.ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Re-reading the store after a change failed", ex);
+        }
+
+        _keys = (await Session.GetKeysAsync()).ToList();
+
+        foreach (var key in _revealed.ToList())
+        {
+            try
+            {
+                _revealedValues[key] = await Session.GetValueAsync(key);
+            }
+            catch (Exception ex) when (ex is PropertyDoesNotExistError)
+            {
+                _revealed.Remove(key);
+                _revealedValues.Remove(key);
+            }
+        }
+
+        StateHasChanged();
     }
 
     // Mobile-friendly search: every keystroke used to re-render the whole list
@@ -414,6 +449,7 @@ else
 
     public void Dispose()
     {
+        Events.VaultChanged -= OnVaultChanged;
         _filterDebounce?.Cancel();
         _filterDebounce?.Dispose();
         _filterDebounce = null;

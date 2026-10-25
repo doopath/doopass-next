@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject IVaultSession Session
+@inject IVaultEvents Events
 @inject NavigationManager Nav
 
 <div class="app-shell @(_sidebarOpen ? "sidebar-open" : string.Empty)">
@@ -96,6 +97,9 @@
         // navigation taps makes the app feel broken (people tap "Store" and
         // see nothing happen). Close on every in-app navigation.
         Nav.LocationChanged += OnLocationChanged;
+
+        // Any lock (logout elsewhere, session TTL, host relock) returns to login.
+        Events.VaultLocked += OnVaultLocked;
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -111,11 +115,17 @@
 
     private void CloseSidebar() => _sidebarOpen = false;
 
+    private Task OnVaultLocked() => InvokeAsync(() => Nav.NavigateTo("/"));
+
     private async Task Logout()
     {
         await Session.LogoutAsync();
         Nav.NavigateTo("/");
     }
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        Events.VaultLocked -= OnVaultLocked;
+    }
 }

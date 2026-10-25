@@ -41,4 +41,8 @@
     <ProjectReference Include="..\Doopass.WebUi\Doopass.WebUi.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Doopass.Api.Tests" />
+  </ItemGroup>
+
 </Project>

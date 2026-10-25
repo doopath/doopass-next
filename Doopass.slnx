@@ -6,6 +6,7 @@
     <Project Path="src/Doopass.WebUi/Doopass.WebUi.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Doopass.Api.Tests/Doopass.Api.Tests.csproj" />
     <Project Path="tests/Doopass.Core.Tests/Doopass.Core.Tests.csproj" />
     <Project Path="tests/Doopass.Tui.Tests/Doopass.Tui.Tests.csproj" />
   </Folder>

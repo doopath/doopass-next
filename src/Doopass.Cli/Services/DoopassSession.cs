@@ -1,3 +1,4 @@
+using Doopass.Cli.Api;
 using Doopass.Core.Configuration;
 using Doopass.Core.Storage;
 using Doopass.Core.Validation;
@@ -7,19 +8,48 @@ namespace Doopass.Cli.Services;
 
 /// <summary>
 /// Per-circuit session holding the currently unlocked store. The store only
-/// lives in server memory while the user is logged in.
+/// lives in server memory while the user is logged in. Every mutation raises
+/// <see cref="IVaultChangeNotifier"/> events, which fan out to SignalR hub
+/// clients (API tokens) and back into this circuit's <see cref="VaultEventRelay"/>
+/// so open pages refresh.
 /// </summary>
-public sealed class DoopassSession : IVaultSession
+public sealed class DoopassSession : IVaultSession, IDisposable
 {
     private readonly object _gate = new();
     private readonly Settings _settings;
     private readonly StoreBackup _backups;
+    private readonly IVaultChangeNotifier? _notifier;
+    private readonly VaultEventRelay? _relay;
     private Store? _store;
 
-    public DoopassSession(Settings settings)
+    public DoopassSession(Settings settings, IVaultChangeNotifier? notifier = null, VaultEventRelay? relay = null)
     {
         _settings = settings;
+        _notifier = notifier;
+        _relay = relay;
         _backups = new StoreBackup(settings.StoreFile, settings.BackupsDir, settings.BackupExtension);
+
+        // Server-side change fan-in: notifier (all clients) -> this circuit's relay.
+        if (_notifier is not null && _relay is not null)
+        {
+            _notifier.VaultChanged += _relay.RaiseVaultChanged;
+            _notifier.BackupsChanged += _relay.RaiseBackupsChanged;
+            _notifier.SettingsChanged += _relay.RaiseSettingsChanged;
+            _notifier.VaultLocked += OnVaultLocked;
+        }
+    }
+
+    private void OnVaultLocked(string token) => _relay?.RaiseVaultLocked();
+
+    public void Dispose()
+    {
+        if (_notifier is not null && _relay is not null)
+        {
+            _notifier.VaultChanged -= _relay.RaiseVaultChanged;
+            _notifier.BackupsChanged -= _relay.RaiseBackupsChanged;
+            _notifier.SettingsChanged -= _relay.RaiseSettingsChanged;
+            _notifier.VaultLocked -= OnVaultLocked;
+        }
     }
 
     public Settings Settings => _settings;
@@ -118,6 +148,8 @@ public sealed class DoopassSession : IVaultSession
         {
             _store!.AddProperty(key, value);
         }
+
+        _notifier?.NotifyVaultChanged();
     }
 
     public void Update(string oldKey, string newKey, string newValue)
@@ -128,6 +160,8 @@ public sealed class DoopassSession : IVaultSession
             store.RemoveProperty(oldKey);
             store.AddProperty(newKey, newValue);
         }
+
+        _notifier?.NotifyVaultChanged();
     }
 
     public void Remove(string key)
@@ -136,6 +170,8 @@ public sealed class DoopassSession : IVaultSession
         {
             _store!.RemoveProperty(key);
         }
+
+        _notifier?.NotifyVaultChanged();
     }
 
     // IVaultSession: awaitable facade over the synchronous storage calls, so the
@@ -193,6 +229,7 @@ public sealed class DoopassSession : IVaultSession
     public ValueTask CreateBackupAsync(CancellationToken ct = default)
     {
         _backups.MakeBackup();
+        _notifier?.NotifyBackupsChanged();
         return ValueTask.CompletedTask;
     }
 
@@ -201,6 +238,8 @@ public sealed class DoopassSession : IVaultSession
     {
         _backups.SwapStoreWithBackup(backupName + _settings.BackupExtension);
         Reload();
+        _notifier?.NotifyBackupsChanged();
+        _notifier?.NotifyVaultChanged();
         return ValueTask.CompletedTask;
     }
 
@@ -208,6 +247,7 @@ public sealed class DoopassSession : IVaultSession
     public ValueTask DeleteBackupAsync(string backupName, CancellationToken ct = default)
     {
         _backups.DeleteBackup(backupName + _settings.BackupExtension);
+        _notifier?.NotifyBackupsChanged();
         return ValueTask.CompletedTask;
     }
 
@@ -223,12 +263,14 @@ public sealed class DoopassSession : IVaultSession
     public ValueTask SetSettingAsync(string section, string key, string value, CancellationToken ct = default)
     {
         _settings.ModifyProperty(section, key, value);
+        _notifier?.NotifySettingsChanged();
         return ValueTask.CompletedTask;
     }
 
     public ValueTask RestoreDefaultSettingsAsync(CancellationToken ct = default)
     {
         _settings.RestoreDefaults();
+        _notifier?.NotifySettingsChanged();
         return ValueTask.CompletedTask;
     }
 }

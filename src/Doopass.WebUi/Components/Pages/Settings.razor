@@ -1,5 +1,7 @@
 @page "/settings"
+@implements IDisposable
 @inject IVaultSession Session
+@inject IVaultEvents Events
 @inject NavigationManager Nav
 @inject ToastService Toast
 @inject IJSRuntime JS
@@ -131,7 +133,10 @@
         }
 
         await RefreshAsync();
+        Events.SettingsChanged += OnSettingsChanged;
     }
+
+    private void OnSettingsChanged() => _ = InvokeAsync(RefreshAsync);
 
     private async Task RefreshAsync() => _sections = (await Session.GetSettingsAsync()).ToList();
 
@@ -240,5 +245,10 @@
             AppLogger.Error("Restoring default settings failed", ex);
             Toast.Error("Restore failed", ex.Message);
         }
+    }
+
+    public void Dispose()
+    {
+        Events.SettingsChanged -= OnSettingsChanged;
     }
 }

@@ -29,6 +29,10 @@ coverage*.json
 # Generated PWA icons (scripts/generate-icons.py writes here; csproj embeds them)
 .pwa-assets/
 
+# Manual smoke-test homes (scripts/smoke-*.ps1)
+scripts/.smoke-api/
+scripts/.smoke-tls/
+
 # Diagnostics from the sandbox ACL skill
 .acl-recovery/
 
