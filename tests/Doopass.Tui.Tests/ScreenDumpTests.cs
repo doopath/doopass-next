@@ -4,6 +4,8 @@ using Doopass.Tui;
 using Doopass.Tui.Screens;
 using Terminal.Gui.App;
 using Terminal.Gui.Time;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 using Xunit;
 
 namespace Doopass.Tui.Tests;
@@ -105,9 +107,50 @@ public sealed class ScreenDumpTests : IDisposable
     }
 
     [Fact]
+    public void Confirm_dialog_buttons_are_centred()
+    {
+        var dialog = new ConfirmScreen(_context, _window, "Delete 'github'?", () => { });
+        _window.Push(dialog);
+        Render();
+
+        var screen = Dump("confirm-buttons");
+
+        Assert.Contains("[ No ]", screen);
+        Assert.Contains("[ Yes ]", screen);
+        AssertActionsCentred(dialog);
+    }
+
+    [Fact]
+    public void Notice_dialog_button_is_centred()
+    {
+        var dialog = new MessageScreen(_context, _window, "Backup created.", () => { });
+        _window.Push(dialog);
+        Render();
+
+        var screen = Dump("notice-button");
+
+        Assert.Contains("[ OK ]", screen);
+        AssertActionsCentred(dialog);
+    }
+
+    [Fact]
+    public void Edit_setting_form_buttons_are_centred()
+    {
+        var dialog = new ValueFormScreen(_context, _window, "Edit setting", "security.iterations", "600000", _ => { });
+        _window.Push(dialog);
+        Render();
+
+        var screen = Dump("value-form-buttons");
+
+        Assert.Contains("[ Save ]", screen);
+        Assert.Contains("[ Cancel ]", screen);
+        AssertActionsCentred(dialog);
+    }
+
+    [Fact]
     public void Edit_form_shows_the_value_and_centred_buttons()
     {
-        _window.Push(new PairFormScreen(
+        var dialog = new PairFormScreen(
             _context,
             _window,
             "Key",
@@ -115,7 +158,9 @@ public sealed class ScreenDumpTests : IDisposable
             "github",
             "correct-horse-battery",
             "Update",
-            (_, _) => { }));
+            (_, _) => { });
+
+        _window.Push(dialog);
 
         Render();
 
@@ -125,6 +170,7 @@ public sealed class ScreenDumpTests : IDisposable
         Assert.DoesNotContain("encrypted with the vault key", screen);
         Assert.Contains("[ Update ]", screen);
         Assert.Contains("[ Cancel ]", screen);
+        AssertActionsCentred(dialog);
     }
 
     [Fact]
@@ -164,6 +210,30 @@ public sealed class ScreenDumpTests : IDisposable
         Assert.Contains("Master password", screen);
         Assert.Contains("Unlock", screen);
         Assert.Contains("layout:", screen);
+    }
+
+    /// <summary>
+    /// Asserts the dialog's bracketed action buttons are centred inside their panel: the gap
+    /// left of the row must match the gap on its right within one column, since an odd
+    /// remainder cannot be split evenly.
+    /// </summary>
+    private static void AssertActionsCentred(ScreenBase screen)
+    {
+        var panel = screen.SubViews.OfType<FrameView>().First();
+        var buttons = panel.SubViews
+            .OfType<Label>()
+            .Where(label => label.Text?.StartsWith("[ ", StringComparison.Ordinal) == true)
+            .ToList();
+
+        Assert.NotEmpty(buttons);
+
+        var inner = panel.Frame.Width - 2; // rounded border: one column per side
+        var left = buttons.Min(button => button.Frame.X);
+        var right = inner - buttons.Max(button => button.Frame.X + button.Frame.Width);
+
+        Assert.True(
+            Math.Abs(left - right) <= 1,
+            $"actions are not centred ({left} columns left vs {right} right) in a {inner}-column panel");
     }
 
     private string Dump(string name)

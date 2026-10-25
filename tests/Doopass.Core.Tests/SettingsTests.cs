@@ -58,12 +58,31 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
-    public void Sections_ContainLocalAndRemote()
+    public void Sections_ContainLocalOnly()
     {
         var settings = new Settings();
 
-        Assert.Contains("local", settings.Sections);
-        Assert.Contains("remote", settings.Sections);
+        Assert.Equal(["local"], settings.Sections);
+    }
+
+    [Fact]
+    public void LegacyRemoteSection_IsDroppedOnLoad()
+    {
+        var settings = new Settings();
+        var path = settings.SettingsFile;
+
+        File.WriteAllText(path,
+            """
+            {
+              "local": { "version": "5.0.0" },
+              "remote": { "repository_url": "http://0.0.0.0:7240", "token": "no token" }
+            }
+            """);
+
+        var reloaded = new Settings();
+
+        Assert.Equal(["local"], reloaded.Sections);
+        Assert.DoesNotContain("remote", File.ReadAllText(path), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

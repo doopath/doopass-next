@@ -26,6 +26,12 @@ coverage*.json
 .dotnet/
 *.local.json
 
+# Generated PWA icons (scripts/generate-icons.py writes here; csproj embeds them)
+.pwa-assets/
+
+# Diagnostics from the sandbox ACL skill
+.acl-recovery/
+
 # Logs
 *.log
 

@@ -6,9 +6,5 @@
     "log_file": "APPDATA/doopass.log",
     "backups": "APPDATA/backups",
     "default_config": "APPDATA/default_config.json"
-  },
-  "remote": {
-    "repository_url": "http://0.0.0.0:7240",
-    "token": "no token"
   }
 }

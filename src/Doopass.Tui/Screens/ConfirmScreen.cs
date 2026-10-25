@@ -7,11 +7,16 @@ namespace Doopass.Tui.Screens;
 /// <summary>A minimal monochrome yes/no confirmation.</summary>
 internal sealed class ConfirmScreen : ScreenBase
 {
+    private const int PanelWidth = 60;
+    private const int PanelHeight = 10;
+    private const int ActionWidth = 8;
+    private const int ActionRow = 6;
+
     public ConfirmScreen(DoopassContext context, DoopassWindow shell, string message, Action onYes)
         : base(context, shell)
     {
-        var panel = UiKit.Panel("confirm", 0, 0, 60, 10);
-        CenterView(panel, 60, 10);
+        var panel = UiKit.Panel("confirm", 0, 0, PanelWidth, PanelHeight);
+        CenterView(panel, PanelWidth, PanelHeight);
 
         panel.Add(new Label
         {
@@ -23,10 +28,13 @@ internal sealed class ConfirmScreen : ScreenBase
             SchemeName = Theme.Monochrome.SchemeName,
         });
 
-        var no = AddStop(UiKit.Primary("No", 2, 6, Shell.Back, width: 8));
-        var yes = AddStop(UiKit.Primary("Yes", 12, 6, onYes, width: 8));
+        var no = AddStop(UiKit.Primary("No", 0, ActionRow, Shell.Back, width: ActionWidth));
+        var yes = AddStop(UiKit.Primary("Yes", 0, ActionRow, onYes, width: ActionWidth));
 
         panel.Add(no, yes);
+
+        // Centre the pair under the question instead of leaving it in the panel's left corner.
+        UiKit.CenterActions(panel, PanelWidth, ActionRow, 2, (no, ActionWidth), (yes, ActionWidth));
 
         Add(panel);
     }

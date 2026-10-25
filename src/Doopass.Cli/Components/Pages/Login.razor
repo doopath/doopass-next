@@ -47,21 +47,29 @@
 
     private void LogIn()
     {
-        var (success, message) = Session.Login(_password ?? string.Empty);
-
-        if (success)
+        try
         {
-            _password = null;
-            Nav.NavigateTo("/store");
-            return;
-        }
+            var (success, message) = Session.Login(_password ?? string.Empty);
 
-        if (!Session.StoreExists)
+            if (success)
+            {
+                _password = null;
+                Nav.NavigateTo("/store");
+                return;
+            }
+
+            if (!Session.StoreExists)
+            {
+                Nav.NavigateTo("/init");
+                return;
+            }
+
+            _error = message;
+        }
+        catch (Exception ex)
         {
-            Nav.NavigateTo("/init");
-            return;
+            AppLogger.Error("Login failed", ex);
+            _error = $"Unexpected error: {ex.Message}";
         }
-
-        _error = message;
     }
 }

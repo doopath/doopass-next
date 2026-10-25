@@ -81,6 +81,30 @@ internal static class UiKit
     }
 
     /// <summary>
+    /// Centres a row of fixed-width actions inside a framed panel. Uses the panel's declared
+    /// outer width (the rounded border eats one column per side) because
+    /// <c>panel.Viewport.Width</c> differs between layout passes and would leave the row one
+    /// column off. Applying it from <c>SubViewLayout</c> keeps it correct after a resize.
+    /// </summary>
+    public static void CenterActions(
+        FrameView panel, int panelWidth, int y, int gap, params (View View, int Width)[] actions)
+    {
+        panel.SubViewLayout += (_, _) =>
+        {
+            var inner = Math.Max(0, panelWidth - 2);
+            var total = actions.Sum(action => action.Width) + gap * (actions.Length - 1);
+            var x = Math.Max(1, (inner - total) / 2);
+
+            foreach (var (view, width) in actions)
+            {
+                view.X = x;
+                view.Y = y;
+                x += width + gap;
+            }
+        };
+    }
+
+    /// <summary>
     /// A menu row: a focusable, full-width label. Used where a ListView's internal
     /// horizontal scrolling would clip long, centered rows.
     /// </summary>

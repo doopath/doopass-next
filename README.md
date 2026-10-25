@@ -57,6 +57,40 @@ dotnet run --project src/Doopass.Cli -- serve --port 7240
 The default binds to `localhost` only. Open <http://localhost:7240> and log in or
 initialize a store. The web assets are embedded, so the app alone is enough to run.
 
+## Install as an app (PWA)
+
+The web interface is an installable Progressive Web App. Once Doopass is serving:
+
+* **Chrome / Edge** — Settings page → “Install as app” → *Install Doopass…*, or the
+  install icon in the address bar. Installs as its own window (like a desktop app).
+* **iOS (Safari, 16.4+)** — Share → *Add to Home Screen*. Launches full-screen from
+  the home-screen icon.
+* **Android** — Chrome or Samsung Internet: “Install app” / “Add to Home screen”
+  (creates a real WebAPK with the Doopass icon).
+* **Safari 17 (macOS)** — File menu → *Add to Dock*.
+* **Firefox desktop** does not support installing web apps; mobile Firefox can add
+  only a home-screen shortcut.
+
+The app requests the `standalone` display mode with `fullscreen` preferred when the
+browser supports it, ships its own 192/512 px (regular + maskable) icons, an
+apple-touch icon, and a service worker that offers a basic offline shell (start
+screen and static assets load without the server; vault operations still need the
+server and reconnect over their existing SignalR circuit).
+
+Requirements and limits:
+
+* Installation needs a **secure origin**: `http://localhost` or any HTTPS host.
+  Plain-HTTP LAN addresses (`--lan` without TLS) can use the UI but cannot install.
+* All PWA assets (manifest, service worker, icons) are embedded in the executable
+  and served from virtual routes (`/pwa/manifest.webmanifest`, `/pwa/sw.js`, …), so
+  the single-file build supports installation with no extra files.
+
+To regenerate the icons after a design change:
+
+```bash
+python scripts/generate-icons.py --out .pwa-assets   # PNGs are embedded from there via the csproj
+```
+
 ## Portable single-file build
 
 ```powershell

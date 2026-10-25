@@ -95,6 +95,19 @@ body {
     text-rendering: optimizeLegibility;
 }
 
+/* Kill the gray flash on tap targets: hover styles would otherwise flash on
+   touch devices and make the UI feel unresponsive. */
+button,
+a,
+input[type="search"] {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+    touch-action: manipulation;
+}
+
 h1, h2, h3, p {
     margin: 0;
 }
@@ -217,11 +230,6 @@ input {
     transition: background 0.15s ease, color 0.15s ease;
 }
 
-.nav-link:hover {
-    background: var(--bg-subtle);
-    color: var(--text);
-}
-
 .nav-link.active {
     background: var(--accent-soft);
     color: var(--accent);
@@ -301,6 +309,9 @@ input {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
+    /* Keep Android's pull-to-refresh from interrupting list scrolling,
+       and iOS from bouncing the whole shell around app modals. */
+    overscroll-behavior: contain;
 }
 
 .page {
@@ -355,18 +366,10 @@ input {
     box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28);
 }
 
-.btn-primary:hover {
-    background: var(--accent-hover);
-}
-
 .btn-secondary {
     background: var(--bg-elevated);
     border-color: var(--border-strong);
     color: var(--text);
-}
-
-.btn-secondary:hover {
-    background: var(--bg-subtle);
 }
 
 .btn-ghost {
@@ -374,18 +377,9 @@ input {
     color: var(--text-muted);
 }
 
-.btn-ghost:hover {
-    background: var(--bg-subtle);
-    color: var(--text);
-}
-
 .btn-danger {
     background: var(--danger);
     color: #fff;
-}
-
-.btn-danger:hover {
-    filter: brightness(0.94);
 }
 
 .btn-sm {
@@ -393,6 +387,65 @@ input {
     padding: 0 12px;
     font-size: 0.84rem;
     border-radius: 9px;
+}
+
+/* Hover-only feedback: on touch devices these flashed whenever a tap landed,
+   so they are gated to real pointer devices. */
+@media (hover: hover) {
+    .icon-btn:hover {
+        background: var(--bg-subtle);
+        color: var(--text);
+    }
+
+    .btn:hover {
+        filter: brightness(0.97);
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-hover);
+        filter: none;
+    }
+
+    .btn-secondary:hover,
+    .btn-ghost:hover {
+        background: var(--bg-subtle);
+        filter: none;
+    }
+
+    .btn-ghost:hover {
+        color: var(--text);
+    }
+
+    .btn-danger:hover {
+        filter: brightness(0.94);
+    }
+
+    .item-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+        border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+    }
+
+    .nav-link:hover {
+        background: var(--bg-subtle);
+        color: var(--text);
+    }
+
+    .toast:hover {
+        filter: brightness(0.985);
+    }
+
+    .input:hover {
+        border-color: var(--text-muted);
+    }
+}
+
+input,
+textarea,
+select {
+    /* Prevent mobile browsers from zooming the page when a form is focused:
+       iOS Safari zooms unless the input font-size is at least 16px. */
+    font-size: 16px;
 }
 
 .icon-btn {
@@ -408,11 +461,6 @@ input {
     color: var(--text-muted);
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
-}
-
-.icon-btn:hover {
-    background: var(--bg-subtle);
-    color: var(--text);
 }
 
 .icon-btn:focus-visible {
@@ -441,10 +489,6 @@ input {
 .input::placeholder {
     color: var(--text-muted);
     opacity: 0.85;
-}
-
-.input:hover {
-    border-color: var(--text-muted);
 }
 
 .input:focus {
@@ -566,12 +610,6 @@ input {
     gap: 12px;
     box-shadow: var(--shadow-sm);
     transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
-}
-
-.item-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
 
 .item-head {
@@ -839,11 +877,15 @@ input {
 }
 
 .toast-title {
+    /* Inline spans collapse "Copied" and "'key' copied to clipboard" into one
+       line with no separator ("Copied'secret' copied...") -- stack them. */
+    display: block;
     font-weight: 600;
     font-size: 0.9rem;
 }
 
 .toast-message {
+    display: block;
     color: var(--text-muted);
     font-size: 0.82rem;
     margin-top: 2px;
@@ -958,6 +1000,7 @@ input {
         transform: translateX(-100%);
         transition: transform 0.2s ease;
         box-shadow: var(--shadow-lg);
+        padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     }
 
     .app-shell.sidebar-open .sidebar {
@@ -980,25 +1023,136 @@ input {
         display: inline-flex;
     }
 
+    /* Generous touch targets (~44px) and edge insets. */
     .topbar {
-        padding: 0 16px;
+        height: calc(var(--topbar-height) + env(safe-area-inset-top, 0px));
+        padding:
+            env(safe-area-inset-top, 0px) 14px 0 calc(12px + env(safe-area-inset-left, 0px));
+        gap: 10px;
+    }
+
+    .icon-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    .btn {
+        height: 46px;
+    }
+
+    .btn-sm {
+        height: 40px;
+    }
+
+    .btn:active,
+    .btn-primary:active,
+    .item-card:active {
+        transform: none;
     }
 
     .page {
-        padding: 22px 16px 48px;
+        padding: 18px calc(14px + env(safe-area-inset-left, 0px)) 44px;
+    }
+
+    .category-card-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    /* The search box spans the full row once the sidebar collapses behind the
+       burger (≤900px); on wide desktops it stays capped at 460px. */
+    .toolbar .search {
+        max-width: none;
+    }
+
+    .item-card,
+    .card {
+        padding: 14px;
+    }
+
+    .page-title {
+        font-size: 1.35rem;
+    }
+
+    .page-head .btn {
+        margin-left: 0;
+    }
+
+    .modal-footer {
+        position: sticky;
+        bottom: 0;
+        padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+        background: var(--bg-elevated);
+        border-top: 1px solid var(--border);
+        border-bottom-right-radius: 16px;
+        border-bottom-left-radius: 16px;
+    }
+
+    .modal-footer .btn {
+        flex: 1;
+    }
+
+    .modal-footer .btn-primary {
+        flex: 2;
+    }
+
+    .toast-stack {
+        right: 12px;
+        left: 12px;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        max-width: none;
+    }
+
+    .auth-shell {
+        padding: max(24px, env(safe-area-inset-top, 0px)) 18px max(24px, env(safe-area-inset-bottom, 0px));
     }
 
     .desktop-only {
         display: none;
     }
+}
 
-    .page-title {
-        font-size: 1.4rem;
+/* ==========================================================================
+   Narrow phones (≤750px): card stacking happens here, not at the burger
+   breakpoint -- in the 751–900px band the regular multi-column grid still
+   fits comfortably next to the collapsed sidebar.
+   ========================================================================== */
+@media (max-width: 750px) {
+    /* Vault/backup cards: one per row, full width (page gutters only). */
+    .card-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .item-title {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    /* Settings: "name" sits on its own line, "value + edit" below it --
+       instead of one squeezed row. */
+    .setting-row {
+        flex-wrap: wrap;
+        row-gap: 4px;
+        column-gap: 14px;
+    }
+
+    .setting-key {
+        flex: 0 0 100%;
+        min-width: 0;
     }
 }
 
 @media (min-width: 901px) {
     .sidebar-backdrop {
+        display: none;
+    }
+
+    /* On desktop the sidebar is permanently visible, so a burger that only
+       toggles the "sidebar-open" class looks dead. The rule must live here
+       (after .icon-btn) or its `display: inline-flex` wins at equal
+       specificity and the button stays visible where it does nothing. */
+    .hamburger {
         display: none;
     }
 }
@@ -1044,15 +1198,164 @@ input {
     box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
     display: none;
     left: 0;
-    padding: 0.6rem 1.25rem;
+    padding: 1.1rem 1.25rem;
+    padding-bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
     position: fixed;
     width: 100%;
     z-index: 2000;
+    text-align: center;
+}
+
+#blazor-error-ui .reload {
+    color: #fff;
+    text-decoration: underline;
+    font-weight: 600;
+    display: inline-block;
+    padding: 8px 12px;
 }
 
 #blazor-error-ui .dismiss {
     cursor: pointer;
     position: absolute;
-    right: 0.75rem;
-    top: 0.5rem;
+    right: 0.35rem;
+    top: 0.35rem;
+    padding: 10px;
+    display: inline-flex;
+}
+
+/* ==========================================================================
+   Error card (ErrorBoundary fallback)
+   ========================================================================== */
+
+.app-error-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    padding: 42px 20px;
+    margin: 20px 0;
+}
+
+.app-error-icon {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.app-error-card .page-sub {
+    word-break: break-word;
+    margin-top: 0;
+}
+
+/* ==========================================================================
+   Blazor Server reconnection dialog
+   (#components-reconnect-modal; blazor.web.js toggles the
+   components-reconnect-* classes and app.js wires the Reload button)
+   ========================================================================== */
+
+#components-reconnect-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    place-items: center;
+    padding: 20px;
+    background: rgba(9, 12, 24, 0.55);
+    backdrop-filter: blur(2px);
+}
+
+#components-reconnect-modal.components-reconnect-show,
+#components-reconnect-modal.components-reconnect-retrying,
+#components-reconnect-modal.components-reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected,
+#components-reconnect-modal.components-reconnect-paused,
+#components-reconnect-modal.components-reconnect-resume-failed {
+    display: grid;
+}
+
+.app-reconnect-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    padding: 28px 26px;
+    max-width: 340px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow-lg);
+}
+
+.app-reconnect-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid var(--accent-soft);
+    border-top-color: var(--accent);
+    animation: appReconnectSpin 0.9s linear infinite;
+}
+
+#components-reconnect-modal.components-reconnect-failed .app-reconnect-spinner,
+#components-reconnect-modal.components-reconnect-rejected .app-reconnect-spinner,
+#components-reconnect-modal.components-reconnect-resume-failed .app-reconnect-spinner {
+    animation: none;
+    border: 3px solid var(--danger-soft);
+    border-top-color: var(--danger);
+}
+
+.app-reconnect-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.app-reconnect-text {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    display: none;
+    margin: 0;
+}
+
+.app-reconnect-text-connecting {
+    display: block;
+}
+
+#components-reconnect-modal.components-reconnect-paused .app-reconnect-text-connecting {
+    display: block;
+}
+
+.app-reconnect-reload {
+    display: none;
+}
+
+/* When Blazor gave up (failed / rejected / resume-failed), swap the spinner
+   plus the "reconnecting" text for the reload button. */
+#components-reconnect-modal.components-reconnect-failed .app-reconnect-spinner,
+#components-reconnect-modal.components-reconnect-rejected .app-reconnect-spinner,
+#components-reconnect-modal.components-reconnect-resume-failed .app-reconnect-spinner {
+    display: none;
+}
+
+#components-reconnect-modal.components-reconnect-failed .app-reconnect-text-connecting,
+#components-reconnect-modal.components-reconnect-rejected .app-reconnect-text-connecting,
+#components-reconnect-modal.components-reconnect-resume-failed .app-reconnect-text-connecting {
+    display: none;
+}
+
+#components-reconnect-modal.components-reconnect-failed .app-reconnect-text-refresh,
+#components-reconnect-modal.components-reconnect-rejected .app-reconnect-text-refresh,
+#components-reconnect-modal.components-reconnect-resume-failed .app-reconnect-text-refresh {
+    display: block;
+}
+
+#components-reconnect-modal.components-reconnect-failed .app-reconnect-reload,
+#components-reconnect-modal.components-reconnect-rejected .app-reconnect-reload,
+#components-reconnect-modal.components-reconnect-resume-failed .app-reconnect-reload {
+    display: inline-flex;
+}
+
+@keyframes appReconnectSpin {
+    to {
+        transform: rotate(360deg);
+    }
 }

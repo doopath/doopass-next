@@ -13,6 +13,16 @@ public sealed class Settings
 {
     private const string DefaultConfigResource = "Doopass.Core.Configuration.DefaultConfig.json";
 
+    /// <summary>
+    /// Sections that older versions wrote to <c>settings.json</c> but that are no
+    /// longer part of the configuration. They are dropped on load so the settings
+    /// UI never shows them again.
+    /// </summary>
+    private static readonly HashSet<string> ObsoleteSections = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "remote",
+    };
+
     private Dictionary<string, Dictionary<string, string>> _settings = new();
 
     public Settings()
@@ -42,7 +52,7 @@ public sealed class Settings
     /// <summary>The backup file extension.</summary>
     public string BackupExtension => GetValue("local", "backup_extension");
 
-    /// <summary>The names of all top-level settings sections (<c>local</c>, <c>remote</c>).</summary>
+    /// <summary>The names of all top-level settings sections (currently only <c>local</c>).</summary>
     public IReadOnlyList<string> Sections => _settings.Keys.ToList();
 
     /// <summary>Returns a substituted value from a section.</summary>
@@ -104,8 +114,17 @@ public sealed class Settings
             return;
         }
 
+        var droppedObsolete = false;
+
         foreach (var (section, pairs) in raw)
         {
+            if (ObsoleteSections.Contains(section))
+            {
+                droppedObsolete = true;
+                AppLogger.Info($"Dropped obsolete settings section: {section}");
+                continue;
+            }
+
             var substituted = new Dictionary<string, string>();
 
             foreach (var (key, value) in pairs)
@@ -114,6 +133,11 @@ public sealed class Settings
             }
 
             _settings[section] = substituted;
+        }
+
+        if (droppedObsolete)
+        {
+            Save();
         }
     }
 

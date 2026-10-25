@@ -36,19 +36,13 @@ internal sealed class PairFormScreen : ScreenBase
 
         var saveWidth = Math.Max(12, buttonText.Length + 6);
         const int cancelWidth = 12;
-        var save = AddStop(UiKit.Primary(buttonText, 2, 10, Submit, width: saveWidth));
-        var cancel = AddStop(UiKit.Primary("Cancel", 2 + saveWidth + 2, 10, Shell.Back, width: cancelWidth));
+        var save = AddStop(UiKit.Primary(buttonText, 0, 10, Submit, width: saveWidth));
+        var cancel = AddStop(UiKit.Primary("Cancel", 0, 10, Shell.Back, width: cancelWidth));
 
         panel.Add(keyCaption, _key, valueCaption, _value, save, cancel);
 
-        // Centre the button pair inside the panel once its width is known.
-        panel.SubViewLayout += (_, _) =>
-        {
-            var total = saveWidth + 2 + cancelWidth;
-            var start = Math.Max(1, (panel.Viewport.Width - total) / 2);
-            save.X = start;
-            cancel.X = start + saveWidth + 2;
-        };
+        // Centre the button pair inside the panel.
+        UiKit.CenterActions(panel, 62, 10, 2, (save, saveWidth), (cancel, cancelWidth));
 
         Add(panel);
 

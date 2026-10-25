@@ -1,4 +1,5 @@
 @page "/store"
+@implements IDisposable
 @inject DoopassSession Session
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -20,7 +21,8 @@
 <div class="toolbar">
     <div class="search">
         <input class="input" type="search" placeholder="Search keys..."
-               @bind="_filter" @bind:event="oninput" />
+               value="@_filter" @oninput="OnFilterChanged"
+               autocapitalize="none" autocomplete="off" enterkeyhint="search" />
     </div>
 </div>
 
@@ -88,12 +90,14 @@ else
         <div class="field">
             <label class="field-label">Key</label>
             <input class="input" type="text" placeholder="e.g. github"
-                   @bind="_formKey" @bind:event="oninput" />
+                   @bind="_formKey" @bind:event="oninput"
+                   spellcheck="false" autocapitalize="none" autocomplete="off" />
         </div>
         <div class="field">
             <label class="field-label">Value</label>
             <input class="input" type="text" placeholder="Secret value"
-                   @bind="_formValue" @bind:event="oninput" />
+                   @bind="_formValue" @bind:event="oninput"
+                   spellcheck="false" autocapitalize="none" autocomplete="off" />
         </div>
         @if (!string.IsNullOrEmpty(_formError))
         {
@@ -124,6 +128,7 @@ else
 
 @code {
     private string? _filter;
+    private CancellationTokenSource? _filterDebounce;
     private readonly HashSet<string> _revealed = new(StringComparer.Ordinal);
 
     private bool _showEditor;
@@ -158,6 +163,39 @@ else
         if (!Session.IsUnlocked)
         {
             Nav.NavigateTo("/");
+        }
+    }
+
+    // Mobile-friendly search: every keystroke used to re-render the whole list
+    // over SignalR, which on phones lagged the on-screen keyboard. Buffer the
+    // typed text locally and re-render at most every 250 ms.
+    private async Task OnFilterChanged(ChangeEventArgs args)
+    {
+        _filter = args.Value?.ToString();
+
+        _filterDebounce?.Cancel();
+        _filterDebounce?.Dispose();
+        _filterDebounce = new CancellationTokenSource();
+        var token = _filterDebounce.Token;
+
+        try
+        {
+            await Task.Delay(250, token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        // Guarded so a late render after a navigation cannot blow up the circuit.
+        if (Nav.ToBaseRelativePath(Nav.Uri).StartsWith("store", StringComparison.OrdinalIgnoreCase))
+        {
+            StateHasChanged();
         }
     }
 
@@ -232,10 +270,59 @@ else
         }
     }
 
+    // The old version called navigator.clipboard.writeText directly. Android Chrome
+    // gives the call no user-activation permission from the SignalR dispatch, the
+    // promise rejects, and Blazor ripples the JS exception through the whole
+    // circuit -- after that every button on the page stopped working. Copying now
+    // runs through wwwroot/app.js, which falls back to an internal <textarea> +
+    // execCommand('copy') and reports success/failure instead of throwing, so a
+    // blocked clipboard shows an error toast rather than killing the session.
     private async Task CopyAsync(string key)
     {
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", Session.GetValue(key));
-        Toast.Success("Copied", $"'{key}' copied to clipboard");
+        string value;
+
+        try
+        {
+            value = Session.GetValue(key);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Reading the value of '{key}' before copy failed", ex);
+            Toast.Error("Copy failed", ex.Message);
+            return;
+        }
+
+        bool success;
+
+        try
+        {
+            success = await JS.InvokeAsync<bool>("doopass.copyText", value);
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit is gone; nothing left to notify.
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"doopass.copyText failed for '{key}'", ex);
+            success = false;
+        }
+
+        if (success)
+        {
+            Toast.Success("Copied", $"'{key}' copied to clipboard");
+            return;
+        }
+
+        // Platform refused the copy (no user activation, insecure context):
+        // reveal the value so it can be copied by hand instead of doing nothing.
+        _revealed.Add(key);
+        Toast.Error("Clipboard is blocked", $"'{key}' value shown — copy it manually");
     }
 
     private void ConfirmDelete(string key)
@@ -264,5 +351,12 @@ else
         _deleteKey = null;
 
         Toast.Success("Deleted", $"'{key}' removed");
+    }
+
+    public void Dispose()
+    {
+        _filterDebounce?.Cancel();
+        _filterDebounce?.Dispose();
+        _filterDebounce = null;
     }
 }

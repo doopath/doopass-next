@@ -116,9 +116,17 @@ else
 
     private void CreateBackup()
     {
-        Session.Backups.MakeBackup();
-        Refresh();
-        Toast.Success("Backup created", "A new snapshot of your vault is ready");
+        try
+        {
+            Session.Backups.MakeBackup();
+            Refresh();
+            Toast.Success("Backup created", "A new snapshot of your vault is ready");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Backup creation failed", ex);
+            Toast.Error("Backup failed", ex.Message);
+        }
     }
 
     private void ConfirmRestore(string name)
@@ -141,13 +149,24 @@ else
         }
 
         var name = _restoreName;
-        Session.Backups.SwapStoreWithBackup(name + Extension);
-        Session.Reload();
-        _showRestore = false;
-        _restoreName = null;
-        Refresh();
 
-        Toast.Success("Restored", $"Vault restored from '{name}'");
+        try
+        {
+            Session.Backups.SwapStoreWithBackup(name + Extension);
+            Session.Reload();
+            Toast.Success("Restored", $"Vault restored from '{name}'");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Restoring backup '{name}' failed", ex);
+            Toast.Error("Restore failed", ex.Message);
+        }
+        finally
+        {
+            _showRestore = false;
+            _restoreName = null;
+            Refresh();
+        }
     }
 
     private void ConfirmDelete(string name)
@@ -170,11 +189,22 @@ else
         }
 
         var name = _deleteName;
-        Session.Backups.DeleteBackup(name + Extension);
-        _showDelete = false;
-        _deleteName = null;
-        Refresh();
 
-        Toast.Success("Backup deleted", $"'{name}' removed");
+        try
+        {
+            Session.Backups.DeleteBackup(name + Extension);
+            Toast.Success("Backup deleted", $"'{name}' removed");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Deleting backup '{name}' failed", ex);
+            Toast.Error("Delete failed", ex.Message);
+        }
+        finally
+        {
+            _showDelete = false;
+            _deleteName = null;
+            Refresh();
+        }
     }
 }

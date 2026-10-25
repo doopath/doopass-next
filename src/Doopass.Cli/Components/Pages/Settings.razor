@@ -2,6 +2,7 @@
 @inject DoopassSession Session
 @inject NavigationManager Nav
 @inject ToastService Toast
+@inject IJSRuntime JS
 
 <PageTitle>Doopass — Settings</PageTitle>
 
@@ -34,6 +35,51 @@
         }
     </div>
 }
+
+<div class="card" style="margin-bottom:16px;">
+    <h2 class="card-title">Install as app</h2>
+    @if (_installState is null)
+    {
+        <p class="card-sub">Checking installation options…</p>
+    }
+    else if (_installState == "standalone")
+    {
+        <p class="card-sub">Doopass is installed and running in its own window.</p>
+    }
+    else if (_installState == "installable")
+    {
+        <p class="card-sub">
+            Install Doopass on this device — it then opens in its own window
+            without browser UI, with an icon on your home screen or desktop.
+        </p>
+        <button type="button" class="btn btn-primary" @onclick="InstallApp">
+            <Icon Name="add" Size="18" />
+            <span>Install Doopass…</span>
+        </button>
+    }
+    else if (_installState == "ios")
+    {
+        <p class="card-sub">
+            On iOS: open this page in Safari, tap the <strong>Share</strong>
+            button, then <strong>Add to Home Screen</strong>.
+        </p>
+    }
+    else if (_installState == "manual")
+    {
+        <p class="card-sub">
+            There is no one-click prompt in this browser. Use the browser menu:
+            Chrome / Edge — “Install app” or “Save and share → Install”;
+            mobile Firefox — Share → “Add shortcut to Home screen”.
+        </p>
+    }
+    else
+    {
+        <p class="card-sub">
+            Installation requires a secure origin. Open the web interface at
+            http://localhost or over HTTPS, then return to this page.
+        </p>
+    }
+</div>
 
 <Modal Visible="_showEdit" Title="@($"Edit {_editKey}")" OnClose="CancelEdit">
     <ChildContent>
@@ -72,6 +118,7 @@
     private string? _editValue;
 
     private bool _showRestoreDefaults;
+    private string? _installState;
 
     protected override void OnInitialized()
     {
@@ -81,13 +128,60 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _installState = await JS.InvokeAsync<string>("doopass.pwa.probe");
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit is gone; nothing to show.
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("PWA install probe failed", ex);
+                _installState = "no-service-worker";
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task InstallApp()
+    {
+        try
+        {
+            var outcome = await JS.InvokeAsync<string>("doopass.pwa.promptInstall");
+
+            switch (outcome)
+            {
+                case "accepted":
+                    Toast.Success("Installing", "Doopass is being added as an app");
+                    break;
+                case "dismissed":
+                    Toast.Info("Install cancelled", "You can install later from this page");
+                    break;
+                default:
+                    Toast.Info("Prompt unavailable", "Try again in a moment");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("PWA install prompt failed", ex);
+            Toast.Error("Install failed", ex.Message);
+        }
+    }
+
     private static string SectionTitle(string section) =>
         section.Length == 0 ? section : char.ToUpper(section[0]) + section[1..];
 
     private static string SectionSubtitle(string section) => section switch
     {
         "local" => "Storage paths and file locations",
-        "remote" => "Sync server connection settings",
         _ => "Configuration section",
     };
 
@@ -107,9 +201,17 @@
 
     private void SaveEdit()
     {
-        Session.Settings.ModifyProperty(_editSection, _editKey, _editValue ?? string.Empty);
-        _showEdit = false;
-        Toast.Success("Saved", $"'{_editKey}' updated");
+        try
+        {
+            Session.Settings.ModifyProperty(_editSection, _editKey, _editValue ?? string.Empty);
+            _showEdit = false;
+            Toast.Success("Saved", $"'{_editKey}' updated");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Saving setting '{_editKey}' failed", ex);
+            Toast.Error("Save failed", ex.Message);
+        }
     }
 
     private void ConfirmRestoreDefaults() => _showRestoreDefaults = true;
@@ -118,8 +220,16 @@
 
     private void RestoreDefaults()
     {
-        Session.Settings.RestoreDefaults();
-        _showRestoreDefaults = false;
-        Toast.Success("Restored", "Default settings restored");
+        try
+        {
+            Session.Settings.RestoreDefaults();
+            _showRestoreDefaults = false;
+            Toast.Success("Restored", "Default settings restored");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Restoring default settings failed", ex);
+            Toast.Error("Restore failed", ex.Message);
+        }
     }
 }

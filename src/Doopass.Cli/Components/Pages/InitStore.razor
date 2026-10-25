@@ -50,16 +50,24 @@
             return;
         }
 
-        var (success, message) = Session.Init(_password ?? string.Empty);
-
-        if (success)
+        try
         {
-            _password = null;
-            _confirm = null;
-            Nav.NavigateTo("/store");
-            return;
-        }
+            var (success, message) = Session.Init(_password ?? string.Empty);
 
-        _error = message;
+            if (success)
+            {
+                _password = null;
+                _confirm = null;
+                Nav.NavigateTo("/store");
+                return;
+            }
+
+            _error = message;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Vault initialization failed", ex);
+            _error = $"Unexpected error: {ex.Message}";
+        }
     }
 }

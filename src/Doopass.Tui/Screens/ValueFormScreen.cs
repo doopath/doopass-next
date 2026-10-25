@@ -7,6 +7,11 @@ namespace Doopass.Tui.Screens;
 /// <summary>A single-value edit form (used for settings).</summary>
 internal sealed class ValueFormScreen : ScreenBase
 {
+    private const int PanelWidth = 62;
+    private const int PanelHeight = 9;
+    private const int ActionWidth = 12;
+    private const int ActionRow = 5;
+
     private readonly TextField _value;
     private readonly Action<string> _onSave;
 
@@ -20,17 +25,19 @@ internal sealed class ValueFormScreen : ScreenBase
     {
         _onSave = onSave;
 
-        var panel = UiKit.Panel("edit setting", 0, 0, 62, 9);
-        CenterView(panel, 62, 9);
+        var panel = UiKit.Panel("edit setting", 0, 0, PanelWidth, PanelHeight);
+        CenterView(panel, PanelWidth, PanelHeight);
 
         var caption = UiKit.Hint("  " + label, 0);
         _value = AddStop(UiKit.Input(1, text: value, width: 54));
         _value.X = 2;
 
-        var save = AddStop(UiKit.Primary("Save", 2, 5, () => _onSave(_value.Text ?? string.Empty), width: 12));
-        var cancel = AddStop(UiKit.Primary("Cancel", 16, 5, Shell.Back, width: 12));
+        var save = AddStop(UiKit.Primary("Save", 0, ActionRow, () => _onSave(_value.Text ?? string.Empty), width: ActionWidth));
+        var cancel = AddStop(UiKit.Primary("Cancel", 0, ActionRow, Shell.Back, width: ActionWidth));
 
         panel.Add(caption, _value, save, cancel);
+
+        UiKit.CenterActions(panel, PanelWidth, ActionRow, 2, (save, ActionWidth), (cancel, ActionWidth));
 
         Add(panel, UiKit.Hint("  " + title, 10));
 

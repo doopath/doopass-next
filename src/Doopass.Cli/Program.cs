@@ -77,9 +77,27 @@ static int RunWebServer(int port, bool openBrowser, bool lan)
     app.UseAntiforgery();
 
     // Serve the web assets from embedded resources (works in single-file deployments too).
-    app.MapGet("/app.css", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.app.css", "text/css; charset=utf-8"));
-    app.MapGet("/theme.js", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.theme.js", "text/javascript; charset=utf-8"));
+    // The asset URLs carry no content hash, so they must be revalidated on every load --
+    // otherwise a browser keeps running a stale theme.js / app.css for an hour after an upgrade.
+    app.MapGet("/app.css", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.app.css", "text/css; charset=utf-8", revalidate: true));
+    app.MapGet("/theme.js", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.theme.js", "text/javascript; charset=utf-8", revalidate: true));
+    app.MapGet("/app.js", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.app.js", "text/javascript; charset=utf-8", revalidate: true));
     app.MapGet("/_framework/blazor.web.js", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.blazor.web.js", "text/javascript; charset=utf-8"));
+
+    // PWA: installable web app (manifest, service worker, icons), all embedded.
+    app.MapGet("/pwa/manifest.webmanifest", (HttpContext ctx) =>
+        ServeAsset(ctx, "Doopass.Cli.wwwroot.pwa.manifest.webmanifest", "application/manifest+json; charset=utf-8", revalidate: true));
+    app.MapGet("/pwa/sw.js", (HttpContext ctx) =>
+    {
+        // Lets a worker under /pwa/ claim the whole site ("https://host/") as scope.
+        ctx.Response.Headers["Service-Worker-Allowed"] = "/";
+        return ServeAsset(ctx, "Doopass.Cli.wwwroot.pwa.sw.js", "text/javascript; charset=utf-8", revalidate: true);
+    });
+    app.MapGet("/pwa/icon-192.png", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.pwa.icon-192.png", "image/png"));
+    app.MapGet("/pwa/icon-512.png", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.pwa.icon-512.png", "image/png"));
+    app.MapGet("/pwa/icon-maskable-192.png", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.pwa.icon-maskable-192.png", "image/png"));
+    app.MapGet("/pwa/icon-maskable-512.png", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.pwa.icon-maskable-512.png", "image/png"));
+    app.MapGet("/pwa/apple-touch-icon.png", (HttpContext ctx) => ServeAsset(ctx, "Doopass.Cli.wwwroot.pwa.apple-touch-icon.png", "image/png"));
 
     app.MapRazorComponents<Doopass.Cli.Components.App>()
         .AddInteractiveServerRenderMode();
@@ -109,7 +127,7 @@ static int RunWebServer(int port, bool openBrowser, bool lan)
     return 0;
 }
 
-static IResult ServeAsset(HttpContext ctx, string resourceName, string contentType)
+static IResult ServeAsset(HttpContext ctx, string resourceName, string contentType, bool revalidate = false)
 {
     var stream = typeof(Doopass.Cli.Components.App).Assembly.GetManifestResourceStream(resourceName);
 
@@ -118,6 +136,6 @@ static IResult ServeAsset(HttpContext ctx, string resourceName, string contentTy
         return Results.NotFound();
     }
 
-    ctx.Response.Headers["Cache-Control"] = "public, max-age=3600";
+    ctx.Response.Headers["Cache-Control"] = revalidate ? "no-cache" : "public, max-age=3600";
     return Results.Stream(stream, contentType);
 }

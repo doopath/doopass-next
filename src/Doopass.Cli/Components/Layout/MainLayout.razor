@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject DoopassSession Session
 @inject NavigationManager Nav
 
@@ -56,7 +57,22 @@
 
         <main class="content">
             <div class="page">
-                @Body
+                <ErrorBoundary>
+                    <ChildContent>@Body</ChildContent>
+                    <ErrorContent>
+                        <div class="card app-error-card">
+                            <div class="empty-icon app-error-icon">
+                                <Icon Name="warning" Size="24" />
+                            </div>
+                            <h2 class="page-title">Something went wrong</h2>
+                            <p class="page-sub">@context.Message</p>
+                            <button type="button" class="btn btn-primary" onclick="location.reload()">
+                                <Icon Name="restore" Size="18" />
+                                <span>Reload</span>
+                            </button>
+                        </div>
+                    </ErrorContent>
+                </ErrorBoundary>
             </div>
         </main>
     </div>
@@ -74,6 +90,23 @@
         _ => "Store",
     };
 
+    protected override void OnInitialized()
+    {
+        // On phones the sidebar covers the whole screen; leave it open across
+        // navigation taps makes the app feel broken (people tap "Store" and
+        // see nothing happen). Close on every in-app navigation.
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (_sidebarOpen)
+        {
+            _sidebarOpen = false;
+            StateHasChanged();
+        }
+    }
+
     private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
 
     private void CloseSidebar() => _sidebarOpen = false;
@@ -83,4 +116,6 @@
         Session.Logout();
         Nav.NavigateTo("/");
     }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }
