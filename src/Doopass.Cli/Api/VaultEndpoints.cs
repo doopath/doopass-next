@@ -29,6 +29,7 @@ public static class VaultEndpoints
         var group = app.MapGroup("/api")
             .AddEndpointFilter<NoStoreFilter>();
 
+        var announce = app.ServiceProvider.GetRequiredService<DiscoveryAnnounce>();
         var secure = group
             .MapGroup("")
             .AddEndpointFilter<RequireVaultTokenFilter>();
@@ -83,6 +84,7 @@ public static class VaultEndpoints
             storeExists = coordinator.GetState().StoreExists,
             unlocked = coordinator.GetState().IsUnlocked,
             serverVersion = coordinator.ServerVersion,
+            certFingerprint = announce.Fingerprint,
         }));
 
         secure.MapGet("/vault/keys", (HttpContext ctx) => Guard(() =>

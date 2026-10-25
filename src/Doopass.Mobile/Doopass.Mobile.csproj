@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Doopass.Mobile</RootNamespace>
+    <AssemblyName>Doopass.Mobile</AssemblyName>
+    <Version>5.0.0</Version>
+    <Description>Doopass Android thin client: connects to the vault host over the REST API.</Description>
+
+    <!-- Package identity for local APK builds. -->
+    <ApplicationId>io.github.doopath.doopass</ApplicationId>
+    <ApplicationTitle>Doopass</ApplicationTitle>
+    <ApplicationDisplayVersion>5.0.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+
+    <!-- Keep release diagnostics readable until trimming is proven safe with
+         System.Text.Json reflection on the API DTOs. -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Doopass.Core\Doopass.Core.csproj" />
+    <ProjectReference Include="..\Doopass.WebUi\Doopass.WebUi.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <MauiIcon Include="Resources\AppIcon\appicon.png" Color="#4f46e5" />
+  </ItemGroup>
+
+</Project>

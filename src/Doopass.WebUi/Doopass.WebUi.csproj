@@ -9,22 +9,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Razor components depend on the ASP.NET Core shared framework. -->
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- Razor components compile against the NuGet packages so the same RCL
+         runs in the web host (shared framework) and MAUI WebView hosts,
+         which have no Microsoft.AspNetCore.App runtime pack on mobile. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Static assets are served from embedded resources so the app can be published,
-         self-contained, as a single file with no wwwroot folder next to it. The same
-         assets back the MAUI Blazor WebView host, which reads them from this assembly. -->
+    <!-- Static assets: embedded resources back the server host's direct serving
+         (single-file publish), while the default content items make the same
+         files available under _content/Doopass.WebUi/ in the MAUI WebView.
+         Both flows read the identical sources; no duplication on disk. -->
     <EmbeddedResource Include="wwwroot\app.css" LogicalName="Doopass.WebUi.wwwroot.app.css" />
     <EmbeddedResource Include="wwwroot\theme.js" LogicalName="Doopass.WebUi.wwwroot.theme.js" />
     <EmbeddedResource Include="wwwroot\app.js" LogicalName="Doopass.WebUi.wwwroot.app.js" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Don't publish wwwroot as loose files; assets are embedded and served from resources. -->
-    <Content Remove="wwwroot\**" />
   </ItemGroup>
 
   <ItemGroup>

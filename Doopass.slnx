@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Doopass.Cli/Doopass.Cli.csproj" />
     <Project Path="src/Doopass.Core/Doopass.Core.csproj" />
+    <Project Path="src/Doopass.Mobile/Doopass.Mobile.csproj" />
     <Project Path="src/Doopass.Tui/Doopass.Tui.csproj" />
     <Project Path="src/Doopass.WebUi/Doopass.WebUi.csproj" />
   </Folder>

@@ -105,6 +105,9 @@ public static class WebHostFactory
             Enabled = announceEnabled,
         };
         builder.Services.AddHostedService(_ => new DiscoveryService(announce));
+        // Registered for the state endpoint as well: the trust-on-first-use flow
+        // on thin clients reads the fingerprint from /api/vault/state.
+        builder.Services.AddSingleton(announce);
 
         builder.Services.AddHostedService<VaultHubRelay>();
 

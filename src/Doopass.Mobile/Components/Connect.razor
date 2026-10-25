@@ -1,0 +1,297 @@
+@page "/connect"
+@layout AuthLayout
+@implements IDisposable
+@inject ConnectionStore Connections
+@inject HostDiscovery Discovery
+@inject IVaultSession Session
+@inject ToastService Toast
+
+<PageTitle>Doopass — Connect</PageTitle>
+
+<h1 class="auth-title">Connect to your vault host</h1>
+<p class="auth-sub">The phone keeps no secrets: it stores only the host address, its certificate pin and your session token.</p>
+
+@if (!string.IsNullOrEmpty(_warning))
+{
+    <div class="error">@_warning</div>
+}
+
+<div class="card" style="margin-bottom:16px;">
+    <h2 class="card-title">Automatic discovery</h2>
+    <p class="card-sub">Searches the local network for Doopass hosts via UDP broadcast.</p>
+    <div class="auth-actions">
+        <button type="button" class="btn btn-primary" @onclick="SearchAsync" disabled="@_searching">
+            <Icon Name="search" Size="18" />
+            <span>@(_searching ? "Searching…" : "Find hosts")</span>
+        </button>
+    </div>
+
+    @if (_candidates.Count > 0)
+    {
+        <div style="margin-top:12px;">
+            @foreach (var candidate in _candidates)
+            {
+                <div class="setting-row">
+                    <span class="setting-key" style="min-width:0;">
+                        <strong>@candidate.Name</strong><br />
+                        <span class="muted" style="font-size:.78rem;">@candidate.Url @((candidate.Tls ? "" : "— no encryption"))</span>
+                    </span>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ProbeAsync(candidate))">Select</button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <h2 class="card-title">Manual address</h2>
+    <p class="card-sub">e.g. http://192.168.1.10:7240 — on the Android emulator the host PC is 10.0.2.2:7240.</p>
+    <div class="field">
+        <label class="field-label">Host URL</label>
+        <input class="input" type="text" placeholder="http://192.168.1.10:7240"
+               value="@_manualHost" @oninput="OnManualChanged"
+               autocapitalize="none" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="auth-actions">
+        <button type="button" class="btn btn-primary" @onclick="@(() => ProbeAsync(NewCandidate(_manualHost)))" disabled="@_probing">
+            <Icon Name="shield" Size="18" />
+            <span>@(_probing ? "Checking…" : "Connect")</span>
+        </button>
+    </div>
+</div>
+
+@if (_pending is not null)
+{
+    <div class="card" style="margin-bottom:16px;">
+        <h2 class="card-title">@_pending.Name</h2>
+        @if (_pending.Tls)
+        {
+            <p class="card-sub">
+                Server certificate fingerprint (SHA-256):
+                <br />
+                <span class="plain" style="font-size:.78rem; word-break:break-all;">@_pending.Fingerprint</span>
+            </p>
+            <p class="card-sub">Trust this host? Its fingerprint will be pinned on this phone.</p>
+        }
+        else
+        {
+            <p class="card-sub">
+                This connection is <strong>not encrypted</strong> (plain HTTP over the LAN).
+                Anyone in the network can see the traffic. Prefer the host to enable TLS.
+            </p>
+        }
+        <div class="auth-actions">
+            <button type="button" class="btn btn-primary" @onclick="TrustAsync">
+                <Icon Name="success" Size="18" />
+                <span>Trust and connect</span>
+            </button>
+            <button type="button" class="btn btn-ghost" @onclick="CancelPending">Cancel</button>
+        </div>
+    </div>
+}
+
+@code {
+    private List<HostCandidate> _candidates = new();
+    private HostCandidate? _pending;
+    private string? _manualHost;
+    private string? _warning;
+    private bool _searching;
+    private bool _probing;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Connections.LoadAsync();
+        }
+    }
+
+    private static HostCandidate NewCandidate(string hostUrl) =>
+        new("Doopass host", (hostUrl ?? string.Empty).Trim(), hostUrl?.StartsWith("https", StringComparison.OrdinalIgnoreCase) ?? false, null, "5.0.0");
+
+    private void OnManualChanged(ChangeEventArgs args) => _manualHost = args.Value?.ToString();
+
+    private async Task SearchAsync()
+    {
+        _searching = true;
+        _warning = null;
+        _candidates.Clear();
+        StateHasChanged();
+
+        try
+        {
+            _candidates = (await Discovery.DiscoverAsync()).ToList();
+            _warning = _candidates.Count == 0
+                ? "No hosts answered in ~2 s. Check that the PC host runs with --lan and UDP 7241 is allowed, or type the address manually."
+                : null;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Discovery failed", ex);
+            _warning = $"Discovery failed: {ex.Message}";
+        }
+        finally
+        {
+            _searching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ProbeAsync(HostCandidate candidate)
+    {
+        _probing = true;
+        _warning = null;
+        StateHasChanged();
+
+        try
+        {
+            var sanitized = Sanitize(candidate.Url);
+
+            if (sanitized.url is null)
+            {
+                _warning = "Enter a full host URL, e.g. http://192.168.1.10:7240";
+                return;
+            }
+
+            var probeUrl = sanitized.url;
+
+            // Probe the state endpoint against the fresh address; it returns the
+            // real server fingerprint for TLS hosts (the discovery reply may lack
+            // one when the network stack filters broadcast responses).
+            var (ok, fingerprint, version) = await ProbeStateAsync(probeUrl);
+
+            if (!ok)
+            {
+                _warning = "The host did not answer. Check the address and that the PC runs `doopass serve --lan`.";
+                return;
+            }
+
+            var discovered = _candidates.FirstOrDefault(item => item.Url == probeUrl) ?? candidate;
+            _pending = discovered with
+            {
+                Url = probeUrl,
+                Fingerprint = fingerprint ?? discovered.Fingerprint,
+                Version = version ?? discovered.Version,
+            };
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Probing '{candidate.Url}' failed", ex);
+            _warning = $"Probe failed: {ex.Message}";
+        }
+        finally
+        {
+            _probing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TrustAsync()
+    {
+        if (_pending is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Connections.SaveHostAsync(_pending.Url, _pending.Tls ? _pending.Fingerprint : null);
+            var state = await Session.GetStateAsync();
+
+            Toast.Success("Connected", $"Saved host {_pending.Url} ({state.ServerVersion})");
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Saving the host failed", ex);
+            _warning = $"Could not save the connection: {ex.Message}";
+        }
+        finally
+        {
+            _pending = null;
+            StateHasChanged();
+        }
+    }
+
+    private void CancelPending() => _pending = null;
+
+    private static (string? url, string scheme) Sanitize(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return (null, "http");
+        }
+
+        var trimmed = raw.Trim();
+
+        if (!trimmed.Contains("://", StringComparison.Ordinal))
+        {
+            trimmed = "http://" + trimmed;
+        }
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https")
+            || uri.PathAndQuery is not ("/" or ""))
+        {
+            return (null, "http");
+        }
+
+        return (uri.GetLeftPart(UriPartial.Authority), uri.Scheme);
+    }
+
+    // Probe (GET /api/vault/state) without saving anything; returns the TLS
+    // certificate fingerprint, needed for the trust-on-first-use confirm.
+    private async Task<(bool Ok, string? Fingerprint, string? Version)> ProbeStateAsync(string baseUrl)
+    {
+        HttpClient client;
+
+        try
+        {
+            client = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(6) };
+        }
+        catch (UriFormatException)
+        {
+            return (false, null, null);
+        }
+
+        using (client)
+        {
+            try
+            {
+                var response = await client.GetAsync("/api/vault/state");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (false, null, null);
+                }
+
+                var text = await response.Content.ReadAsStringAsync();
+
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return (false, null, null);
+                }
+
+                var payload = System.Text.Json.JsonSerializer.Deserialize<ConnectState>(text, ProbeJson);
+
+                return (true, payload?.CertFingerprint, payload?.ServerVersion);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, null, null);
+            }
+        }
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions ProbeJson =
+        new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    private sealed record ConnectState(bool StoreExists, bool IsUnlocked, string? ServerVersion, string? CertFingerprint);
+
+    public void Dispose()
+    {
+        // No persistent resources; kept for symmetry with other pages.
+    }
+
+    [Inject] private NavigationManager Nav { get; set; } = null!;
+}

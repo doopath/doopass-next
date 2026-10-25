@@ -1,0 +1,116 @@
+@implements IDisposable
+
+@code {
+    private bool _bootstrapped;
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        Events.VaultLocked += OnVaultLocked;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _bootstrapped = true;
+            await EvaluateAsync(initial: true);
+        }
+    }
+
+    // Route checks run on every navigation and on vaultLocked events.
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) =>
+        _ = InvokeAsync(() => EvaluateAsync(initial: false));
+
+    private Task OnVaultLocked() =>
+        InvokeAsync(() => EvaluateAsync(initial: false, fromLock: true));
+
+    private async Task EvaluateAsync(bool initial, bool fromLock = false)
+    {
+        if (initial)
+        {
+            await Connections.LoadAsync();
+        }
+
+        // Keep the push channel aligned with the token: starts right after a
+        // fresh login, restarts after a re-login, no-op while connected.
+        if (Connections.IsConfigured && !string.IsNullOrEmpty(Connections.Token) && !Push.IsConnected)
+        {
+            _ = Push.StartAsync();
+        }
+
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var onConnect = relative.StartsWith("connect", StringComparison.OrdinalIgnoreCase)
+                        || relative.StartsWith("connect/", StringComparison.OrdinalIgnoreCase);
+        var onLogin = relative.Length == 0; // route "/" is the login page
+
+        // First start: decide between /connect, / and /store.
+        if (initial)
+        {
+            if (!Connections.IsConfigured)
+            {
+                if (!onConnect)
+                {
+                    Nav.NavigateTo("/connect");
+                }
+
+                return;
+            }
+
+            if (onConnect)
+            {
+                return;
+            }
+
+            var state = await Session.GetStateAsync();
+
+            if (state.IsUnlocked)
+            {
+                // A live token resumes the vault.
+                if (!onLogin && !relative.StartsWith("store", StringComparison.OrdinalIgnoreCase))
+                {
+                    Nav.NavigateTo("/store");
+                }
+
+                return;
+            }
+
+            // Dead or missing token: clean the slate and land on the login page.
+            if (!string.IsNullOrEmpty(Connections.Token))
+            {
+                await Connections.SetTokenAsync(null);
+            }
+
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        // Mid-session: only react to explicit lock events or unconfigured hosts.
+        if (fromLock)
+        {
+            Nav.NavigateTo("/"); // re-login will restart the push via the gate above
+            return;
+        }
+
+        if (!Connections.IsConfigured && !onConnect)
+        {
+            Nav.NavigateTo("/connect");
+        }
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        Events.VaultLocked -= OnVaultLocked;
+    }
+
+    [Inject] private ConnectionStore Connections { get; set; } = null!;
+
+    [Inject] private IVaultSession Session { get; set; } = null!;
+
+    [Inject] private IVaultEvents Events { get; set; } = null!;
+
+    [Inject] private VaultPushClient Push { get; set; } = null!;
+
+    [Inject] private NavigationManager Nav { get; set; } = null!;
+}
