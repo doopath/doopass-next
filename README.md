@@ -4,21 +4,24 @@
 
   # Doopass
 
-  **A cross-platform password manager for the terminal and the browser — rewritten in .NET 10.**
+  **A cross-platform password manager for the terminal, the browser and phones — rewritten in .NET 10.**
 
   [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=.net&logoColor=white)](https://dotnet.microsoft.com/)
-  [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue)](#run-it)
-  [![Frontends](https://img.shields.io/badge/frontends-TUI%20%2B%20Web%20(PWA)-4f46e5)](#run-it)
+  [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Android-blue)](#run-it)
+  [![Frontends](https://img.shields.io/badge/frontends-TUI%20%2B%20Web%20(PWA)%20%2B%20Android%20thin%20client-4f46e5)](#run-it)
   [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 </div>
 
-Doopass keeps everything in a single encrypted `store.enc` file and offers two
-front-ends for it:
+Doopass keeps everything in a single encrypted `store.enc` file and offers
+three front-ends for it:
 
 * a **TUI** built on Terminal.Gui v2 that mirrors the original Textual interface;
 * a **custom-styled web UI** (ASP.NET Core Blazor Server) with light and dark
-  themes, served as a local web app.
+  themes, served as a local web app;
+* an **Android thin client** (MAUI + Blazor) that connects to the same host
+  over a private REST API — the phone stores nothing but the host address,
+  its certificate pin and the session token.
 
 This project is a from-scratch .NET 10 rewrite of the original
 [Doopass](https://github.com/doopath/PasswordManager/) (Python + Textual). The
@@ -29,8 +32,11 @@ any migration — just point the new app at the same `~/doopass` folder.
 
 - **Drop-in compatible** with the original Python implementation: Fernet crypto
   (AES-128-CBC + HMAC-SHA256) derived with PBKDF2-HMAC-SHA256 (100 000 iterations).
-- **Two front-ends, one store** — the same vault is available in the terminal
-  and in the browser, with dated backups, restore and settings in both.
+- **Three front-ends, one store** — the same vault is available in the terminal,
+  in the browser and on an Android phone, with dated backups, restore and
+  settings everywhere.
+- **Thin-client architecture** — the host is the single unlocked vault; every
+  client (browser session or API token) shares the encrypted file safely.
 - **Self-contained single-file executables** for Windows and Linux — no .NET
   runtime required, and all web assets are embedded in the binary.
 - **Installable web app (PWA)** — opens as its own window on desktop and mobile,
@@ -91,9 +97,45 @@ dotnet run --project src/Doopass.Cli -- serve --port 7240 --lan
 | `--port N` (`-p`)             | HTTP port (default `7240`)                      |
 | `--no-browser`                | do not open the browser automatically           |
 | `--lan` (`--network`)         | listen on `0.0.0.0` instead of `localhost`      |
+| `--tls <pfx> [--tls-pass P]`  | serve HTTPS from a PKCS#12 certificate; the      |
+|                               | startup log prints the SHA-256 fingerprint,      |
+|                               | which thin clients pin for trust-on-first-use    |
+| `--announce`                  | force LAN discovery announce (also on with `--lan`) |
 
 The UI and all assets are embedded in the executable, so nothing else is needed
 to serve the app. Open <http://localhost:7240> and log in or initialize a store.
+
+### REST API and thin clients
+
+`serve` mode also exposes a private REST API for thin clients (the Doopass
+Android app) and a SignalR channel for change push, both on the same port:
+
+* `GET /api/vault/state` — anonymous: `{storeExists, unlocked, serverVersion, certFingerprint}`.
+* Everything else is `Authorization: Bearer <token>`; tokens come from
+  `POST /api/auth/login` / `POST /api/auth/init` and die on logout or a sliding
+  30 min TTL (configurable via the optional `api.session_ttl_minutes` key in
+  `settings.json`).
+* Vault pairs, backups and settings live under `/api/vault/*`, `/api/backups*`
+  and `/api/settings*` — full table in `THIN_CLIENT_PROMPT.md`.
+* Changes made by any client raise `vaultChanged` / `backupsChanged` /
+  `settingsChanged` on the `/hubs/vault` SignalR channel, so every connected
+  device updates without reloads.
+* `secret` responses carry `Cache-Control: no-store`; errors are always
+  `{ "error": "<message>" }` with 400/401/404/409 semantics; login/init are
+  rate-limited to 5 requests per minute per IP (429 after that).
+
+### LAN discovery
+
+With `--lan` (or `--announce`), the host answers UDP broadcasts on port 7241:
+send the ASCII datagram `DOOPASS_DISCOVER`, get back the JSON announcement with
+the host name, web port, TLS flag and certificate fingerprint. Phones use this
+to find the PC without typing an address — allow **inbound UDP 7241** in your
+firewall (the autostart installers do it on Windows / ufw).
+
+When the API is exposed, the host also relays and keeps its vault consistent:
+after a backup restore the coordinator re-reads the store automatically, and
+`vaultLocked` is pushed to clients whose session ended (logout elsewhere, TTL,
+`G`-lock in the TUI happens on TTL as well).
 
 #### Install as an app (PWA)
 
@@ -125,6 +167,66 @@ To regenerate the icons after a design change:
 ```bash
 python scripts/generate-icons.py --out .pwa-assets    # PNGs are embedded from there via the csproj
 ```
+
+#### PWA vs the Android thin client
+
+The PWA runs the **web** UI in a browser window — it needs the Blazor Server
+connection. The Android app is a **native** thin client with its own icon and
+its own discovery flow; installing one does not conflict with the other. If you
+manage secrets mainly from a phone, the Android app is the stronger choice: it
+survives browser sessions, pins the host certificate and warns clearly before
+using an unencrypted connection.
+
+## Android thin client
+
+The phone holds **no vault** — it stores only the host address, the pinned
+certificate fingerprint and the session token (in SecureStorage / Android
+Keystore). Everything else lives on the PC host.
+
+### Build and install
+
+Requirements: .NET SDK 10 with the `maui-android` workload, an Android SDK
+(`platforms;android-36`, `build-tools;36.0.0`) and a JDK 17
+(`ANDROID_SDK_ROOT` + `JAVA_HOME`).
+
+```powershell
+scripts\build-android.ps1                       # Debug APK (installable directly)
+dotnet publish src/Doopass.Mobile -c Release -f net10.0-android -p:AndroidPackageFormat=apk
+dotnet publish src/Doopass.Mobile -c Release -f net10.0-android -p:AndroidPackageFormat=aab   # Play-format bundle
+```
+
+Artifacts:
+
+* `src/Doopass.Mobile/bin/Debug/net10.0-android/io.github.doopath.doopass-Signed.apk`
+* `src/Doopass.Mobile/bin/Release/net10.0-android/io.github.doopath.doopass-Signed.apk`
+
+> [!NOTE]
+> The first release builds run with AOT/trimming disabled (full IL) for stable
+> diagnostics; enabling them needs a `TrimmerRootDescriptor.xml` pass for the
+> System.Text.Json and SignalR reflection surfaces.
+
+### Connecting
+
+1. Start the host on the PC: `doopass serve --lan` (plain HTTP + discovery).
+   Prefer `--tls mycert.pfx --tls-pass …` — the app then pins the SHA-256
+   fingerprint printed in the host log and warns loudly when it is absent.
+2. On the phone: **Connect** → *Find hosts* (UDP broadcast discovery) or type
+   the address (e.g. `http://192.168.1.10:7240`).
+3. Confirm the fingerprint ("Trust and connect"), then log in with the master
+   password. Everything afterwards mirrors the web version, pushed live:
+   pairs, copy, backups (incl. safety backups on restore), settings, themes.
+
+Features and limitations:
+
+* the app reads `vaultChanged` / `backupsChanged` / `settingsChanged` /
+  `vaultLocked` events from the `/hubs/vault` SignalR channel and stays in
+  sync with the web UI and other phones;
+* a 30 min sliding session TTL relocks the vault; expired tokens land on the
+  login screen automatically;
+* the emulator cannot reach LAN broadcasts — type `http://10.0.2.2:7240`
+  manually there;
+* plain HTTP shows a permanent warning; IPSec rules of the router or at least
+  `--tls` are recommended on shared networks.
 
 ## Deploy it
 
@@ -230,9 +332,12 @@ on lock (<kbd>G</kbd>), exit or server shutdown.
 | ---------------------------- | --------------------------------------------------------------- |
 | `src/Doopass.Core`           | Store, Fernet/PBKDF2 crypto, settings, backups, validation, logs |
 | `src/Doopass.Tui`            | Terminal.Gui v2 interface (mirrors the original TUI)             |
-| `src/Doopass.Cli`            | Single entry point: the TUI or the Blazor Server web host        |
+| `src/Doopass.WebUi`          | Shared Razor Class Library: components, themes, IVaultSession    |
+| `src/Doopass.Cli`            | Single entry point: TUI or web host (Blazor + REST API + hub)    |
+| `src/Doopass.Mobile`         | Android thin client (MAUI + Blazor WebView)                      |
 | `tests/Doopass.Core.Tests`   | xUnit tests: format compatibility, CRUD, backups, settings       |
 | `tests/Doopass.Tui.Tests`    | xUnit tests: key mapping and screen behaviour                    |
+| `tests/Doopass.Api.Tests`    | xUnit integration tests: the REST API on a real host             |
 
 ---
 

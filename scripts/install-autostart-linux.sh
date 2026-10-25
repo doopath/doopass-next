@@ -74,6 +74,18 @@ URL_HOST="localhost"
 if [[ "$LAN" == "1" ]]; then
     URL_HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"
     [[ -z "$URL_HOST" ]] && URL_HOST="localhost"
+
+    # Discovery rides an inbound UDP broadcast on 7241; ufw needs both rules.
+    if command -v ufw >/dev/null 2>&1; then
+        sudo -n ufw allow "7241/udp" comment 'Doopass discovery' 2>/dev/null \
+            && sudo -n ufw allow "$PORT/tcp" comment 'Doopass web/API' 2>/dev/null \
+            && echo "Firewall rules added: UDP 7241 (discovery) + TCP $PORT (web/API)." \
+            || echo "NOTE: allow inbound UDP 7241 (discovery) and TCP $PORT (web/API) in your firewall."
+    else
+        echo "NOTE: allow inbound UDP 7241 (discovery) and TCP $PORT (web/API) in your firewall if one is active."
+    fi
+
+    echo "NOTE: lan mode is plain HTTP; pair it with --tls for phone clients."
 fi
 
 echo "Installed. Web interface: http://$URL_HOST:$PORT"

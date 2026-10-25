@@ -49,9 +49,18 @@ Doopass $Version (win-x64) - portable, self-contained
 
 Run the web interface manually:
     .\doopass.exe serve --port 7240
+    .\doopass.exe serve --port 7240 --lan          # reachable from other devices
+    .\doopass.exe serve --port 7240 --lan --tls mycert.pfx --tls-pass mypass
 
 Run the terminal UI:
     .\doopass.exe
+
+Thin clients (phone / other PCs):
+    The web interface also exposes a REST API for the Doopass Android app:
+    host discovery uses UDP 7241 (responses only when the server runs).
+    With --lan, allow inbound TCP 7240 and UDP 7241 on private networks.
+    --tls enables HTTPS; the startup log prints the SHA-256 fingerprint the
+    phone pins on first connect.
 
 Install autostart (web server at sign-in):
     powershell -ExecutionPolicy Bypass -File .\install-autostart-win.ps1 .\doopass.exe
@@ -93,6 +102,13 @@ Doopass $Version (linux-x64) - portable, self-contained
 Run the web interface manually:
     chmod +x ./doopass
     ./doopass serve --port 7240
+    ./doopass serve --port 7240 --lan          # reachable from other devices
+    ./doopass serve --port 7240 --lan --tls mycert.pfx --tls-pass mypass
+
+Thin clients (phone / other PCs):
+    The web interface also exposes a REST API for the Doopass Android app:
+    host discovery uses UDP 7241 (responses only when the server runs).
+    With --lan, allow inbound TCP 7240 and UDP 7241 on private networks.
 
 Install autostart (systemd user service):
     chmod +x install-autostart-linux.sh

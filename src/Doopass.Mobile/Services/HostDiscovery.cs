@@ -119,7 +119,7 @@ public sealed class HostDiscovery
                 return null;
             }
 
-            var wifiLock = wifi.CreateMulticastLock("doopass-discovery");
+            var wifiLock = wifi.CreateMulticastLock("doopass-discovery")!;
             wifiLock.SetReferenceCounted(false);
             wifiLock.Acquire();
             return new MulticastLockHandle(wifiLock);

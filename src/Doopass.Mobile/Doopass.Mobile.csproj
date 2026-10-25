@@ -17,11 +17,15 @@
     <ApplicationTitle>Doopass</ApplicationTitle>
     <ApplicationDisplayVersion>5.0.0</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
+    <!-- BlazorHybrid requires Android 6.0 (API 23)+; declared so the analyzer stays quiet. -->
+    <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
-    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
 
-    <!-- Keep release diagnostics readable until trimming is proven safe with
-         System.Text.Json reflection on the API DTOs. -->
+    <!-- Runtime diagnostics stay readable during the first thin-client releases:
+         no AOT, no trimming. Flipping this on requires a TrimmerRootDescriptor
+         pass for System.Text.Json / SignalR reflection members (see docs). -->
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 

@@ -43,6 +43,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$script:DiscoveryPort = 7241
+
 function Get-LanIp {
     try {
         $ips = [System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
@@ -131,5 +133,29 @@ Write-Host "Installed. The web server will start automatically at your next sign
 Write-Host "Open the web interface any time: $webUrl"
 
 if ($isLan) {
-    Write-Warning "LAN mode listens on all interfaces over plain HTTP. Allow TCP port $Port in Windows Firewall if needed and only use it on trusted networks."
+    # Discovery + API reachability: Android / phone clients find the host via
+    # an incoming UDP broadcast on 7241, the API itself rides the TCP port.
+    $rulesCreated = $false
+    try {
+        $firewallExists = Get-NetFirewallRule -DisplayName 'Doopass discovery' -ErrorAction SilentlyContinue
+        if (-not $firewallExists) {
+            New-NetFirewallRule -DisplayName 'Doopass discovery' -Direction Inbound -Protocol UDP -LocalPort $script:DiscoveryPort -Action Allow -Profile Private | Out-Null
+            $rulesCreated = $true
+        }
+
+        $firewallExists = Get-NetFirewallRule -DisplayName 'Doopass web' -ErrorAction SilentlyContinue
+        if (-not $firewallExists) {
+            New-NetFirewallRule -DisplayName 'Doopass web' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Private | Out-Null
+            $rulesCreated = $true
+        }
+
+        if ($rulesCreated) {
+            Write-Host "Firewall rules added: UDP $script:DiscoveryPort (discovery, private networks) + TCP $Port (web/API)." -ForegroundColor Green
+        }
+    }
+    catch {
+        Write-Warning "Could not add firewall rules automatically; allow inbound UDP 7241 (discovery) and TCP $Port (web/API) on private networks manually."
+    }
+
+    Write-Warning "LAN mode listens on all interfaces. Plain HTTP is unencrypted -- pair it with --tls for phone clients."
 }

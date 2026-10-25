@@ -106,7 +106,7 @@
         }
     }
 
-    private static HostCandidate NewCandidate(string hostUrl) =>
+    private static HostCandidate NewCandidate(string? hostUrl) =>
         new("Doopass host", (hostUrl ?? string.Empty).Trim(), hostUrl?.StartsWith("https", StringComparison.OrdinalIgnoreCase) ?? false, null, "5.0.0");
 
     private void OnManualChanged(ChangeEventArgs args) => _manualHost = args.Value?.ToString();
