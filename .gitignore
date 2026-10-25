@@ -33,6 +33,10 @@ coverage*.json
 scripts/.smoke-api/
 scripts/.smoke-tls/
 
+# Scratch build/test logs at the repo root
+/*-build.txt
+/*-test*.txt
+
 # Diagnostics from the sandbox ACL skill
 .acl-recovery/
 
