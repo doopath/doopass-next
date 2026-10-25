@@ -286,7 +286,7 @@
     private static readonly System.Text.Json.JsonSerializerOptions ProbeJson =
         new(System.Text.Json.JsonSerializerDefaults.Web);
 
-    private sealed record ConnectState(bool StoreExists, bool IsUnlocked, string? ServerVersion, string? CertFingerprint);
+    private sealed record ConnectState(bool StoreExists, bool Unlocked, string? ServerVersion, string? CertFingerprint);
 
     public void Dispose()
     {

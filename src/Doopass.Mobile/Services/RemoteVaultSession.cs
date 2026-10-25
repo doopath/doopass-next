@@ -57,7 +57,7 @@ public sealed class RemoteVaultSession : IVaultSession
         {
             using var response = await Client.GetAsync("/api/vault/state", HttpCompletionOption.ResponseHeadersRead, ct);
             var state = await ReadJsonAsync<StateDto>(response.Content, response.StatusCode, ct);
-            return new VaultState(state!.StoreExists, state.IsUnlocked, state.ServerVersion ?? CoreVersion);
+            return new VaultState(state!.StoreExists, state.Unlocked, state.ServerVersion ?? CoreVersion);
         }
         catch (HttpRequestException ex)
         {
@@ -326,7 +326,10 @@ public sealed class RemoteVaultSession : IVaultSession
 
     private const string CoreVersion = "5.0.0";
 
-    private sealed record StateDto(bool StoreExists, bool IsUnlocked, string? ServerVersion, string? CertFingerprint);
+    // JSON field names come from the host as camelCase ("unlocked", not
+    // "isUnlocked") — the property name must match the wire name, otherwise the
+    // state silently reads as locked and pages bounce between / and /store.
+    private sealed record StateDto(bool StoreExists, bool Unlocked, string? ServerVersion, string? CertFingerprint);
 
     private sealed record TokenDto(string Token, string ServerVersion);
 
