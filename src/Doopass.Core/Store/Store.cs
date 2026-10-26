@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Doopass.Core.Crypto;
@@ -171,10 +172,33 @@ public sealed class Store
     /// <summary>Decrypts a full store payload (salt + iterations + token).</summary>
     public static byte[] Decrypt(string password, string source)
     {
-        var decoded = Base64Url.Decode(source.Trim());
+        byte[] decoded;
+
+        try
+        {
+            decoded = Base64Url.Decode(source.Trim());
+        }
+        catch (FormatException)
+        {
+            throw new StoreCorruptedError("The store file is corrupted.");
+        }
+
+        // salt(16) + iterations(4) + minimal Fernet token (1 + 8 + 16 + 16 + 32 = 73)
+        if (decoded.Length < 20 + 73)
+        {
+            throw new StoreCorruptedError("The store file is corrupted or truncated.");
+        }
+
+        var iterations = BinaryPrimitives.ReadInt32BigEndian(decoded.AsSpan(16, 4));
+
+        // Checked before Pbkdf2.DeriveKey: a tampered cost would otherwise burn
+        // minutes of CPU on every login attempt.
+        if (iterations is < 10_000 or > 10_000_000)
+        {
+            throw new StoreCorruptedError("The store file declares an unsupported key-derivation cost.");
+        }
 
         var salt = decoded.AsSpan(0, 16).ToArray();
-        var iterations = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(decoded.AsSpan(16, 4));
         var token = Base64Url.Encode(decoded.AsSpan(20).ToArray());
 
         var key = Pbkdf2.DeriveKey(password, salt, iterations);
@@ -191,6 +215,7 @@ public sealed class Store
         }
         catch (IncorrectPasswordError)
         {
+            // Only a wrong password is "try again"; a corrupted file must surface.
             AppLogger.Debug($"Store open failed (incorrect password): {storePath}");
             return null;
         }

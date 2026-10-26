@@ -353,6 +353,10 @@ public sealed class RemoteVaultSession : IVaultSession
                 throw new UnauthorizedAccessException(message);
             case 409:
                 throw new PropertyAlreadyExistError(message);
+            case 422:
+                // The host could read the store file but it is not a valid vault
+                // (corrupted or tampered). Retrying cannot help.
+                throw new StoreCorruptedError(message);
             case 404:
                 throw new PropertyDoesNotExistError(message);
             case 429:

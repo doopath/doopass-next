@@ -46,3 +46,12 @@ public sealed class StoreBusyError : Exception
 {
     public StoreBusyError(string message) : base(message) { }
 }
+
+/// <summary>
+/// Raised when the store file is not a valid Doopass payload: not base64, too
+/// short to hold a token, or declaring an absurd key-derivation cost.
+/// </summary>
+public sealed class StoreCorruptedError : Exception
+{
+    public StoreCorruptedError(string message) : base(message) { }
+}

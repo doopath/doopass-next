@@ -200,6 +200,7 @@ public static class VaultEndpoints
             IncorrectPasswordError => (StatusCodes.Status401Unauthorized, ex.Message),
             StoreIsNotInitializedError => (StatusCodes.Status409Conflict, ex.Message),
             StoreBusyError => (StatusCodes.Status409Conflict, "The vault is busy, try again."),
+            StoreCorruptedError => (StatusCodes.Status422UnprocessableEntity, ex.Message),
             ReadOnlySettingError => (StatusCodes.Status403Forbidden, ex.Message),
             InvalidSettingValueError => (StatusCodes.Status400BadRequest, ex.Message),
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Session expired or unauthorized."),

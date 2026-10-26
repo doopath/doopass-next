@@ -71,7 +71,16 @@ public sealed class DoopassSession : IVaultSession, IDisposable
                 return (false, "Store is not initialized. Please initialize it first.");
             }
 
-            var store = Store.TryInitializeStore(password, _settings.StoreFile);
+            Store? store;
+
+            try
+            {
+                store = Store.TryInitializeStore(password, _settings.StoreFile);
+            }
+            catch (StoreCorruptedError)
+            {
+                return (false, "The store file is corrupted.");
+            }
 
             if (store is null)
             {

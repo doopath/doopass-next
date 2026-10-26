@@ -1,3 +1,4 @@
+using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Storage;
 using Doopass.Core.Validation;
@@ -10,6 +11,7 @@ public enum LoginStatus
     Success,
     IncorrectPassword,
     NotInitialized,
+    Corrupted,
 }
 
 /// <summary>Result of an init-store attempt.</summary>
@@ -48,7 +50,17 @@ internal sealed class DoopassContext
             return LoginStatus.NotInitialized;
         }
 
-        var store = Store.TryInitializeStore(password, Settings.StoreFile);
+        Store? store;
+
+        try
+        {
+            store = Store.TryInitializeStore(password, Settings.StoreFile);
+        }
+        catch (StoreCorruptedError)
+        {
+            // A damaged file is not a wrong password: retrying will not help.
+            return LoginStatus.Corrupted;
+        }
 
         if (store is null)
         {
