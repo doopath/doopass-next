@@ -97,9 +97,10 @@ dotnet run --project src/Doopass.Cli -- serve --port 7240 --lan
 | `--port N` (`-p`)             | HTTP port (default `7240`)                      |
 | `--no-browser`                | do not open the browser automatically           |
 | `--lan` (`--network`)         | listen on `0.0.0.0` instead of `localhost`      |
-| `--tls <pfx> [--tls-pass P]`  | serve HTTPS from a PKCS#12 certificate; the      |
-|                               | startup log prints the SHA-256 fingerprint,      |
-|                               | which thin clients pin for trust-on-first-use    |
+| `--tls <pfx> [--tls-pass P]`  | serve HTTPS from a PKCS#12 certificate (binds    |
+|                               | every interface); the startup log prints the     |
+|                               | SHA-256 fingerprint, which thin clients pin for  |
+|                               | trust-on-first-use                               |
 | `--announce`                  | force LAN discovery announce (also on with `--lan`) |
 
 The UI and all assets are embedded in the executable, so nothing else is needed
@@ -159,8 +160,11 @@ need the server and reconnect over their existing SignalR circuit.
 
 > [!IMPORTANT]
 > Installation requires a **secure origin**: `http://localhost` or any HTTPS
-> host. A plain-HTTP LAN address (`--lan` without TLS) can use the UI but
-> cannot install the app.
+> host whose certificate the browser trusts. A plain-HTTP LAN address (`--lan`
+> without TLS) can use the UI but cannot install the app, and a self-signed
+> certificate — fine for the Android client, see
+> [Self-signed HTTPS with certificate pinning](#self-signed-https-with-certificate-pinning)
+> — is not trusted by browsers, which blocks the install.
 
 To regenerate the icons after a design change, drop the new artwork into
 `assets/` and run:
@@ -227,6 +231,8 @@ Artifacts:
 1. Start the host on the PC: `doopass serve --lan` (plain HTTP + discovery).
    Prefer `--tls mycert.pfx --tls-pass …` — the app then pins the SHA-256
    fingerprint printed in the host log and warns loudly when it is absent.
+   A self-signed certificate is enough; see
+   [Self-signed HTTPS with certificate pinning](#self-signed-https-with-certificate-pinning).
 2. On the phone: the **Connect** screen scans the LAN over UDP as soon as it
    opens — pick a discovered host, or switch to *Manual* and type the address
    (e.g. `http://192.168.1.10:7240`). *Search again* re-runs the scan.
@@ -258,6 +264,98 @@ Features and limitations:
   manually there;
 * plain HTTP shows a permanent warning; IPSec rules of the router or at least
   `--tls` are recommended on shared networks.
+
+#### Self-signed HTTPS with certificate pinning
+
+The Android client pins the host certificate, so no public CA, domain or
+reverse proxy is required: a self-signed certificate works as long as its
+fingerprint is confirmed once on the phone. The pin lives in Android Keystore,
+and every later handshake is compared against it.
+
+Browsers do not pin, so this certificate only gives them a warning — and the
+PWA cannot be installed over an untrusted one. This setup is for the Android
+client; see [Install as an app](#install-as-an-app-pwa) for the browser
+requirements.
+
+1. Note the host's LAN address — this is what the phone will dial:
+
+   ```bash
+   ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1   # Linux
+   ipconfig getifaddr en0                                             # macOS
+   ```
+
+2. Create the certificate with that address in its SAN. Keep the files outside
+   the repository — `~/doopass/` next to the store is the natural place. This
+   needs OpenSSL 1.1.1+ (on macOS use the Homebrew `openssl` if the system
+   LibreSSL rejects `-addext`):
+
+   ```bash
+   cd ~/doopass
+   LAN_IP=192.168.1.10            # from step 1
+   HOST=$(hostname)
+   openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
+     -keyout doopass.key -out doopass.crt \
+     -subj "/CN=$HOST" \
+     -addext "subjectAltName=DNS:$HOST,DNS=localhost,IP:$LAN_IP,IP:127.0.0.1"
+   openssl pkcs12 -export -out doopass.pfx \
+     -inkey doopass.key -in doopass.crt -passout pass:CHANGE-ME
+   ```
+
+   The same commands run in Git Bash on Windows; PowerShell can do it too:
+
+   ```powershell
+   $cert = New-SelfSignedCertificate -Subject 'CN=doopass' `
+       -TextExtension @('2.5.29.17={text}DNS=doopass&DNS=localhost&IPAddress=192.168.1.10&IPAddress=127.0.0.1') `
+       -NotAfter (Get-Date).AddDays(825)
+   Export-PfxCertificate -Cert $cert -FilePath doopass.pfx `
+       -Password (ConvertTo-SecureString 'CHANGE-ME' -AsPlainText -Force)
+   ```
+
+3. Start the host in TLS mode. `--tls` already binds every interface, so
+   `--lan` only adds the discovery announce:
+
+   ```bash
+   doopass serve --lan --tls ~/doopass/doopass.pfx --tls-pass CHANGE-ME
+   ```
+
+   The startup log prints the fingerprint in the compact form the app pins:
+
+   ```
+   TLS certificate SHA-256 fingerprint: d3894b6e…c8e50f
+   ```
+
+   To keep the password out of the shell history, use `tls_pfx` and `tls_pass`
+   under `[api]` in `settings.json` instead (the password is stored there in
+   plain text).
+
+4. Open the firewall once — inbound **TCP 7240** for the app and **UDP 7241**
+   for discovery, see [Discovery finds nothing?](#discovery-finds-nothing).
+
+5. On the phone, **Connect** → the discovered host carries an *Encrypted · TLS*
+   tag and shows the fingerprint. Compare it with the host log before tapping
+   **Trust and connect**, then log in with the master password. From then on a
+   different certificate on that address fails the handshake instead of
+   leaking the password. For an independent check on any machine:
+
+   ```bash
+   openssl x509 -in doopass.crt -noout -fingerprint -sha256
+   # drop the colons and lowercase the hex to compare with the app
+   ```
+
+6. To rotate the certificate, regenerate it and pick the host again through
+   **Change host**: the app shows the new fingerprint and re-pins it on
+   confirmation. Rotating without re-pairing is the intended failure mode — the
+   app refuses the host rather than trusting it silently.
+
+Notes:
+
+* the app compares the fingerprint only, not the host name or the SAN, so the
+  same certificate keeps working when DHCP gives the PC a new address;
+  browsers would complain about the mismatch;
+* the trust-on-first-use probe only reads the fingerprint — no vault data is
+  sent before you confirm it, and the pin is stored after you tap
+  **Trust and connect**;
+* treat `doopass.key` as a secret, and never commit `doopass.pfx` or the key.
 
 #### Discovery finds nothing?
 
