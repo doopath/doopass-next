@@ -117,9 +117,11 @@
                     else if (_scanned && _warning is null)
                     {
                         <p class="connect-empty">
-                            No hosts answered. Make sure the PC runs <code>doopass serve --lan</code> and UDP 7241 is allowed,
-                            then search again — or
+                            No hosts answered. Make sure the PC runs <code>doopass serve --lan</code> and its firewall
+                            allows inbound UDP 7241 + TCP 7240, then search again — or
                             <button type="button" class="link-btn" @onclick="@(() => SelectMode(ConnectMode.Manual))">enter the address manually</button>.
+                            Over USB debugging, run <code>adb reverse tcp:7240 tcp:7240</code> on the PC and enter
+                            <code>127.0.0.1:7240</code>.
                         </p>
                     }
                 </div>
@@ -149,6 +151,8 @@
                 <p class="connect-notes">
                     Full URL or just <code>host:port</code>, e.g. <code>http://192.168.1.10:7240</code>.
                     On the Android emulator the host PC is <code>10.0.2.2:7240</code>.
+                    Over USB debugging, run <code>adb reverse tcp:7240 tcp:7240</code> on the PC and enter
+                    <code>127.0.0.1:7240</code>.
                 </p>
 
                 <button type="button" class="btn btn-primary btn-block"
