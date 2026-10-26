@@ -46,3 +46,5 @@ scripts/.smoke-tls/
 # OS
 .DS_Store
 Thumbs.db
+docs/E2E-CHECKLIST.md
+THIN_CLIENT_PROMPT.md
