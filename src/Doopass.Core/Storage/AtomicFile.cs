@@ -21,6 +21,7 @@ public static class AtomicFile
         }
 
         Directory.CreateDirectory(directory);
+        SweepStaleTempFiles(directory, Path.GetFileName(path));
 
         var temp = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
 
@@ -45,6 +46,39 @@ public static class AtomicFile
                     AppLogger.Debug($"Could not remove temp file '{temp}': {ex.Message}");
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Removes temp files a crashed or killed process left behind for the same
+    /// target an hour ago. Best effort: a cleanup failure must never fail the
+    /// write that follows.
+    /// </summary>
+    private static void SweepStaleTempFiles(string directory, string fileName)
+    {
+        var cutoff = DateTime.UtcNow - TimeSpan.FromHours(1);
+
+        try
+        {
+            foreach (var stale in Directory.EnumerateFiles(directory, $".{fileName}.*.tmp"))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(stale) < cutoff)
+                    {
+                        File.Delete(stale);
+                        AppLogger.Debug($"Removed stale temp file '{stale}'.");
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    AppLogger.Debug($"Could not remove stale temp file '{stale}': {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLogger.Debug($"Could not sweep stale temp files in '{directory}': {ex.Message}");
         }
     }
 
