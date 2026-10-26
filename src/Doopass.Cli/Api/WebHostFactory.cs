@@ -117,6 +117,38 @@ public static class WebHostFactory
 
         app.Lifetime.ApplicationStopping.Register(() => AppLogger.Info("Doopass web server stopped"));
 
+        // Security headers for every response (assets, API, hub handshake, pages).
+        // Applied in OnStarting so they are written even after the component
+        // pipeline, and with the indexer so a header the framework already set
+        // (Blazor emits its own frame-ancestors policy) is replaced rather than
+        // duplicated. style-src needs 'unsafe-inline' because Razor pages carry
+        // inline style="..." attributes; everything else stays same-origin.
+        var usesTls = tlsPfx is not null;
+        app.Use((context, next) =>
+        {
+            context.Response.OnStarting(() =>
+            {
+                var headers = context.Response.Headers;
+                headers["X-Content-Type-Options"] = "nosniff";
+                headers["X-Frame-Options"] = "DENY";
+                headers["Referrer-Policy"] = "no-referrer";
+                headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()";
+                headers["Content-Security-Policy"] =
+                    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+                    "script-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; " +
+                    "base-uri 'self'; form-action 'self'";
+
+                if (usesTls)
+                {
+                    headers["Strict-Transport-Security"] = "max-age=31536000";
+                }
+
+                return Task.CompletedTask;
+            });
+
+            return next(context);
+        });
+
         if (!app.Environment.IsDevelopment())
         {
             app.UseExceptionHandler("/Error", createScopeForErrors: true);
