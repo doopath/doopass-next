@@ -86,7 +86,12 @@ public sealed class RemoteVaultSession : IVaultSession
             }
 
             _host.MarkReachable();
-            return new VaultState(state.StoreExists, state.Unlocked, state.ServerVersion ?? CoreVersion);
+            // /api/vault/state reports the host-wide unlock state: the web UI or
+            // another phone may hold the open vault. Without a session token of
+            // our own this client can read nothing, so it must land on the login
+            // screen instead of opening a Store that would come back empty.
+            var unlockedHere = state.Unlocked && !string.IsNullOrEmpty(_connections.Token);
+            return new VaultState(state.StoreExists, unlockedHere, state.ServerVersion ?? CoreVersion);
         }
         catch (HostUnreachableException ex)
         {
