@@ -48,3 +48,4 @@ scripts/.smoke-tls/
 Thumbs.db
 docs/E2E-CHECKLIST.md
 THIN_CLIENT_PROMPT.md
+docs/FIX-PLAN.md
