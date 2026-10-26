@@ -1,4 +1,5 @@
 using Doopass.Cli.Api;
+using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Storage;
 using Doopass.Core.Validation;
@@ -236,6 +237,7 @@ public sealed class DoopassSession : IVaultSession, IDisposable
     /// <summary>Restores a backup by extensionless name; a safety backup is written first, then the session re-reads the store.</summary>
     public ValueTask RestoreBackupAsync(string backupName, CancellationToken ct = default)
     {
+        RequireExistingBackup(backupName);
         _backups.SwapStoreWithBackup(backupName + _settings.BackupExtension);
         Reload();
         _notifier?.NotifyBackupsChanged();
@@ -246,9 +248,20 @@ public sealed class DoopassSession : IVaultSession, IDisposable
     /// <summary>Deletes a backup by extensionless name.</summary>
     public ValueTask DeleteBackupAsync(string backupName, CancellationToken ct = default)
     {
+        RequireExistingBackup(backupName);
         _backups.DeleteBackup(backupName + _settings.BackupExtension);
         _notifier?.NotifyBackupsChanged();
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Same rule as the REST API: unsafe or unknown names look like missing backups.</summary>
+    private void RequireExistingBackup(string backupName)
+    {
+        if (!StoreBackup.IsSafeBackupName(backupName)
+            || !_backups.GetBackupNames().Contains(backupName, StringComparer.Ordinal))
+        {
+            throw new PropertyDoesNotExistError($"Backup '{backupName}' does not exist!");
+        }
     }
 
     public ValueTask<IReadOnlyList<(string Section, IReadOnlyDictionary<string, string> Pairs)>>

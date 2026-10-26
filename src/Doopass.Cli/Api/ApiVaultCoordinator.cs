@@ -284,14 +284,9 @@ public sealed class ApiVaultCoordinator
             RequireToken_locked(token);
 
             var backups = BuildStoreBackup();
-            var name = backupName + _settings.BackupExtension;
+            RequireExistingBackup_locked(backups, backupName);
 
-            if (!File.Exists(Path.Combine(_settings.BackupsDir, name)))
-            {
-                throw new PropertyDoesNotExistError($"Backup '{backupName}' does not exist!");
-            }
-
-            backups.SwapStoreWithBackup(name);
+            backups.SwapStoreWithBackup(backupName + _settings.BackupExtension);
 
             if (_store is not null)
             {
@@ -309,18 +304,26 @@ public sealed class ApiVaultCoordinator
         {
             RequireToken_locked(token);
 
-            var name = backupName + _settings.BackupExtension;
-            var path = Path.Combine(_settings.BackupsDir, name);
+            var backups = BuildStoreBackup();
+            RequireExistingBackup_locked(backups, backupName);
 
-            if (!File.Exists(path))
-            {
-                throw new PropertyDoesNotExistError($"Backup '{backupName}' does not exist!");
-            }
-
-            BuildStoreBackup().DeleteBackup(name);
+            backups.DeleteBackup(backupName + _settings.BackupExtension);
         }
 
         _notifier.NotifyBackupsChanged();
+    }
+
+    /// <summary>
+    /// Rejects unsafe (path-traversal) and unknown backup names before any file
+    /// operation — including the safety backup a restore would otherwise write.
+    /// </summary>
+    private static void RequireExistingBackup_locked(StoreBackup backups, string backupName)
+    {
+        if (!StoreBackup.IsSafeBackupName(backupName)
+            || !backups.GetBackupNames().Contains(backupName, StringComparer.Ordinal))
+        {
+            throw new PropertyDoesNotExistError($"Backup '{backupName}' does not exist!");
+        }
     }
 
     public IReadOnlyList<(string Section, IReadOnlyDictionary<string, string> Pairs)> GetSettings(string token)
