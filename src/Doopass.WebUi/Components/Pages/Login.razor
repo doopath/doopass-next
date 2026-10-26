@@ -11,13 +11,30 @@
 <h1 class="auth-title">Welcome back</h1>
 <p class="auth-sub">Unlock your encrypted vault to continue.</p>
 
+@if (_host is not null)
+{
+    @* Always present on thin clients, not only after a failed probe: the host
+       can be replaced at any time, even while this one still answers. *@
+    <div class="auth-host">
+        <span class="auth-host-main" title="@_host.Address">
+            <Icon Name="database" Size="14" />
+            <span class="auth-host-label">Host</span>
+            <span class="auth-host-url">@HostLabel(_host.Address)</span>
+        </span>
+        <button type="button" class="btn btn-secondary btn-sm" disabled="@_busy" @onclick="ChangeHost">
+            <Icon Name="edit" Size="14" />
+            <span>Change host</span>
+        </button>
+    </div>
+}
+
 @if (_host is { IsUnreachable: true, Address: { Length: > 0 } unreachableHost })
 {
     <div class="connect-alert auth-alert" role="alert">
         <Icon Name="warning" Size="16" />
         <span>
             <strong>@HostOnly(unreachableHost)</strong> did not answer. The host's address may have changed —
-            pick the host again below.
+            pick the host again above.
         </span>
     </div>
 }
@@ -44,21 +61,6 @@
                 @onclick="@(() => Nav.NavigateTo("/init"))">Init store</button>
     </div>
 </div>
-
-@if (_host?.Address is { Length: > 0 } hostAddress)
-{
-    <div class="auth-host">
-        <span class="auth-host-main" title="@hostAddress">
-            <Icon Name="database" Size="14" />
-            <span class="auth-host-label">Host</span>
-            <span class="auth-host-url">@HostOnly(hostAddress)</span>
-        </span>
-        <button type="button" class="link-btn" aria-label="Change the vault host"
-                disabled="@_busy" @onclick="ChangeHost">
-            Change host
-        </button>
-    </div>
-}
 
 <p class="auth-foot">Your data never leaves this machine.</p>
 
@@ -106,6 +108,9 @@
 
     private static string HostOnly(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Authority : url;
+
+    private static string HostLabel(string? url) =>
+        string.IsNullOrWhiteSpace(url) ? "not configured" : HostOnly(url);
 
     private void ChangeHost() => Nav.NavigateTo("/connect");
 
