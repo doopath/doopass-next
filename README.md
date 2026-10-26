@@ -147,8 +147,11 @@ Android app) and a SignalR channel for change push, both on the same port:
 * `secret` responses carry `Cache-Control: no-store`; errors are always
   `{ "error": "<message>" }` with 400/401/403/404/409/422 semantics and a fixed
   `Internal server error.` for unexpected failures; login/init are rate-limited
-  to 5 requests per minute per IP (429 after that), and the same counter applies
-  to the Blazor login page.
+  to 5 requests per minute per IP (429 after that). Failed master-password
+  attempts are shared between the API and the Blazor login page: after 5
+  failures in the last minute each further attempt is delayed by 1 s, 2 s, 4 s
+  and then at most 5 s. There is no hard lockout, so a correct password always
+  logs in.
 
 ### LAN discovery
 

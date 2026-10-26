@@ -1,8 +1,44 @@
 # Changelog
 
 Notable changes to Doopass. The on-disk format — `store.enc`, `settings.json`
-and backup file names — is unchanged since 5.0.0: 5.0.1 only closes security
-issues, so existing vaults and settings files keep working as they are.
+and backup file names — is unchanged since 5.0.0: 5.0.1 and 5.0.2 only close
+security and robustness issues, so existing vaults and settings files keep
+working as they are.
+
+## 5.0.2 — security fixes
+
+Follow-up to the 5.0.1 review, fixed before public disclosure.
+
+### Fixed
+
+- **Failed logins no longer lock the owner out.** The master-password throttle
+  shared by the REST API and the Blazor login page now slows attempts instead of
+  refusing them: after five failures in the last minute each further attempt is
+  delayed by 1 s, 2 s, 4 s and then at most 5 s, and a successful login resets
+  the counter. A correct password always gets in, whether the failures came from
+  another device or from a LAN attacker. The REST `vault-auth` per-IP limiter is
+  unchanged and still caps raw request volume.
+- **The ErrorBoundary Reload button works under the CSP.** It used an inline
+  `onclick`, which `script-src 'self'` blocks; it now uses a Blazor event.
+  Inline `onclick` handlers are gone from every Razor source and a test keeps
+  them out.
+- **Backup restores take the store lock.** Replacing `store.enc` from a backup
+  now uses the same cross-process lock as pair mutations, so a write from another
+  process can no longer be overwritten (and lost) after the client received 204.
+- **The mobile client tells 409s apart.** A busy vault and an uninitialized
+  store are no longer reported as "this pair already exists"; the response body
+  selects the matching error.
+- **The mobile client reports the shared Core version** instead of a hardcoded
+  one, so the version shown in the app follows the release.
+- **HSTS is not pinned for loopback hosts.** After a `--tls` run on localhost the
+  header is no longer stored for `localhost`, `127.0.0.1` or `::1`, so a later
+  plain `http://localhost` run is not upgraded into a certificate error.
+- **Stale atomic-write temp files are cleaned up** when the same target is
+  rewritten, best effort, so a crashed write does not leave debris forever.
+
+### Tests
+
+222 tests green: Core 92, Tui 50, Api 80.
 
 ## 5.0.1 — security fixes
 

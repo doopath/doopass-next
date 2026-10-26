@@ -9,13 +9,13 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Doopass.Mobile</RootNamespace>
     <AssemblyName>Doopass.Mobile</AssemblyName>
-    <Version>5.0.1</Version>
+    <Version>5.0.2</Version>
     <Description>Doopass Android thin client: connects to the vault host over the REST API.</Description>
 
     <!-- Package identity for local APK builds. -->
     <ApplicationId>io.github.doopath.doopass</ApplicationId>
     <ApplicationTitle>Doopass</ApplicationTitle>
-    <ApplicationDisplayVersion>5.0.1</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>5.0.2</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
     <!-- BlazorHybrid requires Android 6.0 (API 23)+; declared so the analyzer stays quiet. -->
     <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
