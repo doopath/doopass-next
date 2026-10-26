@@ -263,6 +263,14 @@ Produces one self-contained executable per platform (no .NET install needed):
 * `dist/portable/win-x64/doopass.exe`
 * `dist/portable/linux-x64/doopass`
 
+> [!NOTE]
+> Distro SDK packages ship ASP.NET Core as a separate package. If publishing
+> fails with `NETSDK1226: Prune Package data not found … Microsoft.AspNetCore.App`,
+> install the matching ASP.NET Core pack — `aspnet-runtime` + `aspnet-targeting-pack`
+> on Arch/Omarchy, `aspnetcore-runtime-10.0` + `aspnetcore-targeting-pack-10.0`
+> on Debian/Ubuntu, the same names via `dnf` on Fedora. The script prints this
+> hint on its own when it detects that error.
+
 Run it directly:
 
 ```bash
