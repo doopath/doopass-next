@@ -1,6 +1,7 @@
 @page "/connect"
 @layout ConnectLayout
 @implements IDisposable
+@using System.Security.Cryptography
 @inject ConnectionStore Connections
 @inject HostDiscovery Discovery
 @inject IVaultSession Session
@@ -195,7 +196,8 @@
                         <span class="security-value">@_pending.Fingerprint</span>
                     </div>
                     <p class="connect-lead">
-                        The fingerprint will be pinned on this phone, so a different certificate is rejected later.
+                        Compare it with the SHA-256 fingerprint printed in the host log before trusting:
+                        it will be pinned on this phone, so a different certificate is rejected later.
                     </p>
                 }
                 else
@@ -539,16 +541,38 @@
 
     // Probe (GET /api/vault/state) without saving anything; returns the TLS
     // certificate fingerprint, needed for the trust-on-first-use confirm.
+    //
+    // There is no pin yet, so the probe must tolerate the self-signed
+    // certificate it is about to be pinned to -- a default HttpClient rejects
+    // it and the phone could never learn the fingerprint. The certificate seen
+    // in the handshake wins over the JSON field: that is the value every later
+    // request is compared against, so a spoofed body cannot change the pin.
     private async Task<(bool Ok, string? Fingerprint, string? Version)> ProbeStateAsync(string baseUrl)
     {
+        string? presented = null;
+
+        var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+            {
+                if (certificate is not null)
+                {
+                    presented = Convert.ToHexString(SHA256.HashData(certificate.RawData)).ToLowerInvariant();
+                }
+
+                return true;
+            },
+        };
+
         HttpClient client;
 
         try
         {
-            client = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(6) };
+            client = new HttpClient(handler) { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(6) };
         }
         catch (UriFormatException)
         {
+            handler.Dispose();
             return (false, null, null);
         }
 
@@ -572,7 +596,7 @@
 
                 var payload = System.Text.Json.JsonSerializer.Deserialize<ConnectState>(text, ProbeJson);
 
-                return (true, payload?.CertFingerprint, payload?.ServerVersion);
+                return (true, presented ?? payload?.CertFingerprint, payload?.ServerVersion);
             }
             catch (HttpRequestException)
             {
