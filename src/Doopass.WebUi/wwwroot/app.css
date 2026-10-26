@@ -1105,13 +1105,6 @@ select {
    Host picker (/connect on the phone)
    ========================================================================== */
 
-/* Unlike the login card, this screen keeps its top edge fixed while the
-   discovery list grows, so nothing shifts when a host is found. */
-.auth-shell.auth-shell--connect {
-    align-items: start;
-    justify-items: center;
-}
-
 .connect-page {
     min-width: 0;
 }

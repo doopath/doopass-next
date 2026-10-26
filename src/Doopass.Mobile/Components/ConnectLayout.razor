@@ -1,8 +1,7 @@
 @inherits LayoutComponentBase
 
-@* AuthLayout with a top-aligned shell: the host list on /connect grows as
-   discovery results appear, and a vertically centred card would jump upwards
-   every time the list got taller. *@
+@* Same centred shell as AuthLayout: the picker is a single card, and matching
+   the login screen keeps the transition between the two visually stable. *@
 <div class="auth-shell auth-shell--connect">
     <div class="theme-corner">
         <ThemeToggle />
