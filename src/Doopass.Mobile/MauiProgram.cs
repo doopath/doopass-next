@@ -17,6 +17,10 @@ public static partial class MauiProgram
         // One session per app (the MAUI root scope hosts "scoped" services for
         // the whole lifetime), matching the prompt's thin-client design.
         builder.Services.AddSingleton<ConnectionStore>();
+        // The shared login screen resolves this optionally: only the phone has
+        // another machine holding the vault, so only it shows "Change host".
+        builder.Services.AddSingleton<HostConnectionState>();
+        builder.Services.AddSingleton<IHostConnection>(sp => sp.GetRequiredService<HostConnectionState>());
         builder.Services.AddSingleton<HostDiscovery>();
         builder.Services.AddSingleton<VaultPushClient>();
         builder.Services.AddScoped<VaultEventRelay>();

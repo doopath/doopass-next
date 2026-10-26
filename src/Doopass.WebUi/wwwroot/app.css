@@ -994,6 +994,65 @@ select {
     color: var(--text-muted);
 }
 
+/* Current host under the login form (thin clients only): the same card where
+   a stale address used to be invisible now offers the way back to /connect. */
+.auth-host {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.auth-host-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.auth-host-label {
+    flex: 0 0 auto;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.66rem;
+}
+
+.auth-host-url {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+}
+
+/* Back from the host picker to the login screen (only when a host is saved). */
+.connect-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 12px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+
+.connect-back-icon {
+    transform: rotate(180deg);
+}
+
+.connect-back:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 /* ==========================================================================
    Host picker (/connect on the phone)
    ========================================================================== */

@@ -9,6 +9,18 @@
 <PageTitle>Doopass — Connect</PageTitle>
 
 <div class="connect-page">
+    @if (Connections.IsConfigured && _pending is null)
+    {
+        @* Opened from the login screen: without this the chooser would be a
+           dead end when the user only wanted to look at the current host. *@
+        <button type="button" class="link-btn connect-back"
+                disabled="@(_probing || _saving)"
+                @onclick="BackToLogin">
+            <Icon Name="chevron" Size="14" Class="connect-back-icon" />
+            <span>Back to sign in</span>
+        </button>
+    }
+
     <h1 class="auth-title">Connect to your vault host</h1>
     <p class="auth-sub">The phone keeps no secrets — it stores only the host address, its certificate pin and your session token.</p>
 
@@ -334,6 +346,17 @@
     // host:port — much easier to fit on a phone than a full URL.
     private static string HostOnly(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Authority : url;
+
+    private void BackToLogin()
+    {
+        if (_probing || _saving)
+        {
+            return;
+        }
+
+        // The current host stays saved; the login screen re-probes it.
+        Nav.NavigateTo("/");
+    }
 
     private void SelectMode(ConnectMode mode)
     {

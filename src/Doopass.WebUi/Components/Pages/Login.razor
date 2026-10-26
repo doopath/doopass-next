@@ -1,7 +1,9 @@
 @page "/"
 @layout AuthLayout
+@using Microsoft.Extensions.DependencyInjection
 @inject IVaultSession Session
 @inject NavigationManager Nav
+@inject IServiceProvider Services
 
 <PageTitle>Doopass — Log in</PageTitle>
 
@@ -23,19 +25,53 @@
     </div>
 </div>
 
+@if (_host?.Address is { Length: > 0 } hostAddress)
+{
+    <div class="auth-host">
+        <span class="auth-host-main" title="@hostAddress">
+            <Icon Name="database" Size="14" />
+            <span class="auth-host-label">Host</span>
+            <span class="auth-host-url">@HostOnly(hostAddress)</span>
+        </span>
+        <button type="button" class="link-btn" aria-label="Change the vault host" @onclick="ChangeHost">
+            Change host
+        </button>
+    </div>
+}
+
 <p class="auth-foot">Your data never leaves this machine.</p>
 
 @code {
     private string? _password;
     private string? _error;
+    private IHostConnection? _host;
+
+    protected override void OnInitialized()
+    {
+        // Optional: the phone registers a host descriptor, the web host does
+        // not. Resolving instead of injecting keeps one page for both hosts.
+        _host = Services.GetService<IHostConnection>();
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        // The login screen may render before the route guard loaded the saved
+        // host; the phone's descriptor can fetch it itself.
+        if (_host is not null)
+        {
+            await _host.EnsureLoadedAsync();
+        }
+
         if ((await Session.GetStateAsync()).IsUnlocked)
         {
             Nav.NavigateTo("/store");
         }
     }
+
+    private static string HostOnly(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Authority : url;
+
+    private void ChangeHost() => Nav.NavigateTo("/connect");
 
     private void HandleKeyDown(KeyboardEventArgs args)
     {
