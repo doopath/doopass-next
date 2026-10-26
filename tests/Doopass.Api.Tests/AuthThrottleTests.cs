@@ -4,8 +4,9 @@ using Xunit;
 namespace Doopass.Api.Tests;
 
 /// <summary>
-/// The Blazor login path has no ASP.NET rate limiter in front of it, so this
-/// class is the only brake on master-password guessing there.
+/// The Blazor login path has no ASP.NET rate limiter in front of it. This
+/// throttle must slow guessing down without ever locking the owner out: it only
+/// answers how long to wait before the password check.
 /// </summary>
 public sealed class AuthThrottleTests
 {
@@ -18,75 +19,70 @@ public sealed class AuthThrottleTests
     }
 
     [Fact]
-    public void Five_failures_block_the_sixth_attempt()
+    public void Four_failures_do_not_delay_the_next_attempt()
     {
-        for (var attempt = 0; attempt < AuthThrottle.MaxFailuresPerWindow; attempt++)
-        {
-            Assert.Null(_throttle.GetRetryAfter());
-            _throttle.RegisterFailure();
-        }
+        Fail(AuthThrottle.DelayStartsAfter - 1);
 
-        var retryAfter = _throttle.GetRetryAfter();
+        Assert.Equal(TimeSpan.Zero, _throttle.DelayBeforeAttempt());
+    }
 
-        Assert.NotNull(retryAfter);
-        Assert.InRange(retryAfter.Value, TimeSpan.FromSeconds(59), TimeSpan.FromMinutes(1));
+    [Theory]
+    [InlineData(5, 1)]
+    [InlineData(6, 2)]
+    [InlineData(7, 4)]
+    [InlineData(8, 5)]
+    [InlineData(20, 5)]
+    public void Delay_grows_after_five_failures_and_is_capped(int failures, int seconds)
+    {
+        Fail(failures);
+
+        Assert.Equal(TimeSpan.FromSeconds(seconds), _throttle.DelayBeforeAttempt());
     }
 
     [Fact]
-    public void Retry_after_shrinks_as_the_window_slides()
+    public void Window_expiry_removes_the_delay_without_any_lockout()
     {
-        Fail(AuthThrottle.MaxFailuresPerWindow);
+        Fail(AuthThrottle.DelayStartsAfter);
+        Assert.NotEqual(TimeSpan.Zero, _throttle.DelayBeforeAttempt());
 
-        _now += TimeSpan.FromSeconds(20);
-        var retryAfter = _throttle.GetRetryAfter();
-
-        Assert.NotNull(retryAfter);
-        Assert.InRange(retryAfter.Value, TimeSpan.FromSeconds(39), TimeSpan.FromSeconds(40));
-    }
-
-    [Fact]
-    public void Window_expiry_lets_the_next_attempt_through()
-    {
-        Fail(AuthThrottle.MaxFailuresPerWindow);
         _now += TimeSpan.FromSeconds(61);
 
-        Assert.Null(_throttle.GetRetryAfter());
+        Assert.Equal(TimeSpan.Zero, _throttle.DelayBeforeAttempt());
     }
 
     [Fact]
-    public void Success_resets_the_counter()
+    public void The_delay_never_refuses_an_attempt()
     {
-        Fail(AuthThrottle.MaxFailuresPerWindow);
-        Assert.NotNull(_throttle.GetRetryAfter());
+        // Ten failures used to add a 30 s lockout. The delay only says "wait";
+        // there is no state in which an attempt is forbidden.
+        Fail(10);
+
+        var delay = _throttle.DelayBeforeAttempt();
+
+        Assert.True(delay > TimeSpan.Zero);
+        Assert.True(delay <= AuthThrottle.MaxDelay);
+    }
+
+    [Fact]
+    public void Success_resets_the_counter_and_the_delay()
+    {
+        Fail(10);
+        Assert.Equal(AuthThrottle.MaxDelay, _throttle.DelayBeforeAttempt());
 
         _throttle.RegisterSuccess();
 
-        Assert.Null(_throttle.GetRetryAfter());
-    }
-
-    [Fact]
-    public void Ten_consecutive_failures_lock_for_thirty_seconds()
-    {
-        Fail(AuthThrottle.MaxFailuresPerWindow);
-        _now += TimeSpan.FromSeconds(61);
-        Fail(AuthThrottle.MaxFailuresPerWindow);
-
-        var retryAfter = _throttle.GetRetryAfter();
-        Assert.NotNull(retryAfter);
-        Assert.InRange(retryAfter.Value, TimeSpan.FromSeconds(29), TimeSpan.FromSeconds(30));
-
-        _now += TimeSpan.FromSeconds(31);
-        Assert.Null(_throttle.GetRetryAfter());
+        Assert.Equal(TimeSpan.Zero, _throttle.DelayBeforeAttempt());
     }
 
     [Fact]
     public void Reset_clears_everything()
     {
-        Fail(AuthThrottle.FailuresBeforeLockout);
+        Fail(10);
+        Assert.NotEqual(TimeSpan.Zero, _throttle.DelayBeforeAttempt());
 
         _throttle.Reset();
 
-        Assert.Null(_throttle.GetRetryAfter());
+        Assert.Equal(TimeSpan.Zero, _throttle.DelayBeforeAttempt());
     }
 
     private void Fail(int count)

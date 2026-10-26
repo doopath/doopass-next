@@ -137,6 +137,13 @@ public sealed class ApiVaultCoordinator
     private bool StoreExistsCore => Store.DoesStoreFileExist(_settings.StoreFile);
 
     /// <summary>
+    /// How long a REST login should pause before checking the password. Shares
+    /// the host-wide failure counter with the Blazor page; it never refuses, so
+    /// the ASP.NET limiter remains the only hard cap on REST attempts.
+    /// </summary>
+    public TimeSpan LoginDelay() => _throttle.DelayBeforeAttempt();
+
+    /// <summary>
     /// Validates the master password and issues a token. When some session has
     /// already unlocked the vault, a correct password just adds a token — the
     /// live store is kept so parallel clients never race over the file.
@@ -146,12 +153,6 @@ public sealed class ApiVaultCoordinator
         lock (_gate)
         {
             PruneExpired_locked(Clock());
-
-            if (_throttle.GetRetryAfter() is { } retryAfter)
-            {
-                // Shared with the Blazor login page: one budget for the whole host.
-                return (false, null, $"Too many attempts. Try again in {Math.Ceiling(retryAfter.TotalSeconds):0} s.");
-            }
 
             if (!StoreExistsCore)
             {

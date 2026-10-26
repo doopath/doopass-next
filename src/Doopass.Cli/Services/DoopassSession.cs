@@ -63,18 +63,15 @@ public sealed class DoopassSession : IVaultSession, IDisposable
 
     public bool StoreExists => Store.DoesStoreFileExist(_settings.StoreFile);
 
-    /// <summary>Tries to unlock the store with the given password.</summary>
+    /// <summary>
+    /// Tries to unlock the store with the given password. Synchronous on purpose:
+    /// the growable pre-attempt delay belongs to <see cref="LoginAsync"/>, which is
+    /// the path the login page uses.
+    /// </summary>
     public (bool Success, string Message) Login(string password)
     {
         lock (_gate)
         {
-            if (_throttle.GetRetryAfter() is { } retryAfter)
-            {
-                // Refuse before the PBKDF2 work: the browser page has no rate
-                // limiter of its own, so this counter is what stops brute force.
-                return (false, $"Too many attempts. Try again in {Math.Ceiling(retryAfter.TotalSeconds):0} s.");
-            }
-
             if (!StoreExists)
             {
                 return (false, "Store is not initialized. Please initialize it first.");
@@ -201,8 +198,15 @@ public sealed class DoopassSession : IVaultSession, IDisposable
     public ValueTask<VaultState> GetStateAsync(CancellationToken ct = default) =>
         ValueTask.FromResult(new VaultState(StoreExists, IsUnlocked, Doopass.Core.Constants.Version));
 
-    public ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default) =>
-        ValueTask.FromResult(Login(password));
+    public async ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default)
+    {
+        // Slow repeated guessing down, never refuse: the browser page has no
+        // ASP.NET limiter of its own, but a LAN attacker must not be able to keep
+        // the owner waiting forever. The delay applies to correct passwords too,
+        // so it only ever costs a few seconds.
+        await _throttle.DelayHook(_throttle.DelayBeforeAttempt());
+        return Login(password);
+    }
 
     public ValueTask<(bool Success, string Message)> InitAsync(string password, CancellationToken ct = default) =>
         ValueTask.FromResult(Init(password));
