@@ -120,7 +120,10 @@ def main() -> None:
 
     # Android launcher icon: MAUI's resizetizer masks it into the adaptive
     # foreground, so transparency is fine and `MauiIcon Color` supplies the
-    # background behind the tile's corners.
+    # background behind the tile's corners. The csproj also sets
+    # ForegroundScale=2/3 on that item: the adaptive canvas is 108dp but the
+    # launcher only reveals the central 72dp, so without it the tile arrives
+    # pre-cropped and the lock looks oversized.
     MOBILE_ICON.parent.mkdir(parents=True, exist_ok=True)
     square(master, 1024).save(MOBILE_ICON)
     print(f"  wrote {MOBILE_ICON.relative_to(REPO)}")
