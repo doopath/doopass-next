@@ -3,14 +3,15 @@
  * Served from an embedded resource at /pwa/sw.js with
  * Service-Worker-Allowed: / (set by Program.cs), so the worker may take
  * the whole origin as its scope. Handles only same-origin GET requests;
- * the SignalR traffic (/_blazor) is passed through untouched so the
- * Blazor Server circuit always reconnects to the live server.
+ * the SignalR and REST traffic (/_blazor, /hubs, /api) is passed through
+ * untouched: a cached /api/vault/value?key=... would put a decrypted secret
+ * into Cache Storage on disk.
  *
  * Bump CACHE name when served assets change: old caches are evicted on
  * activate. Precache misses are tolerated (allSettled) so one flaky
  * asset can never brick the install.
  */
-const CACHE = 'doopass-pwa-v2';
+const CACHE = 'doopass-pwa-v3';
 const PRECACHE = [
   '/',
   '/app.css',
@@ -47,6 +48,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/_blazor')) return; // SignalR: never cached
+  if (url.pathname.startsWith('/hubs/')) return;    // SignalR hub: never cached
+  if (url.pathname.startsWith('/api/')) return;     // vault API: never cached
 
   // Change-of-page navigations prefer the network so a live server session
   // always wins; the cached shell covers offline starts.
