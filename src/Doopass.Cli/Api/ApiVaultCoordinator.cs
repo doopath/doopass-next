@@ -14,6 +14,9 @@ public sealed class ApiSession(string token)
 {
     public string Token { get; } = token;
 
+    /// <summary>When the token was issued; the absolute TTL is measured from here.</summary>
+    public DateTimeOffset CreatedUtc { get; internal set; } = DateTimeOffset.UtcNow;
+
     public DateTimeOffset LastSeenUtc { get; internal set; } = DateTimeOffset.UtcNow;
 }
 
@@ -27,6 +30,9 @@ public sealed class ApiSession(string token)
 public sealed class ApiVaultCoordinator
 {
     public static readonly TimeSpan DefaultSessionTtl = TimeSpan.FromMinutes(30);
+
+    /// <summary>Hard cap on a token's lifetime, no matter how active it is.</summary>
+    public static readonly TimeSpan DefaultAbsoluteSessionTtl = TimeSpan.FromHours(8);
 
     private readonly object _gate = new();
     private readonly Settings _settings;
@@ -59,6 +65,22 @@ public sealed class ApiVaultCoordinator
         }
 
         SessionTtl = ttl;
+
+        var absoluteTtl = DefaultAbsoluteSessionTtl;
+
+        if (settings.Sections.Contains("api", StringComparer.Ordinal))
+        {
+            var api = settings.GetSection("api");
+
+            if (api.TryGetValue("absolute_session_ttl_hours", out var rawHours)
+                && double.TryParse(rawHours, System.Globalization.CultureInfo.InvariantCulture, out var hours)
+                && hours > 0)
+            {
+                absoluteTtl = TimeSpan.FromHours(hours);
+            }
+        }
+
+        AbsoluteSessionTtl = absoluteTtl;
     }
 
     /// <summary>Time source; replaced with a fake clock in TTL tests.</summary>
@@ -66,6 +88,12 @@ public sealed class ApiVaultCoordinator
 
     /// <summary>Sliding session TTL (reads <c>api.session_ttl_minutes</c> from settings.json when present).</summary>
     public TimeSpan SessionTtl { get; }
+
+    /// <summary>
+    /// Absolute session lifetime (reads <c>api.absolute_session_ttl_hours</c>, 8 h
+    /// by default): an active token must still not live forever.
+    /// </summary>
+    public TimeSpan AbsoluteSessionTtl { get; }
 
     public string ServerVersion => Doopass.Core.Constants.Version;
 
@@ -141,7 +169,7 @@ public sealed class ApiVaultCoordinator
             _throttle.RegisterSuccess();
             _store ??= store;
             var token = NewToken();
-            _sessions[token] = new ApiSession(token) { LastSeenUtc = Clock() };
+            _sessions[token] = NewSession_locked(token);
             return (true, token, null);
         }
     }
@@ -167,7 +195,7 @@ public sealed class ApiVaultCoordinator
 
             _store = new Store(password, _settings.StoreFile);
             var token = NewToken();
-            _sessions[token] = new ApiSession(token) { LastSeenUtc = Clock() };
+            _sessions[token] = NewSession_locked(token);
             return (true, token, null);
         }
     }
@@ -414,7 +442,8 @@ public sealed class ApiVaultCoordinator
     private void PruneExpired_locked(DateTimeOffset now)
     {
         var expired = _sessions
-            .Where(kv => now - kv.Value.LastSeenUtc > SessionTtl)
+            .Where(kv => now - kv.Value.LastSeenUtc > SessionTtl
+                         || now - kv.Value.CreatedUtc > AbsoluteSessionTtl)
             .Select(kv => kv.Key)
             .ToList();
 
@@ -440,6 +469,12 @@ public sealed class ApiVaultCoordinator
 
         _store = null;
         _notifier.NotifyVaultLocked(string.Empty);
+    }
+
+    private ApiSession NewSession_locked(string token)
+    {
+        var now = Clock();
+        return new ApiSession(token) { CreatedUtc = now, LastSeenUtc = now };
     }
 
     private static string NewToken()
