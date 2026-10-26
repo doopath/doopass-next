@@ -16,6 +16,8 @@ public sealed class VaultPushClient : IAsyncDisposable
     private readonly ConnectionStore _connections;
     private readonly VaultEventRelay _relay;
     private HubConnection? _connection;
+    private string? _connectionHost;
+    private string? _connectionToken;
     private readonly SemaphoreSlim _startGate = new(1, 1);
 
     public VaultPushClient(ConnectionStore connections, VaultEventRelay relay)
@@ -24,7 +26,15 @@ public sealed class VaultPushClient : IAsyncDisposable
         _relay = relay;
     }
 
-    public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+    /// <summary>
+    /// True when the live connection belongs to the saved host and token. After
+    /// the host is changed, the old connection is still open for a moment and
+    /// must not be mistaken for the channel of the new session.
+    /// </summary>
+    public bool IsCurrentSession =>
+        _connection?.State == HubConnectionState.Connected
+        && string.Equals(_connectionHost, _connections.Host, StringComparison.Ordinal)
+        && string.Equals(_connectionToken, _connections.Token, StringComparison.Ordinal);
 
     /// <summary>Starts (or restarts) the hub connection for the current session.</summary>
     public async Task StartAsync()
@@ -40,7 +50,8 @@ public sealed class VaultPushClient : IAsyncDisposable
                 return;
             }
 
-            var url = $"{_connections.Host!.TrimEnd('/')}/hubs/vault";
+            var host = _connections.Host!;
+            var url = $"{host.TrimEnd('/')}/hubs/vault";
             var token = _connections.Token;
 
             _connection = new HubConnectionBuilder()
@@ -51,10 +62,13 @@ public sealed class VaultPushClient : IAsyncDisposable
                 .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30) })
                 .Build();
 
+            _connectionHost = host;
+            _connectionToken = token;
+
             _connection.On("vaultChanged", () => _relay.RaiseVaultChanged());
             _connection.On("backupsChanged", () => _relay.RaiseBackupsChanged());
             _connection.On("settingsChanged", () => _relay.RaiseSettingsChanged());
-            _connection.On("vaultLocked", () => OnVaultLocked());
+            _connection.On("vaultLocked", () => OnVaultLocked(host, token));
 
             _connection.Closed += async exception =>
             {
@@ -85,8 +99,16 @@ public sealed class VaultPushClient : IAsyncDisposable
         }
     }
 
-    private void OnVaultLocked()
+    private void OnVaultLocked(string host, string token)
     {
+        // A late event from a host/token the user already left (after switching
+        // hosts or logging out) must not end the new session.
+        if (!string.Equals(_connections.Host, host, StringComparison.Ordinal)
+            || !string.Equals(_connections.Token, token, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         // The token is already invalidated server-side; forget it and let the
         // guard route the user through the connect / login screens again.
         _ = _connections.SetTokenAsync(null);
@@ -110,6 +132,8 @@ public sealed class VaultPushClient : IAsyncDisposable
         }
 
         _connection = null;
+        _connectionHost = null;
+        _connectionToken = null;
     }
 
     public async ValueTask DisposeAsync()

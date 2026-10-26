@@ -30,8 +30,9 @@
         }
 
         // Keep the push channel aligned with the token: starts right after a
-        // fresh login, restarts after a re-login, no-op while connected.
-        if (Connections.IsConfigured && !string.IsNullOrEmpty(Connections.Token) && !Push.IsConnected)
+        // fresh login, restarts after a re-login or a host change, no-op while
+        // the current host/token are already connected.
+        if (Connections.IsConfigured && !string.IsNullOrEmpty(Connections.Token) && !Push.IsCurrentSession)
         {
             _ = Push.StartAsync();
         }
