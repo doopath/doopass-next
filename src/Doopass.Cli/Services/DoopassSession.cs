@@ -18,14 +18,20 @@ public sealed class DoopassSession : IVaultSession, IDisposable
 {
     private readonly object _gate = new();
     private readonly Settings _settings;
+    private readonly AuthThrottle _throttle;
     private readonly StoreBackup _backups;
     private readonly IVaultChangeNotifier? _notifier;
     private readonly VaultEventRelay? _relay;
     private Store? _store;
 
-    public DoopassSession(Settings settings, IVaultChangeNotifier? notifier = null, VaultEventRelay? relay = null)
+    public DoopassSession(
+        Settings settings,
+        AuthThrottle throttle,
+        IVaultChangeNotifier? notifier = null,
+        VaultEventRelay? relay = null)
     {
         _settings = settings;
+        _throttle = throttle;
         _notifier = notifier;
         _relay = relay;
         _backups = new StoreBackup(settings.StoreFile, settings.BackupsDir, settings.BackupExtension);
@@ -66,6 +72,13 @@ public sealed class DoopassSession : IVaultSession, IDisposable
     {
         lock (_gate)
         {
+            if (_throttle.GetRetryAfter() is { } retryAfter)
+            {
+                // Refuse before the PBKDF2 work: the browser page has no rate
+                // limiter of its own, so this counter is what stops brute force.
+                return (false, $"Too many attempts. Try again in {Math.Ceiling(retryAfter.TotalSeconds):0} s.");
+            }
+
             if (!StoreExists)
             {
                 return (false, "Store is not initialized. Please initialize it first.");
@@ -84,9 +97,11 @@ public sealed class DoopassSession : IVaultSession, IDisposable
 
             if (store is null)
             {
+                _throttle.RegisterFailure();
                 return (false, "Incorrect password!");
             }
 
+            _throttle.RegisterSuccess();
             _store = store;
             return (true, string.Empty);
         }

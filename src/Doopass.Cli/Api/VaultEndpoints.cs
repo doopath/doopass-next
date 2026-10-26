@@ -215,6 +215,7 @@ public static class VaultEndpoints
         error is null or "Incorrect password!" ? StatusCodes.Status401Unauthorized
         : error.Contains("already exists", StringComparison.OrdinalIgnoreCase) ? StatusCodes.Status409Conflict
         : error.Contains("not initialized", StringComparison.OrdinalIgnoreCase) ? StatusCodes.Status409Conflict
+        : error.Contains("Too many attempts", StringComparison.OrdinalIgnoreCase) ? StatusCodes.Status429TooManyRequests
         : StatusCodes.Status400BadRequest;
 
     private static IResult Error(int status, string message) =>

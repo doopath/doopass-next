@@ -84,6 +84,7 @@ public static class WebHostFactory
 
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton<IVaultChangeNotifier, VaultChangeNotifier>();
+        builder.Services.AddSingleton<AuthThrottle>();
         builder.Services.AddSingleton<ApiVaultCoordinator>();
 
         // One session type per circuit; IVaultSession / IVaultEvents resolve to

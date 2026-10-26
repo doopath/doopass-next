@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Doopass.Cli.Services;
 using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Storage;
@@ -30,13 +31,15 @@ public sealed class ApiVaultCoordinator
     private readonly object _gate = new();
     private readonly Settings _settings;
     private readonly IVaultChangeNotifier _notifier;
+    private readonly AuthThrottle _throttle;
     private readonly ConcurrentDictionary<string, ApiSession> _sessions = new();
     private Store? _store;
 
-    public ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier)
+    public ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier, AuthThrottle throttle)
     {
         _settings = settings;
         _notifier = notifier;
+        _throttle = throttle;
 
         // Overridable for TTL tests.
         Clock = () => DateTimeOffset.UtcNow;
@@ -80,6 +83,7 @@ public sealed class ApiVaultCoordinator
             _sessions.Clear();
             _store = null;
             Clock = () => DateTimeOffset.UtcNow;
+            _throttle.Reset();
 
             if (File.Exists(_settings.StoreFile))
             {
@@ -115,6 +119,12 @@ public sealed class ApiVaultCoordinator
         {
             PruneExpired_locked(Clock());
 
+            if (_throttle.GetRetryAfter() is { } retryAfter)
+            {
+                // Shared with the Blazor login page: one budget for the whole host.
+                return (false, null, $"Too many attempts. Try again in {Math.Ceiling(retryAfter.TotalSeconds):0} s.");
+            }
+
             if (!StoreExistsCore)
             {
                 return (false, null, "Store is not initialized. Please initialize it first.");
@@ -124,9 +134,11 @@ public sealed class ApiVaultCoordinator
 
             if (store is null)
             {
+                _throttle.RegisterFailure();
                 return (false, null, "Incorrect password!");
             }
 
+            _throttle.RegisterSuccess();
             _store ??= store;
             var token = NewToken();
             _sessions[token] = new ApiSession(token) { LastSeenUtc = Clock() };
