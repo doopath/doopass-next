@@ -5,7 +5,14 @@ namespace Doopass.WebUi.Abstractions;
 /// whether some session has unlocked it, and the host version. Used by the
 /// login / initialization screens and by thin clients probing a host.
 /// </summary>
-public sealed record VaultState(bool StoreExists, bool IsUnlocked, string ServerVersion);
+public sealed record VaultState(bool StoreExists, bool IsUnlocked, string ServerVersion)
+{
+    /// <summary>
+    /// True only on thin clients that could not reach their host; the other
+    /// values then say nothing about the vault. Always false on the web host.
+    /// </summary>
+    public bool IsOffline { get; init; }
+}
 
 /// <summary>
 /// The vault operations the UI components need. Both hosts implement it:

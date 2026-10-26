@@ -1,6 +1,7 @@
 @page "/"
 @layout AuthLayout
 @using Microsoft.Extensions.DependencyInjection
+@implements IDisposable
 @inject IVaultSession Session
 @inject NavigationManager Nav
 @inject IServiceProvider Services
@@ -10,8 +11,20 @@
 <h1 class="auth-title">Welcome back</h1>
 <p class="auth-sub">Unlock your encrypted vault to continue.</p>
 
+@if (_host is { IsUnreachable: true, Address: { Length: > 0 } unreachableHost })
+{
+    <div class="connect-alert auth-alert" role="alert">
+        <Icon Name="warning" Size="16" />
+        <span>
+            <strong>@HostOnly(unreachableHost)</strong> did not answer. The host's address may have changed —
+            pick the host again below.
+        </span>
+    </div>
+}
+
 <div class="auth-form" @onkeydown="HandleKeyDown">
     <input class="input" type="password" placeholder="Master password"
+           disabled="@_busy"
            @bind="_password" @bind:event="oninput" autocomplete="current-password" />
 
     @if (!string.IsNullOrEmpty(_error))
@@ -20,8 +33,15 @@
     }
 
     <div class="auth-actions">
-        <button type="button" class="btn btn-primary grow" @onclick="LogIn">Unlock vault</button>
-        <button type="button" class="btn btn-ghost" @onclick="@(() => Nav.NavigateTo("/init"))">Init store</button>
+        <button type="button" class="btn btn-primary grow" disabled="@_busy" @onclick="LogIn">
+            @if (_busy)
+            {
+                <span class="auth-spinner" aria-hidden="true"></span>
+            }
+            <span>@(_busy ? "Unlocking…" : "Unlock vault")</span>
+        </button>
+        <button type="button" class="btn btn-ghost" disabled="@_busy"
+                @onclick="@(() => Nav.NavigateTo("/init"))">Init store</button>
     </div>
 </div>
 
@@ -33,7 +53,8 @@
             <span class="auth-host-label">Host</span>
             <span class="auth-host-url">@HostOnly(hostAddress)</span>
         </span>
-        <button type="button" class="link-btn" aria-label="Change the vault host" @onclick="ChangeHost">
+        <button type="button" class="link-btn" aria-label="Change the vault host"
+                disabled="@_busy" @onclick="ChangeHost">
             Change host
         </button>
     </div>
@@ -45,12 +66,18 @@
     private string? _password;
     private string? _error;
     private IHostConnection? _host;
+    private bool _busy;
 
     protected override void OnInitialized()
     {
         // Optional: the phone registers a host descriptor, the web host does
         // not. Resolving instead of injecting keeps one page for both hosts.
         _host = Services.GetService<IHostConnection>();
+
+        if (_host is not null)
+        {
+            _host.Changed += OnHostChanged;
+        }
     }
 
     protected override async Task OnInitializedAsync()
@@ -62,9 +89,18 @@
             await _host.EnsureLoadedAsync();
         }
 
-        if ((await Session.GetStateAsync()).IsUnlocked)
+        try
         {
-            Nav.NavigateTo("/store");
+            if ((await Session.GetStateAsync()).IsUnlocked)
+            {
+                Nav.NavigateTo("/store");
+            }
+        }
+        catch (Exception ex)
+        {
+            // A dead host must not keep the login screen from rendering; the
+            // offline banner and the host picker take over.
+            AppLogger.Error("Checking the vault state on the login screen failed", ex);
         }
     }
 
@@ -73,9 +109,11 @@
 
     private void ChangeHost() => Nav.NavigateTo("/connect");
 
+    private void OnHostChanged() => _ = InvokeAsync(StateHasChanged);
+
     private void HandleKeyDown(KeyboardEventArgs args)
     {
-        if (args.Key == "Enter")
+        if (args.Key == "Enter" && !_busy)
         {
             _ = LogIn();
         }
@@ -83,6 +121,15 @@
 
     private async Task LogIn()
     {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        StateHasChanged();
+
         try
         {
             var (success, message) = await Session.LoginAsync(_password ?? string.Empty);
@@ -94,7 +141,17 @@
                 return;
             }
 
-            if (!(await Session.GetStateAsync()).StoreExists)
+            var state = await Session.GetStateAsync();
+
+            if (state.IsOffline)
+            {
+                // The banner above the form explains the dead host; a password
+                // error would be misleading when nothing answered at all.
+                _error = null;
+                return;
+            }
+
+            if (!state.StoreExists)
             {
                 Nav.NavigateTo("/init");
                 return;
@@ -102,10 +159,28 @@
 
             _error = message;
         }
+        catch (HostUnreachableException ex)
+        {
+            AppLogger.Error("Login failed: the host is unreachable", ex);
+            _error = null; // the host banner offers the picker
+        }
         catch (Exception ex)
         {
             AppLogger.Error("Login failed", ex);
             _error = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_host is not null)
+        {
+            _host.Changed -= OnHostChanged;
         }
     }
 }

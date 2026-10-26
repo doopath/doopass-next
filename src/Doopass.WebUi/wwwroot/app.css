@@ -1033,6 +1033,26 @@ select {
     font-size: 0.75rem;
 }
 
+/* The stale-host warning sits above the password field, so the reason the
+   login is failing is visible before the user types anything. */
+.auth-alert {
+    margin-bottom: 12px;
+}
+
+.auth-alert strong {
+    word-break: break-word;
+}
+
+.auth-spinner {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: connectSpin 0.7s linear infinite;
+}
+
 /* Back from the host picker to the login screen (only when a host is saved). */
 .connect-back {
     display: inline-flex;

@@ -72,6 +72,20 @@
                 return;
             }
 
+            if (state.IsOffline)
+            {
+                // The saved address no longer answers (the host's IP may have
+                // changed). Keep the host and token: the login screen shows the
+                // offline banner and opens the host picker, while silently
+                // logging the user out would lose a still-valid session.
+                if (!onLogin && !onConnect)
+                {
+                    Nav.NavigateTo("/");
+                }
+
+                return;
+            }
+
             // Dead or missing token: clean the slate and land on the login page.
             if (!string.IsNullOrEmpty(Connections.Token))
             {

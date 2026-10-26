@@ -16,4 +16,20 @@ public interface IHostConnection
     /// The login screen may render before the route guard has loaded it.
     /// </summary>
     Task EnsureLoadedAsync();
+
+    /// <summary>
+    /// True when the last request to <see cref="Address"/> did not reach the
+    /// host. A saved address goes stale when the host's IP changes, so the
+    /// login screen needs to know before the user types a password.
+    /// </summary>
+    bool IsUnreachable { get; }
+
+    /// <summary>Raised whenever <see cref="IsUnreachable"/> changes.</summary>
+    event Action? Changed;
+
+    /// <summary>Records that the host answered.</summary>
+    void MarkReachable();
+
+    /// <summary>Records that the host did not answer.</summary>
+    void MarkUnreachable();
 }

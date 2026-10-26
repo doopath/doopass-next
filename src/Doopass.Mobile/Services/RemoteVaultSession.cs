@@ -19,14 +19,25 @@ public sealed class RemoteVaultSession : IVaultSession
 {
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
+    // A stale host address must fail fast: otherwise the login screen waits on
+    // a dead TCP connection for the whole 20 s request timeout. The state probe
+    // runs before login, so it gets the shortest deadline; authentication gets
+    // a little more room because the host derives the key there.
+    private static readonly TimeSpan StateTimeout = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan AuthTimeout = TimeSpan.FromSeconds(8);
+
     private readonly ConnectionStore _connections;
+    private readonly HostConnectionState _host;
     private readonly VaultEventRelay _relay;
     private HttpClient? _client;
     private string? _clientToken;
+    private string? _clientHost;
+    private string? _clientPin;
 
-    public RemoteVaultSession(ConnectionStore connections, VaultEventRelay relay)
+    public RemoteVaultSession(ConnectionStore connections, HostConnectionState host, VaultEventRelay relay)
     {
         _connections = connections;
+        _host = host;
         _relay = relay;
     }
 
@@ -34,13 +45,21 @@ public sealed class RemoteVaultSession : IVaultSession
     {
         get
         {
-            if (_client is not null && string.Equals(_clientToken, _connections.Token, StringComparison.Ordinal))
+            // The host and the pin belong in the cache key as much as the token:
+            // picking a new host while no token is saved must not reuse a client
+            // still pointed at the old address.
+            if (_client is not null
+                && string.Equals(_clientToken, _connections.Token, StringComparison.Ordinal)
+                && string.Equals(_clientHost, _connections.Host, StringComparison.Ordinal)
+                && string.Equals(_clientPin, _connections.PinnedFingerprint, StringComparison.Ordinal))
             {
                 return _client;
             }
 
             _client?.Dispose();
             _clientToken = _connections.Token;
+            _clientHost = _connections.Host;
+            _clientPin = _connections.PinnedFingerprint;
             _client = BuildClient();
             return _client;
         }
@@ -55,14 +74,34 @@ public sealed class RemoteVaultSession : IVaultSession
 
         try
         {
-            using var response = await Client.GetAsync("/api/vault/state", HttpCompletionOption.ResponseHeadersRead, ct);
-            var state = await ReadJsonAsync<StateDto>(response.Content, response.StatusCode, ct);
-            return new VaultState(state!.StoreExists, state.Unlocked, state.ServerVersion ?? CoreVersion);
+            var state = await WithTimeoutAsync(StateTimeout, ct, async token =>
+            {
+                using var response = await Client.GetAsync("/api/vault/state", HttpCompletionOption.ResponseHeadersRead, token);
+                return await ReadJsonAsync<StateDto>(response.Content, response.StatusCode, token);
+            });
+
+            if (state is null)
+            {
+                throw new HostUnreachableException("The host returned an empty state response.");
+            }
+
+            _host.MarkReachable();
+            return new VaultState(state.StoreExists, state.Unlocked, state.ServerVersion ?? CoreVersion);
+        }
+        catch (HostUnreachableException ex)
+        {
+            // Timeout or a dropped connection: the saved address is probably
+            // stale. Report "offline" instead of "locked", because the caller
+            // must not wipe the session token or show a password error.
+            Diagnostics(ex, "vault/state");
+            _host.MarkUnreachable();
+            return OfflineState();
         }
         catch (HttpRequestException ex)
         {
             Diagnostics(ex, "vault/state");
-            return new VaultState(false, false, $"{CoreVersion} (offline)");
+            _host.MarkUnreachable();
+            return OfflineState();
         }
         catch (PropertyDoesNotExistError)
         {
@@ -71,13 +110,14 @@ public sealed class RemoteVaultSession : IVaultSession
         }
         catch (UnauthorizedAccessException)
         {
+            _host.MarkReachable();
             return new VaultState(false, false, CoreVersion);
         }
     }
 
     public async ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default)
     {
-        using var response = await SendCoreAsync(HttpMethod.Post, "/api/auth/login", new { password }, ct);
+        using var response = await SendAuthAsync(HttpMethod.Post, "/api/auth/login", new { password }, ct);
 
         if (response.IsSuccessStatusCode)
         {
@@ -92,7 +132,7 @@ public sealed class RemoteVaultSession : IVaultSession
 
     public async ValueTask<(bool Success, string Message)> InitAsync(string password, CancellationToken ct = default)
     {
-        using var response = await SendCoreAsync(HttpMethod.Post, "/api/auth/init", new { password }, ct);
+        using var response = await SendAuthAsync(HttpMethod.Post, "/api/auth/init", new { password }, ct);
 
         if (response.IsSuccessStatusCode)
         {
@@ -109,15 +149,28 @@ public sealed class RemoteVaultSession : IVaultSession
     {
         try
         {
-            using var response = await SendCoreAsync(HttpMethod.Post, "/api/auth/logout", content: null, ct);
+            // Logging out of a host that has gone away must not block for the
+            // full request timeout either; the local session ends regardless.
+            using var response = await WithTimeoutAsync(StateTimeout, ct, token =>
+                SendCoreAsync(HttpMethod.Post, "/api/auth/logout", content: null, token));
+
+            _host.MarkReachable();
+        }
+        catch (HostUnreachableException ex)
+        {
+            Diagnostics(ex);
+            _host.MarkUnreachable();
+            // A network failure still ends the local session.
         }
         catch (HttpRequestException ex)
         {
             Diagnostics(ex);
+            _host.MarkUnreachable();
             // A network failure still ends the local session.
         }
         catch (UnauthorizedAccessException)
         {
+            _host.MarkReachable();
         }
 
         _clientToken = null;
@@ -178,6 +231,58 @@ public sealed class RemoteVaultSession : IVaultSession
         await SendAsync(HttpMethod.Post, "/api/settings/restore-defaults", content: null, ct);
 
     // --- Request/response plumbing ---------------------------------------
+
+    private async Task<HttpResponseMessage> SendAuthAsync(
+        HttpMethod method,
+        string url,
+        object content,
+        CancellationToken ct)
+    {
+        try
+        {
+            var response = await WithTimeoutAsync(AuthTimeout, ct, token =>
+                SendCoreAsync(method, url, content, token));
+
+            // Any HTTP status means the host answered; a 401/429 is a vault
+            // error, not a stale address.
+            _host.MarkReachable();
+            return response;
+        }
+        catch (HostUnreachableException ex)
+        {
+            Diagnostics(ex, "auth");
+            _host.MarkUnreachable();
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            Diagnostics(ex, "auth");
+            _host.MarkUnreachable();
+            throw new HostUnreachableException($"Host is unreachable: {ex.Message}", ex);
+        }
+    }
+
+    private static async ValueTask<T> WithTimeoutAsync<T>(
+        TimeSpan timeout,
+        CancellationToken ct,
+        Func<CancellationToken, Task<T>> action)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(timeout);
+
+        try
+        {
+            return await action(deadline.Token);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new HostUnreachableException(
+                $"The host did not answer within {timeout.TotalSeconds:0} seconds.", ex);
+        }
+    }
+
+    private static VaultState OfflineState() =>
+        new(false, false, $"{CoreVersion} (offline)") { IsOffline = true };
 
     private async ValueTask<T?> GetJsonAsync<T>(string url, CancellationToken ct)
     {
