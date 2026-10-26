@@ -352,7 +352,9 @@ public sealed class RemoteVaultSession : IVaultSession
                 _relay.RaiseVaultLocked();
                 throw new UnauthorizedAccessException(message);
             case 409:
-                throw new PropertyAlreadyExistError(message);
+                // Busy / uninitialized / duplicate pair all answer 409; the body
+                // says which one it is, so the page shows the right message.
+                throw VaultResponseErrors.Conflict(message);
             case 422:
                 // The host could read the store file but it is not a valid vault
                 // (corrupted or tampered). Retrying cannot help.
