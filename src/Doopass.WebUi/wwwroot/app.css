@@ -1094,7 +1094,7 @@ select {
    A real button rather than an accent link: the picker has a primary action
    of its own, and an underlined link above the title read as stray text. */
 .connect-back {
-    margin-bottom: 14px;
+    margin-top: 14px;
 }
 
 .connect-back-icon {
