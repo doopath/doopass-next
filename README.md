@@ -359,6 +359,9 @@ Notes:
 * the trust-on-first-use probe only reads the fingerprint — no vault data is
   sent before you confirm it, and the pin is stored after you tap
   **Trust and connect**;
+* the flow above is verified with the Android client: the pin survives app
+  restarts, and a swapped certificate is rejected on the first request, before
+  any vault data is read;
 * treat `doopass.key` as a secret, and never commit `doopass.pfx` or the key.
 
 #### Discovery finds nothing?
@@ -374,13 +377,19 @@ sudo ufw allow 7240/tcp comment 'Doopass web/API'
 sudo ufw allow 7241/tcp comment 'Doopass web/API (custom port)'
 ```
 
+Every custom `--port` needs its own inbound TCP rule. An unlisted port is the
+confusing case: the host answers when reached from the PC itself, while the
+phone just times out — and because `7240`/`7241` keep working, only that one
+address looks broken.
+
 USB debugging alone does not carry UDP broadcasts. For a cable-only setup,
 forward the API port to the phone's loopback and type that address into
-*Manual*:
+*Manual* — prefixed with `https://` when the host runs with `--tls`:
 
 ```bash
 adb reverse tcp:7240 tcp:7240
 # in the app's Manual tab: 127.0.0.1:7240
+# for a TLS host:          https://127.0.0.1:7240
 ```
 
 Make sure only one host process is running on the PC: a stale `doopass serve`
