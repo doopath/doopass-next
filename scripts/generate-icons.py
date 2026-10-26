@@ -1,100 +1,124 @@
-# Generates the PWA icon set (PNG) served by the web interface.
+# Generates the application icon set from the master logo artwork.
 #
-# Usage (any Python with Pillow installed, e.g. the repo's bundled runtime):
+# Usage (any Python with Pillow and numpy, e.g. the repo's bundled runtime):
 #   python scripts/generate-icons.py
 #
-# Outputs in src/Doopass.Cli/wwwroot/:
-#   icon-192.png, icon-512.png                -> manifest "purpose: any"
-#   icon-maskable-192.png, icon-maskable-512  -> manifest "purpose: maskable"
-#   apple-touch-icon.png                      -> iOS home-screen icon (180x180)
+# Source of truth: assets/logo1024.png, the PNG master of the same artwork as
+# assets/logo.svg. The vector master is served as-is as the SVG favicon; every
+# raster icon below is a resize of the PNG master, so a new logo only needs the
+# files in assets/ replaced and this script re-run -- nothing is hand-drawn.
 #
-# The design is a raster replica of the inline SVG favicon in
-# App.razor: an indigo rounded square with a white padlock, drawn in a
-# 24x24 unit coordinate system and supersampled 4x for antialiasing.
+# Outputs:
+#   .pwa-assets/icon-192.png, icon-512.png                -> manifest "purpose: any"
+#   .pwa-assets/icon-maskable-192.png, icon-maskable-512  -> manifest "purpose: maskable"
+#   .pwa-assets/apple-touch-icon.png                      -> iOS home screen (180x180)
+#   .pwa-assets/favicon.ico                               -> multi-size browser tab icon
+#   src/Doopass.Mobile/Resources/AppIcon/appicon.png      -> Android launcher icon
+#   .pwa-assets/app.ico                                   -> Win32 icon for doopass.exe
+#
+# The master is a rounded tile with transparent corners. Where an opaque canvas
+# is required (maskable icons, apple-touch-icon, the Win32 icon) the tile is
+# *flattened*: each row's transparent corners are filled with that row's edge
+# colour, so no background seam shows and no transparency is left behind.
 
 from pathlib import Path
-
-from PIL import Image, ImageDraw
-
-INDIGO = (79, 70, 229, 255)      # #4f46e5, matches --accent in app.css
-WHITE = (255, 255, 255, 255)
-
-SS = 4          # supersampling factor
-UNIT = 24.0     # design grid size
-# Output directory: pass --out <dir> to write elsewhere (e.g. a temp folder
-# when the sandbox denies direct writes); defaults to the web assets folder.
 import sys
-OUT = Path(sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv
-           else Path(__file__).resolve().parent.parent / "src" / "Doopass.Cli" / "wwwroot")
-OUT.mkdir(parents=True, exist_ok=True)
+
+import numpy as np
+from PIL import Image
+
+REPO = Path(__file__).resolve().parent.parent
+ASSETS = REPO / "assets"
+PWA_OUT = REPO / ".pwa-assets"
+MOBILE_ICON = REPO / "src" / "Doopass.Mobile" / "Resources" / "AppIcon" / "appicon.png"
+
+# The PNG masters the logo currently ships in, largest first.
+MASTER_NAMES = ("logo1024.png", "logo2048.png", "logo512.png", "logo256.png")
+
+# Windows .ico payloads: Explorer, the taskbar and the Alt-Tab switcher all pick
+# a different one of these depending on the surface and DPI.
+ICO_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+
+# The favicon is downloaded on every first visit, so it carries only the tab and
+# bookmark sizes; the desktop icon above keeps the large end of the range.
+FAVICON_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48)]
 
 
-def draw_background(d: ImageDraw.ImageDraw, u: float, full_bleed: bool) -> None:
-    """App tile background: rounded square (any) or full-bleed square
-    (maskable / apple-touch, for OS corner masks to apply over)."""
-    if full_bleed:
-        d.rectangle([0, 0, u, u], fill=INDIGO)
-    else:
-        d.rounded_rectangle([1, 1, 23, 23], radius=6, fill=INDIGO)
+def load_master() -> Image.Image:
+    for name in MASTER_NAMES:
+        path = ASSETS / name
+        if path.exists():
+            print(f"  master: {path.relative_to(REPO)}")
+            return Image.open(path).convert("RGBA")
+    sys.exit(f"error: no logo PNG found in {ASSETS} (looked for {', '.join(MASTER_NAMES)})")
 
 
-def draw_lock(d: ImageDraw.ImageDraw, map_x, map_y) -> None:
-    """White padlock in 24-unit space, positioned via unit->pixel maps."""
-    # Shackle: top half circle centered at (12, 7), radius 4, stroke 2.
-    # Outer stroke edge is at radius 5 => PIL arc bbox (7, 2, 17, 12),
-    # drawn from the outer ellipse inward by `width` pixels.
-    r_box = 5 * map_scale
-    sun = map_y(7)
-    d.arc([map_x(12) - r_box, sun - r_box, map_x(12) + r_box, sun + r_box], 180, 360, fill=WHITE, width=int(2 * map_scale))
-    # Vertical legs, with round caps (SVG stroke-linecap), reaching under the
-    # body rect so no seam shows between shapes.
-    cap_r = 1 * map_scale
-    for leg_x in (8, 16):
-        d.line([map_x(leg_x), map_y(6.4), map_x(leg_x), map_y(10.6)], fill=WHITE, width=int(2 * map_scale))
-        d.ellipse([map_x(leg_x) - cap_r, map_y(10.6) - cap_r, map_x(leg_x) + cap_r, map_y(10.6) + cap_r], fill=WHITE)
-    # Lock body.
-    d.rounded_rectangle([map_x(7), map_y(10), map_x(17), map_y(18)], radius=2, fill=WHITE)
+def flatten(img: Image.Image) -> Image.Image:
+    """Composite the tile onto its own edge colour, removing all transparency.
+
+    The master's only transparent pixels are the rounded corners, so extending
+    the edge colour of each row across that row's transparent runs reproduces
+    the artwork over a full-bleed square without a visible seam.
+    """
+    arr = np.array(img).astype(np.float32)
+    rgb = arr[..., :3]
+    alpha = arr[..., 3] / 255.0
+
+    filled = rgb.copy()
+    for y in range(arr.shape[0]):
+        opaque = np.nonzero(alpha[y] >= 1.0)[0]
+        if opaque.size == 0:
+            continue
+        first, last = opaque[0], opaque[-1]
+        if first > 0:
+            filled[y, :first] = rgb[y, first]
+        if last < filled.shape[1] - 1:
+            filled[y, last + 1:] = rgb[y, last]
+
+    out = rgb * alpha[..., None] + filled * (1.0 - alpha[..., None])
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
 
 
-def make_icon(size_px: int, full_bleed: bool, content_scale: float, name: str) -> None:
-    """Render one icon at `size_px` (drawn at SS x then downsampled)."""
-    global map_scale
-    big = size_px * SS
-    img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-
-    draw_background(d, big, full_bleed)
-
-    # Map 24-unit design coordinates onto the canvas. The lock content sits at
-    # `content_scale` of the canvas, centered: content_scale=1 fills the canvas.
-    map_scale = (big / UNIT) * content_scale
-    draw_lock(
-        d,
-        lambda ux: big / 2 + (ux - 12) * map_scale,
-        lambda uy: big / 2 + (uy - 12) * map_scale,
-    )
-
-    img = img.resize((size_px, size_px), Image.LANCZOS)
-    img.save(OUT / name)
-    print(f"  wrote {name} ({size_px}x{size_px}, full_bleed={full_bleed}, content={content_scale:.2f})")
+def square(img: Image.Image, size: int) -> Image.Image:
+    """Lanczos resize to a square canvas of `size` (the master is already square)."""
+    return img.resize((size, size), Image.LANCZOS)
 
 
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    print("Generating PWA icons ...")
+    master = load_master()
+    PWA_OUT.mkdir(parents=True, exist_ok=True)
 
-    # "any" icons: transparent corners, rounded-tile design at full size.
-    make_icon(512, full_bleed=False, content_scale=1.0, name="icon-512.png")
-    make_icon(192, full_bleed=False, content_scale=1.0, name="icon-192.png")
+    # "any" icons keep the designer's rounded tile and its transparent corners.
+    for size in (512, 192):
+        square(master, size).save(PWA_OUT / f"icon-{size}.png")
+        print(f"  wrote icon-{size}.png")
 
-    # Maskable: opaque full bleed; lock shrunk into the safe zone (content must
-    # stay inside the central 80% circle that launchers may crop to).
-    make_icon(512, full_bleed=True, content_scale=0.66, name="icon-maskable-512.png")
-    make_icon(192, full_bleed=True, content_scale=0.66, name="icon-maskable-192.png")
+    # Maskable icons are cropped to a circle by launchers, so they must be
+    # opaque full-bleed. The lock sits inside the central 40% of the canvas,
+    # well within the 80%-diameter safe zone, so no extra scaling is needed.
+    for size in (512, 192):
+        flatten(square(master, size)).save(PWA_OUT / f"icon-maskable-{size}.png")
+        print(f"  wrote icon-maskable-{size}.png")
 
-    # iOS home screen: opaque full bleed (no transparency allowed; iOS applies
-    # its own corner mask), lock slightly larger for visual weight.
-    make_icon(180, full_bleed=True, content_scale=0.70, name="apple-touch-icon.png")
+    # iOS home screen: 180x180, no transparency allowed (iOS adds its own mask).
+    flatten(square(master, 180)).save(PWA_OUT / "apple-touch-icon.png")
+    print("  wrote apple-touch-icon.png")
+
+    # Browser tab / bookmark icon.
+    square(master, 256).save(PWA_OUT / "favicon.ico", format="ICO", sizes=FAVICON_SIZES)
+    print("  wrote favicon.ico")
+
+    # Win32 resource for the doopass.exe apphost and the file icon in Explorer.
+    flattened = flatten(master)
+    flattened.save(PWA_OUT / "app.ico", format="ICO", sizes=ICO_SIZES)
+    print("  wrote app.ico")
+
+    # Android launcher icon: MAUI's resizetizer masks it into the adaptive
+    # foreground, so transparency is fine and `MauiIcon Color` supplies the
+    # background behind the tile's corners.
+    MOBILE_ICON.parent.mkdir(parents=True, exist_ok=True)
+    square(master, 1024).save(MOBILE_ICON)
+    print(f"  wrote {MOBILE_ICON.relative_to(REPO)}")
 
     print("Done.")
 

@@ -10,7 +10,7 @@
  * activate. Precache misses are tolerated (allSettled) so one flaky
  * asset can never brick the install.
  */
-const CACHE = 'doopass-pwa-v1';
+const CACHE = 'doopass-pwa-v2';
 const PRECACHE = [
   '/',
   '/app.css',

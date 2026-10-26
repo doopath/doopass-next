@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="assets/logo.png" alt="Doopass logo" width="104" />
+  <img src="assets/logo256.png" alt="Doopass logo" width="104" />
 
   # Doopass
 
@@ -8,7 +8,7 @@
 
   [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=.net&logoColor=white)](https://dotnet.microsoft.com/)
   [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Android-blue)](#run-it)
-  [![Frontends](https://img.shields.io/badge/frontends-TUI%20%2B%20Web%20(PWA)%20%2B%20Android%20thin%20client-4f46e5)](#run-it)
+  [![Frontends](https://img.shields.io/badge/frontends-TUI%20%2B%20Web%20(PWA)%20%2B%20Android%20thin%20client-7c3aed)](#run-it)
   [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 </div>
@@ -162,11 +162,17 @@ need the server and reconnect over their existing SignalR circuit.
 > host. A plain-HTTP LAN address (`--lan` without TLS) can use the UI but
 > cannot install the app.
 
-To regenerate the icons after a design change:
+To regenerate the icons after a design change, drop the new artwork into
+`assets/` and run:
 
 ```bash
-python scripts/generate-icons.py --out .pwa-assets    # PNGs are embedded from there via the csproj
+python scripts/generate-icons.py    # PWA icons + favicon.ico + Android icon + doopass.exe icon
 ```
+
+It resizes the PNG master into every size the app needs (writing the generated
+files to `.pwa-assets/`, which the csprojs embed) and also refreshes
+`src/Doopass.Mobile/Resources/AppIcon/appicon.png`. The vector master
+`assets/logo.svg` is served as-is as the SVG favicon, so it needs no conversion.
 
 #### PWA vs the Android thin client
 
