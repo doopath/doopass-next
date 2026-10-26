@@ -109,6 +109,25 @@ public sealed class BackupTests : IDisposable
     }
 
     [Fact]
+    public void Restore_takes_the_store_lock()
+    {
+        _backups.MakeBackup();
+        var backupName = Assert.Single(_backups.GetBackupNames()) + ".enc.bak";
+        File.WriteAllText(_storePath, "newer content");
+
+        // Another process is mutating the store: the restore must not overwrite
+        // it behind that process's back. Holding FileShare.None makes Acquire
+        // fail deterministically instead of racing.
+        using var held = new FileStream(
+            _storePath + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.Throws<StoreBusyError>(() => _backups.SwapStoreWithBackup(backupName));
+
+        Assert.Equal("newer content", File.ReadAllText(_storePath));
+        Assert.Single(_backups.GetBackupNames());
+    }
+
+    [Fact]
     public void Twelve_backups_get_numbers_one_to_twelve()
     {
         for (var i = 0; i < 12; i++)

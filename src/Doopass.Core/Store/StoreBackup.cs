@@ -99,9 +99,17 @@ public sealed class StoreBackup
         AppLogger.Info($"Backup created: {Path.GetFileName(backupPath)}");
     }
 
-    /// <summary>Replaces the current store with a backup (making a backup first).</summary>
+    /// <summary>
+    /// Replaces the current store with a backup (making a backup first). Holds the
+    /// same cross-process lock as <see cref="Store"/> mutations, so a pair added by
+    /// another client cannot land between the read and the swap and be lost.
+    /// </summary>
     public void SwapStoreWithBackup(string backupName)
     {
+        // Store.Mutate_locked never calls back into this class, so taking the lock
+        // here cannot deadlock with a mutation.
+        using var lease = StoreFileLock.Acquire(_storePath + ".lock", TimeSpan.FromSeconds(5));
+
         var backupContent = GetBackupContent(backupName);
         MakeBackup();
 
