@@ -12,15 +12,18 @@ public sealed class BackupTests : IDisposable
 {
     private readonly string _dir;
     private readonly string _backupsDir;
+    private readonly string _storePath;
     private readonly StoreBackup _backups;
 
     public BackupTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), "doopass-tests", Guid.NewGuid().ToString("N"));
         _backupsDir = Path.Combine(_dir, "backups");
+        _storePath = Path.Combine(_dir, "store.enc");
         Directory.CreateDirectory(_dir);
+        File.WriteAllText(_storePath, "ciphertext");
 
-        _backups = new StoreBackup(Path.Combine(_dir, "store.enc"), _backupsDir);
+        _backups = new StoreBackup(_storePath, _backupsDir);
     }
 
     public void Dispose()
@@ -96,7 +99,6 @@ public sealed class BackupTests : IDisposable
     [Fact]
     public void ValidBackupLifecycle_StillWorks()
     {
-        File.WriteAllText(Path.Combine(_dir, "store.enc"), "ciphertext");
         _backups.MakeBackup();
 
         var name = Assert.Single(_backups.GetBackupNames());
@@ -105,4 +107,55 @@ public sealed class BackupTests : IDisposable
         _backups.DeleteBackup(name + ".enc.bak");
         Assert.Empty(_backups.GetBackupNames());
     }
+
+    [Fact]
+    public void Twelve_backups_get_numbers_one_to_twelve()
+    {
+        for (var i = 0; i < 12; i++)
+        {
+            _backups.MakeBackup();
+        }
+
+        var names = _backups.GetBackupNames();
+
+        Assert.Equal(12, names.Count);
+        Assert.Equal(Enumerable.Range(1, 12), names.Select(BackupNumber).OrderBy(number => number));
+    }
+
+    [Fact]
+    public void Number_continues_after_a_deleted_backup()
+    {
+        for (var i = 0; i < 12; i++)
+        {
+            _backups.MakeBackup();
+        }
+
+        var fifth = _backups.GetBackupNames().Single(name => BackupNumber(name) == 5);
+        _backups.DeleteBackup(fifth + ".enc.bak");
+
+        _backups.MakeBackup();
+
+        var names = _backups.GetBackupNames();
+        Assert.Equal(12, names.Count);
+        Assert.Contains(names, name => BackupNumber(name) == 13);
+    }
+
+    [Fact]
+    public void Existing_backups_are_never_overwritten()
+    {
+        File.WriteAllText(_storePath, "first");
+        _backups.MakeBackup();
+
+        File.WriteAllText(_storePath, "second");
+        _backups.MakeBackup();
+
+        var names = _backups.GetBackupNames()
+            .ToDictionary(BackupNumber, name => name);
+
+        Assert.Equal("first", _backups.GetBackupContent(names[1] + ".enc.bak"));
+        Assert.Equal("second", _backups.GetBackupContent(names[2] + ".enc.bak"));
+    }
+
+    private static int BackupNumber(string name) =>
+        int.Parse(name[(name.LastIndexOf('_') + 1)..], System.Globalization.CultureInfo.InvariantCulture);
 }

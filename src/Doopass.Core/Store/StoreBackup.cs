@@ -84,16 +84,16 @@ public sealed class StoreBackup
             : storeName;
 
         var basePath = Path.Combine(_backupsDir, $"{currentDate}_{storeBase}");
-        var backupPath = $"{basePath}_1{_extension}";
 
         var storeContent = GetStoreContent();
         var datedBackups = GetDatedBackups($"{currentDate}_{storeBase}");
 
-        if (datedBackups.Count > 0)
-        {
-            var lastNumber = ExtractBackupNumber(datedBackups[^1]);
-            backupPath = $"{basePath}_{lastNumber + 1}{_extension}";
-        }
+        // Max+1, not "last sorted name + 1": ordinal sorting puts "_9" after "_10",
+        // so the old scheme silently overwrote _10 on the eleventh backup of a day.
+        var nextNumber = datedBackups.Count == 0
+            ? 1
+            : datedBackups.Max(ExtractBackupNumber) + 1;
+        var backupPath = $"{basePath}_{nextNumber}{_extension}";
 
         AtomicFile.WriteAllText(backupPath, storeContent, TextFile.Utf8NoBom);
         AppLogger.Info($"Backup created: {Path.GetFileName(backupPath)}");
