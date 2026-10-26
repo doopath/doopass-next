@@ -924,8 +924,11 @@ select {
 
 .theme-corner {
     position: absolute;
-    top: 18px;
-    right: 18px;
+    /* The Android WebView runs edge to edge, so a bare 18px puts the toggle
+       under the status bar. env() is 0 in a desktop browser, so the web UI is
+       unchanged; on the phone it moves the toggle below the system bars. */
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    right: calc(18px + env(safe-area-inset-right, 0px));
     z-index: 2;
 }
 
