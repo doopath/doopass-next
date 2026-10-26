@@ -55,6 +55,11 @@ foreach ($rid in $RuntimeIdentifiers) {
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed for $rid (exit code $LASTEXITCODE)"
     }
+
+    # DebugType=None stops new symbols from being generated, but an incremental
+    # build can still copy stale *.pdb files left in bin\ by an earlier build.
+    Get-ChildItem -Path $outDir -Recurse -File -Filter *.pdb |
+        Remove-Item -Force
 }
 
 Write-Host ""

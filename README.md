@@ -263,6 +263,11 @@ Produces one self-contained executable per platform (no .NET install needed):
 * `dist/portable/win-x64/doopass.exe`
 * `dist/portable/linux-x64/doopass`
 
+Only the executable ends up in the output folder: `.pdb` symbol files are
+removed after publishing, including stale ones that an incremental build may
+have copied from `bin/`. Ship the binary as is — symbols are debugger-only and
+are not needed at runtime.
+
 > [!NOTE]
 > Distro SDK packages ship ASP.NET Core as a separate package. If publishing
 > fails with `NETSDK1226: Prune Package data not found … Microsoft.AspNetCore.App`,

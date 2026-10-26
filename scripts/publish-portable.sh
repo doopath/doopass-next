@@ -163,6 +163,10 @@ for rid in "${RIDS[@]}"; do
     if [[ "$rid" == linux-* && -f "$out_dir/doopass" ]]; then
         chmod +x "$out_dir/doopass"
     fi
+
+    # DebugType=None stops new symbols from being generated, but an incremental
+    # build can still copy stale *.pdb files left in bin/ by an earlier build.
+    find "$out_dir" -type f -name '*.pdb' -delete
 done
 
 echo
