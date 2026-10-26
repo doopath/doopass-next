@@ -1,4 +1,5 @@
 using Doopass.Core;
+using Doopass.Core.Diagnostics;
 using Doopass.WebUi.Abstractions;
 
 namespace Doopass.Cli.Api;
@@ -191,7 +192,7 @@ public static class VaultEndpoints
         }
     }
 
-    private static IResult MapStoreError(Exception ex)
+    internal static IResult MapStoreError(Exception ex)
     {
         var (status, message) = ex switch
         {
@@ -204,10 +205,21 @@ public static class VaultEndpoints
             ReadOnlySettingError => (StatusCodes.Status403Forbidden, ex.Message),
             InvalidSettingValueError => (StatusCodes.Status400BadRequest, ex.Message),
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Session expired or unauthorized."),
-            _ => (StatusCodes.Status500InternalServerError, ex.Message),
+            _ => Unexpected(ex),
         };
 
         return Error(status, message);
+    }
+
+    /// <summary>
+    /// Anything we did not plan for may carry file-system paths, .NET type names
+    /// or other internals; the client gets a fixed message and the details go to
+    /// the log only.
+    /// </summary>
+    private static (int Status, string Message) Unexpected(Exception ex)
+    {
+        AppLogger.Error("Vault API failure", ex);
+        return (StatusCodes.Status500InternalServerError, "Internal server error.");
     }
 
     /// <summary>Auth outcomes carry their message in the coordinator result; missing store is a conflict.</summary>

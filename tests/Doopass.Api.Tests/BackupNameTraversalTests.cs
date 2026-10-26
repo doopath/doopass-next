@@ -60,7 +60,12 @@ public sealed class BackupNameTraversalTests(ApiHostFixture fixture) : IClassFix
         }
 
         Assert.Equal(storeHashBefore, StoreHash(settings));
-        Assert.DoesNotContain("Exception", await restore.Content.ReadAsStringAsync());
+
+        // Nothing internal may leak: no .NET type names, no file-system paths.
+        var body = await restore.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("Exception", body);
+        Assert.DoesNotContain("System.", body);
+        Assert.DoesNotContain(settings.AppDataDir, body);
     }
 
     /// <summary>Valid names still list/restore/delete (the full cycle lives in VaultDataTests.T02).</summary>
