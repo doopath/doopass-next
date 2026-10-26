@@ -1,4 +1,5 @@
 using System.Net;
+using Doopass.Cli.Api;
 using Xunit;
 
 namespace Doopass.Api.Tests;
@@ -36,5 +37,31 @@ public sealed class SecurityHeadersTests(ApiHostFixture fixture) : IClassFixture
         var response = await fixture.Client.GetAsync("/api/vault/state");
 
         Assert.False(response.Headers.Contains("Strict-Transport-Security"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("localhost")]
+    [InlineData("LOCALHOST")]
+    [InlineData("127.0.0.1")]
+    [InlineData("127.0.0.5")]
+    [InlineData("::1")]
+    [InlineData("[::1]")]
+    public void Hsts_is_not_pinned_on_loopback_hosts(string? host)
+    {
+        // A remembered HSTS pin would force the next plain http://localhost run
+        // onto TLS and break it with a self-signed certificate error.
+        Assert.False(WebHostFactory.ShouldSendHsts(host));
+    }
+
+    [Theory]
+    [InlineData("192.168.1.10")]
+    [InlineData("10.0.0.2")]
+    [InlineData("doopass.lan")]
+    [InlineData("example.com")]
+    public void Hsts_is_pinned_on_network_hosts(string host)
+    {
+        Assert.True(WebHostFactory.ShouldSendHsts(host));
     }
 }

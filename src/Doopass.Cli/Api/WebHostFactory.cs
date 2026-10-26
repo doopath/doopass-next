@@ -149,7 +149,7 @@ public static class WebHostFactory
                     "script-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; " +
                     "base-uri 'self'; form-action 'self'";
 
-                if (usesTls)
+                if (usesTls && ShouldSendHsts(context.Request.Host.Host))
                 {
                     headers["Strict-Transport-Security"] = "max-age=31536000";
                 }
@@ -254,6 +254,29 @@ public static class WebHostFactory
 
         app.Run();
         return 0;
+    }
+
+    /// <summary>
+    /// HSTS may only be pinned for a real network host. If a browser remembers it
+    /// for localhost, the next plain <c>http://localhost</c> run is upgraded to
+    /// https against a certificate that run does not even serve.
+    /// </summary>
+    internal static bool ShouldSendHsts(string? host)
+    {
+        if (string.IsNullOrEmpty(host))
+        {
+            return false;
+        }
+
+        // HostString keeps IPv6 literals without brackets, but accept both forms.
+        var normalized = host.Trim('[', ']');
+
+        if (string.Equals(normalized, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !IPAddress.TryParse(normalized, out var address) || !IPAddress.IsLoopback(address);
     }
 
     private static string? ReadApiSetting(Settings settings, string key)
