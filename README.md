@@ -234,8 +234,10 @@ Artifacts:
    A self-signed certificate is enough; see
    [Self-signed HTTPS with certificate pinning](#self-signed-https-with-certificate-pinning).
 2. On the phone: the **Connect** screen scans the LAN over UDP as soon as it
-   opens — pick a discovered host, or switch to *Manual* and type the address
-   (e.g. `http://192.168.1.10:7240`). *Search again* re-runs the scan.
+   opens — pick a discovered host, or switch to *Manual* and type the full
+   address **including the scheme**: `https://192.168.1.10:7240` for a TLS
+   host. Without a scheme the app assumes `http://`, which a TLS-only host
+   answers with silence. *Search again* re-runs the scan.
 3. Confirm the fingerprint ("Trust and connect"), then log in with the master
    password. Everything afterwards mirrors the web version, pushed live:
    pairs, copy, backups (incl. safety backups on restore), settings, themes.
@@ -332,10 +334,12 @@ requirements.
    for discovery, see [Discovery finds nothing?](#discovery-finds-nothing).
 
 5. On the phone, **Connect** → the discovered host carries an *Encrypted · TLS*
-   tag and shows the fingerprint. Compare it with the host log before tapping
-   **Trust and connect**, then log in with the master password. From then on a
-   different certificate on that address fails the handshake instead of
-   leaking the password. For an independent check on any machine:
+   tag and shows the fingerprint. Over *Manual*, include the scheme
+   (`https://192.168.1.10:7240`); discovery fills it in itself. Compare the
+   fingerprint with the host log before tapping **Trust and connect**, then log
+   in with the master password. From then on a different certificate on that
+   address fails the handshake instead of leaking the password. For an
+   independent check on any machine:
 
    ```bash
    openssl x509 -in doopass.crt -noout -fingerprint -sha256
