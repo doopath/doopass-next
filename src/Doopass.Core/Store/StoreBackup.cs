@@ -95,7 +95,7 @@ public sealed class StoreBackup
             backupPath = $"{basePath}_{lastNumber + 1}{_extension}";
         }
 
-        File.WriteAllText(backupPath, storeContent, TextFile.Utf8NoBom);
+        AtomicFile.WriteAllText(backupPath, storeContent, TextFile.Utf8NoBom);
         AppLogger.Info($"Backup created: {Path.GetFileName(backupPath)}");
     }
 
@@ -105,7 +105,7 @@ public sealed class StoreBackup
         var backupContent = GetBackupContent(backupName);
         MakeBackup();
 
-        File.WriteAllText(_storePath, backupContent, TextFile.Utf8NoBom);
+        AtomicFile.WriteAllText(_storePath, backupContent, TextFile.Utf8NoBom);
         AppLogger.Info($"Store restored from backup: {backupName}");
     }
 

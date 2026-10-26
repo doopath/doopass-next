@@ -40,3 +40,9 @@ public sealed class InvalidSettingValueError : Exception
 {
     public InvalidSettingValueError(string message) : base(message) { }
 }
+
+/// <summary>Raised when the store file is locked by another writer for longer than the lock timeout.</summary>
+public sealed class StoreBusyError : Exception
+{
+    public StoreBusyError(string message) : base(message) { }
+}
