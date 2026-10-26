@@ -13,7 +13,7 @@
     {
         @* Opened from the login screen: without this the chooser would be a
            dead end when the user only wanted to look at the current host. *@
-        <button type="button" class="link-btn connect-back"
+        <button type="button" class="btn btn-secondary btn-sm connect-back"
                 disabled="@(_probing || _saving)"
                 @onclick="BackToLogin">
             <Icon Name="chevron" Size="14" Class="connect-back-icon" />

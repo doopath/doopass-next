@@ -1065,24 +1065,15 @@ select {
     animation: connectSpin 0.7s linear infinite;
 }
 
-/* Back from the host picker to the login screen (only when a host is saved). */
+/* Back from the host picker to the login screen (only when a host is saved).
+   A real button rather than an accent link: the picker has a primary action
+   of its own, and an underlined link above the title read as stray text. */
 .connect-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 12px;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    text-decoration: none;
+    margin-bottom: 14px;
 }
 
 .connect-back-icon {
     transform: rotate(180deg);
-}
-
-.connect-back:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
 }
 
 /* ==========================================================================
