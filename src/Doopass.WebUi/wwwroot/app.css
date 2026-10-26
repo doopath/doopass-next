@@ -1000,7 +1000,8 @@ select {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px 10px;
     min-width: 0;
     margin: 0 0 14px;
     padding: 7px 8px 7px 12px;
@@ -1013,12 +1014,17 @@ select {
 
 .auth-host .btn {
     flex: 0 0 auto;
+    margin-left: auto;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 0.82rem;
 }
 
 .auth-host-main {
     display: inline-flex;
     align-items: center;
     gap: 7px;
+    flex: 1 1 auto;
     min-width: 0;
 }
 
