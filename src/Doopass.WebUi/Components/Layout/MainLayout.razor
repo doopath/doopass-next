@@ -67,7 +67,7 @@
                             </div>
                             <h2 class="page-title">Something went wrong</h2>
                             <p class="page-sub">@context.Message</p>
-                            <button type="button" class="btn btn-primary" onclick="location.reload()">
+                            <button type="button" class="btn btn-primary" @onclick="@(() => Nav.Refresh())">
                                 <Icon Name="restore" Size="18" />
                                 <span>Reload</span>
                             </button>
