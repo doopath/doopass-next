@@ -193,11 +193,19 @@ Keystore). Everything else lives on the PC host.
 ### Build and install
 
 Requirements: .NET SDK 10 with the `maui-android` workload, an Android SDK
-(`platforms;android-36`, `build-tools;36.0.0`) and a JDK 17
-(`ANDROID_SDK_ROOT` + `JAVA_HOME`).
+(`platforms;android-36`, `build-tools;36.0.0`) and a JDK 17+ (JDK 21 is what
+the .NET 10 Android pack expects), with `ANDROID_HOME` (or `ANDROID_SDK_ROOT`)
+and `JAVA_HOME` pointing at them.
 
 ```powershell
-scripts\build-android.ps1                       # Debug APK (installable directly)
+scripts\build-android.ps1                       # Windows: Debug APK (installable directly)
+```
+
+```bash
+scripts/build-android.sh                        # Linux/macOS: Debug APK (installable directly)
+```
+
+```bash
 dotnet publish src/Doopass.Mobile -c Release -f net10.0-android -p:AndroidPackageFormat=apk
 dotnet publish src/Doopass.Mobile -c Release -f net10.0-android -p:AndroidPackageFormat=aab   # Play-format bundle
 ```
@@ -227,11 +235,12 @@ Artifacts:
    pairs, copy, backups (incl. safety backups on restore), settings, themes.
 
 The login card always shows the current host with a **Change host** action
-that returns to the picker, so a moved host does not require reinstalling or
-clearing app data. If the saved address stops answering (for example the PC
-got a new IP), the app says so above the password field after a short probe
-and leaves the session token in place; pick the host again, or go back to the
-login screen without changing anything.
+that returns to the picker, whether or not that host still answers — so a
+moved host does not require reinstalling or clearing app data. If the saved
+address stops answering (for example the PC got a new IP), the app says so
+above the password field after a short probe and leaves the session token in
+place; pick the host again, or go back to the login screen without changing
+anything.
 
 Features and limitations:
 
@@ -242,10 +251,46 @@ Features and limitations:
   login screen automatically;
 * a stale host address is detected in about four seconds instead of waiting
   for a long request timeout, and the login screen offers the host picker;
+* discovery probes both `255.255.255.255` and each interface's directed
+  broadcast (e.g. `192.168.31.255`), which survives Wi-Fi stacks that drop the
+  global broadcast;
 * the emulator cannot reach LAN broadcasts — type `http://10.0.2.2:7240`
   manually there;
 * plain HTTP shows a permanent warning; IPSec rules of the router or at least
   `--tls` are recommended on shared networks.
+
+#### Discovery finds nothing?
+
+The phone and the PC must be on the same Wi-Fi/LAN, and the PC firewall must
+allow both the discovery probe and the API port. With `ufw` (the default on
+Omarchy/Arch desktops):
+
+```bash
+sudo ufw allow 7241/udp comment 'Doopass discovery'
+sudo ufw allow 7240/tcp comment 'Doopass web/API'
+# if the host was started with --port 7241, allow that TCP port instead:
+sudo ufw allow 7241/tcp comment 'Doopass web/API (custom port)'
+```
+
+USB debugging alone does not carry UDP broadcasts. For a cable-only setup,
+forward the API port to the phone's loopback and type that address into
+*Manual*:
+
+```bash
+adb reverse tcp:7240 tcp:7240
+# in the app's Manual tab: 127.0.0.1:7240
+```
+
+Make sure only one host process is running on the PC: a stale `doopass serve`
+on the saved port can answer the app's probe with an old build that has no
+REST API, which looks exactly like "the host is unreachable". Check the
+listening sockets with `ss -ltnp | grep doopass`.
+
+> [!NOTE]
+> On some Xiaomi/Redmi HyperOS builds, `adb install` needs *Developer options →
+> Install via USB* (and sometimes *USB debugging (Security settings)*) to be
+> enabled; without it the installer reports
+> `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`.
 
 ## Deploy it
 

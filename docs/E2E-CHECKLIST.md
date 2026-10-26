@@ -43,12 +43,15 @@ The following remain as a manual checklist for a machine with an Android
 device/emulator + Wi-Fi LAN; the code paths for each are implemented and the
 host side of each step is already covered above.
 
-- [ ] Discovery on the phone finds the running host (same Wi-Fi).
-- [ ] Manual entry works; on the emulator `http://10.0.2.2:7240`.
+- [ ] Discovery on the phone finds the running host (same Wi-Fi, inbound UDP
+      7241 and the API TCP port allowed in the PC firewall).
+- [ ] Manual entry works; on the emulator `http://10.0.2.2:7240`; over USB,
+      `adb reverse tcp:7240 tcp:7240` + `127.0.0.1:7240`.
 - [ ] Login with the master password; full pair CRUD; copy to clipboard
       (native MAUI clipboard + fallback reveal).
-- [ ] Change host from the login screen → picker opens, Back to sign in
-      returns to the login card with the same saved host.
+- [ ] Change host is visible on the login screen even while the current host
+      answers → picker opens, Back to sign in returns to the login card with
+      the same saved host.
 - [ ] Stop the host (or move it to another IP) while the phone shows the login
       screen → the offline banner appears in about four seconds, the saved
       token is not cleared, and Change host finds the new address through
