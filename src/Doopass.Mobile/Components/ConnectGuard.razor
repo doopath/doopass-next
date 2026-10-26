@@ -28,13 +28,12 @@
         {
             await Connections.LoadAsync();
         }
-
-        // Keep the push channel aligned with the token: starts right after a
-        // fresh login, restarts after a re-login or a host change, no-op while
-        // the current host/token are already connected.
-        if (Connections.IsConfigured && !string.IsNullOrEmpty(Connections.Token) && !Push.IsCurrentSession)
+        else
         {
-            _ = Push.StartAsync();
+            // Mid-session navigations (after a login or host change) align the
+            // push channel immediately. On first start it waits for the state
+            // probe, so a stale host is not dialled at all.
+            StartPushIfNeeded();
         }
 
         var relative = Nav.ToBaseRelativePath(Nav.Uri);
@@ -57,6 +56,7 @@
 
             if (onConnect)
             {
+                StartPushIfNeeded();
                 return;
             }
 
@@ -65,6 +65,8 @@
             if (state.IsUnlocked)
             {
                 // A live token resumes the vault.
+                StartPushIfNeeded();
+
                 if (!onLogin && !relative.StartsWith("store", StringComparison.OrdinalIgnoreCase))
                 {
                     Nav.NavigateTo("/store");
@@ -110,6 +112,22 @@
         }
     }
 
+    // Starts or restarts the hub channel for the host/token currently saved;
+    // a no-op while that exact session is already connected, and while the
+    // last probe says the host is gone.
+    private void StartPushIfNeeded()
+    {
+        if (Host.IsUnreachable)
+        {
+            return;
+        }
+
+        if (Connections.IsConfigured && !string.IsNullOrEmpty(Connections.Token) && !Push.IsCurrentSession)
+        {
+            _ = Push.StartAsync();
+        }
+    }
+
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
@@ -123,6 +141,8 @@
     [Inject] private IVaultEvents Events { get; set; } = null!;
 
     [Inject] private VaultPushClient Push { get; set; } = null!;
+
+    [Inject] private HostConnectionState Host { get; set; } = null!;
 
     [Inject] private NavigationManager Nav { get; set; } = null!;
 }
