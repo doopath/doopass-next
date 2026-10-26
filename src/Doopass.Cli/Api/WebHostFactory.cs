@@ -51,6 +51,17 @@ public static class WebHostFactory
         var tlsPassword = options.TlsPassword ?? ReadApiSetting(settings, "tls_pass");
         var fingerprint = ValidateTlsCertificate(tlsPfx, tlsPassword);
 
+        if (options.Lan && tlsPfx is null)
+        {
+            // --lan is explicit, so it stays allowed, but the user must know what it
+            // exposes. --tls binds 0.0.0.0 on its own, so it needs no --lan.
+            const string warning =
+                "WARNING: plaintext HTTP on the LAN - the master password and all secrets travel unencrypted. " +
+                "Use --tls <pfx> for encrypted access (--tls already binds 0.0.0.0, no --lan needed).";
+            Console.Error.WriteLine(warning);
+            AppLogger.Error(warning);
+        }
+
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             Args = [],
