@@ -246,6 +246,18 @@ Features and limitations:
 scripts\publish-portable            # or: powershell -File scripts\publish-portable.ps1
 ```
 
+```bash
+scripts/publish-portable.sh                    # both platforms
+scripts/publish-portable.sh -r linux-x64       # a single target
+scripts/publish-portable.sh -c Debug -o /tmp/doopass
+```
+
+The two scripts are equivalent and can cross-publish from either OS: the
+PowerShell one takes `-Configuration`, `-RuntimeIdentifiers` and `-OutputRoot`,
+the shell one takes `-c`, `-r` (comma-separated or repeated) and `-o`. Defaults
+are `Release`, `win-x64` + `linux-x64` and `dist/portable`; the shell script also
+marks the Linux binary executable.
+
 Produces one self-contained executable per platform (no .NET install needed):
 
 * `dist/portable/win-x64/doopass.exe`
