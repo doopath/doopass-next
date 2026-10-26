@@ -421,7 +421,10 @@ public sealed class ApiVaultCoordinator
         foreach (var token in expired)
         {
             _sessions.TryRemove(token, out _);
-            _notifier.NotifyVaultLocked(token);
+
+            // Only the expired token's clients care: the vault itself may still be
+            // unlocked for everybody else (an idle phone must not kick the browser).
+            _notifier.NotifySessionExpired(token);
         }
 
         RelockIfIdle_locked();

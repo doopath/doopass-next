@@ -42,11 +42,8 @@ public sealed class DoopassSession : IVaultSession, IDisposable
             _notifier.VaultChanged += _relay.RaiseVaultChanged;
             _notifier.BackupsChanged += _relay.RaiseBackupsChanged;
             _notifier.SettingsChanged += _relay.RaiseSettingsChanged;
-            _notifier.VaultLocked += OnVaultLocked;
         }
     }
-
-    private void OnVaultLocked(string token) => _relay?.RaiseVaultLocked();
 
     public void Dispose()
     {
@@ -55,7 +52,6 @@ public sealed class DoopassSession : IVaultSession, IDisposable
             _notifier.VaultChanged -= _relay.RaiseVaultChanged;
             _notifier.BackupsChanged -= _relay.RaiseBackupsChanged;
             _notifier.SettingsChanged -= _relay.RaiseSettingsChanged;
-            _notifier.VaultLocked -= OnVaultLocked;
         }
     }
 
