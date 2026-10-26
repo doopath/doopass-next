@@ -13,8 +13,9 @@
 #   .pwa-assets/icon-maskable-192.png, icon-maskable-512  -> manifest "purpose: maskable"
 #   .pwa-assets/apple-touch-icon.png                      -> iOS home screen (180x180)
 #   .pwa-assets/favicon.ico                               -> multi-size browser tab icon
-#   src/Doopass.Mobile/Resources/AppIcon/appicon.png      -> Android launcher icon
 #   .pwa-assets/app.ico                                   -> Win32 icon for doopass.exe
+#   src/Doopass.Mobile/Resources/AppIcon/appicon.png      -> Android launcher icon
+#   src/Doopass.WebUi/wwwroot/brand.svg                   -> sidebar / auth-card mark
 #
 # The master is a rounded tile with transparent corners. Where an opaque canvas
 # is required (maskable icons, apple-touch-icon, the Win32 icon) the tile is
@@ -22,6 +23,7 @@
 # colour, so no background seam shows and no transparency is left behind.
 
 from pathlib import Path
+import shutil
 import sys
 
 import numpy as np
@@ -31,6 +33,9 @@ REPO = Path(__file__).resolve().parent.parent
 ASSETS = REPO / "assets"
 PWA_OUT = REPO / ".pwa-assets"
 MOBILE_ICON = REPO / "src" / "Doopass.Mobile" / "Resources" / "AppIcon" / "appicon.png"
+# The web UI's sidebar / auth-card mark. It lives in the RCL's wwwroot so both
+# the server host and the MAUI WebView (_content/Doopass.WebUi/...) resolve it.
+WEBUI_BRAND = REPO / "src" / "Doopass.WebUi" / "wwwroot" / "brand.svg"
 
 # The PNG masters the logo currently ships in, largest first.
 MASTER_NAMES = ("logo1024.png", "logo2048.png", "logo512.png", "logo256.png")
@@ -119,6 +124,16 @@ def main() -> None:
     MOBILE_ICON.parent.mkdir(parents=True, exist_ok=True)
     square(master, 1024).save(MOBILE_ICON)
     print(f"  wrote {MOBILE_ICON.relative_to(REPO)}")
+
+    # Web UI brand mark: the vector master again, copied into the RCL's wwwroot
+    # so the sidebar and the login card show it in the browser and in the MAUI
+    # WebView, which loads it from _content/Doopass.WebUi/brand.svg.
+    svg_master = ASSETS / "logo.svg"
+    if not svg_master.exists():
+        sys.exit(f"error: {svg_master.relative_to(REPO)} is missing; it feeds the SVG favicon and the brand mark")
+    WEBUI_BRAND.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(svg_master, WEBUI_BRAND)
+    print(f"  wrote {WEBUI_BRAND.relative_to(REPO)}")
 
     print("Done.")
 

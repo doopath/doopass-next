@@ -137,6 +137,11 @@ public static class WebHostFactory
         app.MapGet("/app.css", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.app.css", "text/css; charset=utf-8", revalidate: true));
         app.MapGet("/theme.js", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.theme.js", "text/javascript; charset=utf-8", revalidate: true));
         app.MapGet("/app.js", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.app.js", "text/javascript; charset=utf-8", revalidate: true));
+        // Brand mark for the shared layouts. Served at the same _content/... URL the
+        // MAUI WebView resolves, so MainLayout / AuthLayout keep one image source in
+        // both hosts instead of branching on which one is rendering.
+        app.MapGet("/_content/Doopass.WebUi/brand.svg", (HttpContext ctx) =>
+            ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.brand.svg", "image/svg+xml; charset=utf-8", revalidate: true));
         app.MapGet("/_framework/blazor.web.js", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.blazor.web.js", "text/javascript; charset=utf-8"));
 
         // PWA: installable web app (manifest, service worker, icons), all embedded.

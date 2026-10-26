@@ -166,13 +166,14 @@ To regenerate the icons after a design change, drop the new artwork into
 `assets/` and run:
 
 ```bash
-python scripts/generate-icons.py    # PWA icons + favicon.ico + Android icon + doopass.exe icon
+python scripts/generate-icons.py    # PWA icons + favicons + Android icon + exe icon + brand mark
 ```
 
 It resizes the PNG master into every size the app needs (writing the generated
-files to `.pwa-assets/`, which the csprojs embed) and also refreshes
-`src/Doopass.Mobile/Resources/AppIcon/appicon.png`. The vector master
-`assets/logo.svg` is served as-is as the SVG favicon, so it needs no conversion.
+files to `.pwa-assets/`, which the csprojs embed), refreshes
+`src/Doopass.Mobile/Resources/AppIcon/appicon.png`, and copies the vector master
+`assets/logo.svg` into the RCL as the sidebar / login brand mark
+(`src/Doopass.WebUi/wwwroot/brand.svg`, served as the SVG favicon too).
 
 #### PWA vs the Android thin client
 

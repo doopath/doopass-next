@@ -23,6 +23,9 @@
     <EmbeddedResource Include="wwwroot\app.css" LogicalName="Doopass.WebUi.wwwroot.app.css" />
     <EmbeddedResource Include="wwwroot\theme.js" LogicalName="Doopass.WebUi.wwwroot.theme.js" />
     <EmbeddedResource Include="wwwroot\app.js" LogicalName="Doopass.WebUi.wwwroot.app.js" />
+    <!-- Brand mark for the sidebar and the auth card; a copy of the vector
+         master, written by scripts\generate-icons.py. -->
+    <EmbeddedResource Include="wwwroot\brand.svg" LogicalName="Doopass.WebUi.wwwroot.brand.svg" />
   </ItemGroup>
 
   <ItemGroup>
