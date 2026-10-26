@@ -219,8 +219,9 @@ Artifacts:
 1. Start the host on the PC: `doopass serve --lan` (plain HTTP + discovery).
    Prefer `--tls mycert.pfx --tls-pass …` — the app then pins the SHA-256
    fingerprint printed in the host log and warns loudly when it is absent.
-2. On the phone: **Connect** → *Find hosts* (UDP broadcast discovery) or type
-   the address (e.g. `http://192.168.1.10:7240`).
+2. On the phone: the **Connect** screen scans the LAN over UDP as soon as it
+   opens — pick a discovered host, or switch to *Manual* and type the address
+   (e.g. `http://192.168.1.10:7240`). *Search again* re-runs the scan.
 3. Confirm the fingerprint ("Trust and connect"), then log in with the master
    password. Everything afterwards mirrors the web version, pushed live:
    pairs, copy, backups (incl. safety backups on restore), settings, themes.

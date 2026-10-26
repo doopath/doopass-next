@@ -933,6 +933,10 @@ select {
     position: relative;
     z-index: 1;
     width: min(430px, 100%);
+    /* Grid items default to min-width:auto, which lets a long, unbreakable
+       child (a host URL, a row of nowrap buttons) push the whole card wider
+       than the phone screen. The card must follow the viewport instead. */
+    min-width: 0;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: 20px;
@@ -974,6 +978,7 @@ select {
 
 .auth-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     margin-top: 4px;
 }
@@ -987,6 +992,405 @@ select {
     text-align: center;
     font-size: 0.82rem;
     color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Host picker (/connect on the phone)
+   ========================================================================== */
+
+/* Unlike the login card, this screen keeps its top edge fixed while the
+   discovery list grows, so nothing shifts when a host is found. */
+.auth-shell.auth-shell--connect {
+    align-items: start;
+    justify-items: center;
+}
+
+.connect-page {
+    min-width: 0;
+}
+
+.connect-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-subtle);
+}
+
+.connect-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.connect-tab.is-active {
+    border-color: var(--border);
+    background: var(--bg-elevated);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+}
+
+.connect-tab:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.connect-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.connect-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.connect-lead,
+.connect-notes {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+.connect-notes {
+    font-size: 0.78rem;
+}
+
+.connect-notes code,
+.connect-empty code {
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: var(--bg-subtle);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.94em;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.connect-results {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.connect-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.connect-empty {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.link-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+/* Discovered hosts: one full-width tap target per host instead of a squeezed
+   text/button pair, so the row never dictates the card width. */
+.host-list {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-subtle);
+    overflow: hidden;
+}
+
+.host-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    min-width: 0;
+    padding: 11px 12px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.host-row .host-main {
+    flex: 1 1 auto;
+}
+
+/* The security tag follows the host name and drops to its own line on very
+   narrow screens or with large system fonts, instead of squeezing the name
+   into a column two characters wide. */
+.host-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    min-width: 0;
+}
+
+.host-title .host-name {
+    min-width: 0;
+    margin-right: auto;
+}
+
+.host-title .host-tag {
+    flex: 0 0 auto;
+}
+
+.host-row:first-child {
+    border-top: 0;
+}
+
+.host-row:active {
+    background: var(--bg-hover);
+}
+
+.host-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.host-row:disabled {
+    opacity: 0.65;
+    cursor: default;
+}
+
+.host-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.host-icon--lg {
+    flex-basis: 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+}
+
+.host-main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.host-name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.host-url {
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    overflow-wrap: anywhere;
+}
+
+.host-chevron {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+}
+
+.host-tag {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.host-tag--secure {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.host-tag--insecure {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.host-tag--standalone {
+    align-self: flex-start;
+}
+
+.host-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-subtle);
+}
+
+.connect-step-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.security-note {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-subtle);
+}
+
+.security-label {
+    color: var(--text-muted);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.security-value {
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    word-break: break-all;
+}
+
+.connect-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.connect-alert svg {
+    flex: 0 0 auto;
+    margin-top: 1px;
+}
+
+.connect-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.connect-spinner {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: connectSpin 0.7s linear infinite;
+}
+
+.connect-spinner--sm {
+    width: 14px;
+    height: 14px;
+}
+
+@keyframes connectSpin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 750px) {
+    /* The nested cards are gone; a slightly tighter auth card gives the host
+       rows the full phone width. */
+    .auth-card--connect {
+        padding: 22px 18px 20px;
+        border-radius: 18px;
+    }
+
+    .auth-card--connect .auth-brand {
+        margin-bottom: 14px;
+    }
+
+    .connect-page .auth-title {
+        font-size: 1.28rem;
+    }
+
+    .connect-page .auth-sub {
+        margin-bottom: 18px;
+        font-size: 0.84rem;
+    }
+
+    .connect-tab {
+        min-height: 42px;
+    }
+
+    .host-row {
+        gap: 10px;
+    }
+
+    .host-row .host-icon {
+        flex-basis: 32px;
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+    }
+}
+
+/* Foldable cover screens with a large system font: the row is too narrow for
+   icon + name + tag + chevron, so the chevron yields to the host name. The
+   row is still obviously tappable (hover/active background, full-width list). */
+@media (max-width: 340px) {
+    .host-row .host-chevron {
+        display: none;
+    }
 }
 
 /* ==========================================================================

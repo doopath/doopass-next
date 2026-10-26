@@ -1,5 +1,5 @@
 @page "/connect"
-@layout AuthLayout
+@layout ConnectLayout
 @implements IDisposable
 @inject ConnectionStore Connections
 @inject HostDiscovery Discovery
@@ -8,112 +8,366 @@
 
 <PageTitle>Doopass — Connect</PageTitle>
 
-<h1 class="auth-title">Connect to your vault host</h1>
-<p class="auth-sub">The phone keeps no secrets: it stores only the host address, its certificate pin and your session token.</p>
+<div class="connect-page">
+    <h1 class="auth-title">Connect to your vault host</h1>
+    <p class="auth-sub">The phone keeps no secrets — it stores only the host address, its certificate pin and your session token.</p>
 
-@if (!string.IsNullOrEmpty(_warning))
-{
-    <div class="error">@_warning</div>
-}
-
-<div class="card" style="margin-bottom:16px;">
-    <h2 class="card-title">Automatic discovery</h2>
-    <p class="card-sub">Searches the local network for Doopass hosts via UDP broadcast.</p>
-    <div class="auth-actions">
-        <button type="button" class="btn btn-primary" @onclick="SearchAsync" disabled="@_searching">
-            <Icon Name="search" Size="18" />
-            <span>@(_searching ? "Searching…" : "Find hosts")</span>
-        </button>
-    </div>
-
-    @if (_candidates.Count > 0)
+    @if (_pending is null)
     {
-        <div style="margin-top:12px;">
-            @foreach (var candidate in _candidates)
-            {
-                <div class="setting-row">
-                    <span class="setting-key" style="min-width:0;">
-                        <strong>@candidate.Name</strong><br />
-                        <span class="muted" style="font-size:.78rem;">@candidate.Url @((candidate.Tls ? "" : "— no encryption"))</span>
-                    </span>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ProbeAsync(candidate))">Select</button>
-                </div>
-            }
+        <div class="connect-tabs" role="group" aria-label="How to choose the host">
+            <button type="button"
+                    class="connect-tab @(_mode == ConnectMode.Auto ? "is-active" : null)"
+                    aria-pressed="@(_mode == ConnectMode.Auto ? "true" : "false")"
+                    disabled="@(_probing || _saving)"
+                    @ref="_autoTab"
+                    @onclick="@(() => SelectMode(ConnectMode.Auto))">
+                <Icon Name="search" Size="16" />
+                <span>Automatic</span>
+            </button>
+            <button type="button"
+                    class="connect-tab @(_mode == ConnectMode.Manual ? "is-active" : null)"
+                    aria-pressed="@(_mode == ConnectMode.Manual ? "true" : "false")"
+                    disabled="@(_probing || _saving)"
+                    @ref="_manualTab"
+                    @onclick="@(() => SelectMode(ConnectMode.Manual))">
+                <Icon Name="edit" Size="16" />
+                <span>Manual</span>
+            </button>
         </div>
-    }
-</div>
 
-<div class="card" style="margin-bottom:16px;">
-    <h2 class="card-title">Manual address</h2>
-    <p class="card-sub">e.g. http://192.168.1.10:7240 — on the Android emulator the host PC is 10.0.2.2:7240.</p>
-    <div class="field">
-        <label class="field-label">Host URL</label>
-        <input class="input" type="text" placeholder="http://192.168.1.10:7240"
-               value="@_manualHost" @oninput="OnManualChanged"
-               autocapitalize="none" autocomplete="off" spellcheck="false" />
-    </div>
-    <div class="auth-actions">
-        <button type="button" class="btn btn-primary" @onclick="@(() => ProbeAsync(NewCandidate(_manualHost)))" disabled="@_probing">
-            <Icon Name="shield" Size="18" />
-            <span>@(_probing ? "Checking…" : "Connect")</span>
-        </button>
-    </div>
-</div>
-
-@if (_pending is not null)
-{
-    <div class="card" style="margin-bottom:16px;">
-        <h2 class="card-title">@_pending.Name</h2>
-        @if (_pending.Tls)
+        @if (_mode == ConnectMode.Auto)
         {
-            <p class="card-sub">
-                Server certificate fingerprint (SHA-256):
-                <br />
-                <span class="plain" style="font-size:.78rem; word-break:break-all;">@_pending.Fingerprint</span>
-            </p>
-            <p class="card-sub">Trust this host? Its fingerprint will be pinned on this phone.</p>
+            <section class="connect-pane" aria-label="Automatic discovery">
+                <p class="connect-lead">Searches this Wi-Fi network for Doopass hosts.</p>
+
+                <button type="button"
+                        class="btn btn-block @(_candidates.Count > 0 ? "btn-secondary" : "btn-primary")"
+                        disabled="@_searching"
+                        @onclick="@(() => SearchAsync())">
+                    @if (_searching)
+                    {
+                        <span class="connect-spinner" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <Icon Name="search" Size="18" />
+                    }
+                    <span>@(_searching ? "Searching…" : _scanned ? "Search again" : "Find hosts")</span>
+                </button>
+
+                <div class="connect-results" aria-live="polite">
+                    @if (_candidates.Count > 0)
+                    {
+                        <div class="host-list">
+                            @foreach (var candidate in _candidates)
+                            {
+                                <button type="button" class="host-row"
+                                        title="@candidate.Url"
+                                        aria-label="@($"{candidate.Name}, {candidate.Url}, {(candidate.Tls ? "encrypted" : "not encrypted")}. Select host")"
+                                        disabled="@(_probing || _saving)"
+                                        @onclick="@(() => ProbeAsync(candidate))">
+                                    <span class="host-icon" aria-hidden="true">
+                                        <Icon Name="database" Size="18" />
+                                    </span>
+                                    <span class="host-main">
+                                        <span class="host-title">
+                                            <span class="host-name">@candidate.Name</span>
+                                            @if (candidate.Tls)
+                                            {
+                                                <span class="host-tag host-tag--secure"><Icon Name="lock" Size="11" /> TLS</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="host-tag host-tag--insecure"><Icon Name="warning" Size="11" /> HTTP</span>
+                                            }
+                                        </span>
+                                        <span class="host-url">@HostOnly(candidate.Url)</span>
+                                    </span>
+                                    @if (_probing && _checkingUrl == candidate.Url)
+                                    {
+                                        <span class="connect-spinner connect-spinner--sm" aria-hidden="true"></span>
+                                    }
+                                    else
+                                    {
+                                        <Icon Name="chevron" Size="16" Class="host-chevron" />
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (_searching)
+                    {
+                        <p class="connect-status">
+                            <span class="connect-spinner connect-spinner--sm" aria-hidden="true"></span>
+                            Looking for hosts on this network…
+                        </p>
+                    }
+                    else if (_scanned && _warning is null)
+                    {
+                        <p class="connect-empty">
+                            No hosts answered. Make sure the PC runs <code>doopass serve --lan</code> and UDP 7241 is allowed,
+                            then search again — or
+                            <button type="button" class="link-btn" @onclick="@(() => SelectMode(ConnectMode.Manual))">enter the address manually</button>.
+                        </p>
+                    }
+                </div>
+
+                @if (_warning is not null)
+                {
+                    <div class="connect-alert" role="alert">
+                        <Icon Name="warning" Size="16" />
+                        <span>@_warning</span>
+                    </div>
+                }
+            </section>
         }
         else
         {
-            <p class="card-sub">
-                This connection is <strong>not encrypted</strong> (plain HTTP over the LAN).
-                Anyone in the network can see the traffic. Prefer the host to enable TLS.
-            </p>
+            <section class="connect-pane" aria-label="Manual address">
+                <div class="field">
+                    <label class="field-label" for="connect-host-url">Host address</label>
+                    <input id="connect-host-url" class="input" type="url" inputmode="url"
+                           placeholder="192.168.1.10:7240"
+                           @ref="_manualInput"
+                           @bind="_manualHost" @bind:event="oninput"
+                           @onkeydown="OnManualKeyDown"
+                           autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" />
+                </div>
+
+                <p class="connect-notes">
+                    Full URL or just <code>host:port</code>, e.g. <code>http://192.168.1.10:7240</code>.
+                    On the Android emulator the host PC is <code>10.0.2.2:7240</code>.
+                </p>
+
+                <button type="button" class="btn btn-primary btn-block"
+                        disabled="@(_probing || _saving)"
+                        @onclick="@(() => ProbeAsync(NewCandidate(_manualHost)))">
+                    @if (_probing)
+                    {
+                        <span class="connect-spinner" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <Icon Name="shield" Size="18" />
+                    }
+                    <span>@(_probing ? "Checking…" : "Connect")</span>
+                </button>
+
+                @if (_warning is not null)
+                {
+                    <div class="connect-alert" role="alert">
+                        <Icon Name="warning" Size="16" />
+                        <span>@_warning</span>
+                    </div>
+                }
+            </section>
         }
-        <div class="auth-actions">
-            <button type="button" class="btn btn-primary" @onclick="TrustAsync">
-                <Icon Name="success" Size="18" />
-                <span>Trust and connect</span>
-            </button>
-            <button type="button" class="btn btn-ghost" @onclick="CancelPending">Cancel</button>
-        </div>
-    </div>
-}
+    }
+    else
+    {
+        <section class="connect-pane connect-confirm" tabindex="-1" @ref="_confirmRef" aria-labelledby="connect-confirm-title">
+            <h2 id="connect-confirm-title" class="connect-step-title">Trust this host?</h2>
+
+            <div class="host-summary">
+                <span class="host-icon host-icon--lg" aria-hidden="true">
+                    <Icon Name="database" Size="20" />
+                </span>
+                <span class="host-main">
+                    <span class="host-name">@_pending.Name</span>
+                    <span class="host-url">@_pending.Url</span>
+                </span>
+            </div>
+
+            @if (_pending.Tls)
+            {
+                <span class="host-tag host-tag--secure host-tag--standalone">
+                    <Icon Name="lock" Size="12" /> Encrypted · TLS
+                </span>
+
+                @if (!string.IsNullOrEmpty(_pending.Fingerprint))
+                {
+                    <div class="security-note">
+                        <span class="security-label">Certificate fingerprint (SHA-256)</span>
+                        <span class="security-value">@_pending.Fingerprint</span>
+                    </div>
+                    <p class="connect-lead">
+                        The fingerprint will be pinned on this phone, so a different certificate is rejected later.
+                    </p>
+                }
+                else
+                {
+                    <div class="connect-alert" role="alert">
+                        <Icon Name="warning" Size="18" />
+                        <span>The host did not send a certificate fingerprint, so the pin cannot be verified.</span>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="connect-alert" role="alert">
+                    <Icon Name="warning" Size="18" />
+                    <span>
+                        This connection is <strong>not encrypted</strong> (plain HTTP over the LAN). Anyone on the
+                        network can read the traffic — prefer a host with TLS enabled.
+                    </span>
+                </div>
+            }
+
+            @if (_warning is not null)
+            {
+                <div class="connect-alert" role="alert">
+                    <Icon Name="warning" Size="18" />
+                    <span>@_warning</span>
+                </div>
+            }
+
+            <div class="connect-actions">
+                <button type="button" class="btn btn-primary btn-block" disabled="@_saving" @onclick="TrustAsync">
+                    @if (_saving)
+                    {
+                        <span class="connect-spinner" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <Icon Name="shield" Size="18" />
+                    }
+                    <span>@(_saving ? "Connecting…" : "Trust and connect")</span>
+                </button>
+                <button type="button" class="btn btn-ghost btn-block" disabled="@_saving" @onclick="CancelPending">
+                    Back
+                </button>
+            </div>
+        </section>
+    }
+</div>
 
 @code {
+    private enum ConnectMode
+    {
+        Auto,
+        Manual,
+    }
+
     private List<HostCandidate> _candidates = new();
     private HostCandidate? _pending;
+    private ConnectMode _mode = ConnectMode.Auto;
     private string? _manualHost;
     private string? _warning;
+    private string? _checkingUrl;
     private bool _searching;
     private bool _probing;
+    private bool _saving;
+    private bool _scanned;
+    private bool _focusManual;
+    private bool _focusConfirm;
+    private bool _focusTabs;
+
+    private ElementReference _manualInput;
+    private ElementReference _confirmRef;
+    private ElementReference _autoTab;
+    private ElementReference _manualTab;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             await Connections.LoadAsync();
+
+            // The whole point of this screen is finding the host, so offer the
+            // discovery results right away instead of waiting for an extra tap.
+            await SearchAsync();
+            return;
+        }
+
+        if (_focusManual)
+        {
+            _focusManual = false;
+
+            try
+            {
+                await _manualInput.FocusAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Focusing the manual host input failed", ex);
+            }
+        }
+
+        if (_focusConfirm)
+        {
+            _focusConfirm = false;
+
+            try
+            {
+                // The chooser is replaced by the confirmation step; move focus
+                // with it so screen readers and keyboards do not end up on body.
+                await _confirmRef.FocusAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Focusing the trust confirmation failed", ex);
+            }
+        }
+
+        if (_focusTabs)
+        {
+            _focusTabs = false;
+
+            try
+            {
+                // Back from the confirmation step: return focus to the mode
+                // that produced the host instead of dropping it on <body>.
+                var tab = _mode == ConnectMode.Manual ? _manualTab : _autoTab;
+                await tab.FocusAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Focusing the host mode switch failed", ex);
+            }
         }
     }
 
     private static HostCandidate NewCandidate(string? hostUrl) =>
         new("Doopass host", (hostUrl ?? string.Empty).Trim(), hostUrl?.StartsWith("https", StringComparison.OrdinalIgnoreCase) ?? false, null, "5.0.0");
 
-    private void OnManualChanged(ChangeEventArgs args) => _manualHost = args.Value?.ToString();
+    // The HTTP/TLS tag already carries the scheme, so the list shows just
+    // host:port — much easier to fit on a phone than a full URL.
+    private static string HostOnly(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Authority : url;
+
+    private void SelectMode(ConnectMode mode)
+    {
+        if (_mode == mode || _probing || _saving)
+        {
+            return;
+        }
+
+        _mode = mode;
+        _warning = null;
+
+        if (mode == ConnectMode.Manual)
+        {
+            _focusManual = true;
+        }
+    }
+
+    private async Task OnManualKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !_probing && !_saving)
+        {
+            await ProbeAsync(NewCandidate(_manualHost));
+        }
+    }
 
     private async Task SearchAsync()
     {
+        if (_searching || _probing || _saving)
+        {
+            return;
+        }
+
         _searching = true;
+        _scanned = false;
         _warning = null;
         _candidates.Clear();
         StateHasChanged();
@@ -121,9 +375,6 @@
         try
         {
             _candidates = (await Discovery.DiscoverAsync()).ToList();
-            _warning = _candidates.Count == 0
-                ? "No hosts answered in ~2 s. Check that the PC host runs with --lan and UDP 7241 is allowed, or type the address manually."
-                : null;
         }
         catch (Exception ex)
         {
@@ -133,14 +384,21 @@
         finally
         {
             _searching = false;
+            _scanned = true;
             StateHasChanged();
         }
     }
 
     private async Task ProbeAsync(HostCandidate candidate)
     {
+        if (_probing || _saving)
+        {
+            return;
+        }
+
         _probing = true;
         _warning = null;
+        _checkingUrl = candidate.Url;
         StateHasChanged();
 
         try
@@ -149,7 +407,7 @@
 
             if (sanitized.url is null)
             {
-                _warning = "Enter a full host URL, e.g. http://192.168.1.10:7240";
+                _warning = "Enter a host address like 192.168.1.10:7240.";
                 return;
             }
 
@@ -162,7 +420,7 @@
 
             if (!ok)
             {
-                _warning = "The host did not answer. Check the address and that the PC runs `doopass serve --lan`.";
+                _warning = $"The host at {probeUrl} did not answer. Check the address and that the PC runs \"doopass serve --lan\".";
                 return;
             }
 
@@ -173,25 +431,31 @@
                 Fingerprint = fingerprint ?? discovered.Fingerprint,
                 Version = version ?? discovered.Version,
             };
+            _focusConfirm = true;
         }
         catch (Exception ex)
         {
             AppLogger.Error($"Probing '{candidate.Url}' failed", ex);
-            _warning = $"Probe failed: {ex.Message}";
+            _warning = $"Could not check the host: {ex.Message}";
         }
         finally
         {
             _probing = false;
+            _checkingUrl = null;
             StateHasChanged();
         }
     }
 
     private async Task TrustAsync()
     {
-        if (_pending is null)
+        if (_pending is null || _saving)
         {
             return;
         }
+
+        _saving = true;
+        _warning = null;
+        StateHasChanged();
 
         try
         {
@@ -199,6 +463,7 @@
             var state = await Session.GetStateAsync();
 
             Toast.Success("Connected", $"Saved host {_pending.Url} ({state.ServerVersion})");
+            _pending = null;
             Nav.NavigateTo("/");
         }
         catch (Exception ex)
@@ -208,12 +473,17 @@
         }
         finally
         {
-            _pending = null;
+            _saving = false;
             StateHasChanged();
         }
     }
 
-    private void CancelPending() => _pending = null;
+    private void CancelPending()
+    {
+        _pending = null;
+        _warning = null;
+        _focusTabs = true;
+    }
 
     private static (string? url, string scheme) Sanitize(string? raw)
     {
@@ -278,6 +548,16 @@
             }
             catch (HttpRequestException)
             {
+                return (false, null, null);
+            }
+            catch (TaskCanceledException)
+            {
+                // HttpClient.Timeout elapsed: the host did not answer in 6 s.
+                return (false, null, null);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Something answered on that port, but it is not a Doopass host.
                 return (false, null, null);
             }
         }

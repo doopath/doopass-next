@@ -371,7 +371,7 @@ builder.Services.AddBlazorWebView();
 - Корневой роутер: `Routes.razor` из RCL должен получить параметр
   `AdditionalAssemblies` (Router это умеет) со сборкой Mobile, чтобы
   находились страницы обеих сборок. Клиентская страница `Connect.razor`
-  (`@page "/connect"`, layout `AuthLayout`) лежит **в Mobile-проекте**.
+  (`@page "/connect"`, layout `ConnectLayout`) лежит **в Mobile-проекте**.
 - Стартовый маршрут: если подключение не сконфигурировано/недоступно — редирект на `/connect`.
 
 ### 3.3 `RemoteVaultSession : IVaultSession`
