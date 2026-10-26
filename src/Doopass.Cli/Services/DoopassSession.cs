@@ -247,7 +247,16 @@ public sealed class DoopassSession : IVaultSession, IDisposable
     public ValueTask RestoreBackupAsync(string backupName, CancellationToken ct = default)
     {
         RequireExistingBackup(backupName);
-        _backups.SwapStoreWithBackup(backupName + _settings.BackupExtension);
+
+        var name = backupName + _settings.BackupExtension;
+        var password = _store?.Password
+            ?? throw new StoreIsNotInitializedError("Store isn't initialized!");
+
+        // Validate before the swap: a backup that does not decrypt with the current
+        // password must never replace the live store.
+        Store.Decrypt(password, _backups.GetBackupContent(name));
+
+        _backups.SwapStoreWithBackup(name);
         Reload();
         _notifier?.NotifyBackupsChanged();
         _notifier?.NotifyVaultChanged();

@@ -283,15 +283,21 @@ public sealed class ApiVaultCoordinator
         {
             RequireToken_locked(token);
 
+            var password = _store?.Password
+                ?? throw new StoreIsNotInitializedError("Store isn't initialized!");
+
             var backups = BuildStoreBackup();
             RequireExistingBackup_locked(backups, backupName);
 
-            backups.SwapStoreWithBackup(backupName + _settings.BackupExtension);
+            var name = backupName + _settings.BackupExtension;
 
-            if (_store is not null)
-            {
-                _store = new Store(_store.Password, _settings.StoreFile);
-            }
+            // Validate the candidate BEFORE any write: swapping in a file we cannot
+            // decrypt (tampered, truncated, from another vault) would destroy the
+            // live store, and only then would the failure be noticed.
+            Store.Decrypt(password, backups.GetBackupContent(name));
+
+            backups.SwapStoreWithBackup(name);
+            _store = new Store(password, _settings.StoreFile);
         }
 
         _notifier.NotifyBackupsChanged();
