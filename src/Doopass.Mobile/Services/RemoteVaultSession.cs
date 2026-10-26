@@ -69,7 +69,7 @@ public sealed class RemoteVaultSession : IVaultSession
     {
         if (!_connections.IsConfigured)
         {
-            return new VaultState(false, false, CoreVersion);
+            return new VaultState(false, false, Doopass.Core.Constants.Version);
         }
 
         try
@@ -91,7 +91,7 @@ public sealed class RemoteVaultSession : IVaultSession
             // our own this client can read nothing, so it must land on the login
             // screen instead of opening a Store that would come back empty.
             var unlockedHere = state.Unlocked && !string.IsNullOrEmpty(_connections.Token);
-            return new VaultState(state.StoreExists, unlockedHere, state.ServerVersion ?? CoreVersion);
+            return new VaultState(state.StoreExists, unlockedHere, state.ServerVersion ?? Doopass.Core.Constants.Version);
         }
         catch (HostUnreachableException ex)
         {
@@ -116,7 +116,7 @@ public sealed class RemoteVaultSession : IVaultSession
         catch (UnauthorizedAccessException)
         {
             _host.MarkReachable();
-            return new VaultState(false, false, CoreVersion);
+            return new VaultState(false, false, Doopass.Core.Constants.Version);
         }
     }
 
@@ -287,7 +287,7 @@ public sealed class RemoteVaultSession : IVaultSession
     }
 
     private static VaultState OfflineState() =>
-        new(false, false, $"{CoreVersion} (offline)") { IsOffline = true };
+        new(false, false, $"{Doopass.Core.Constants.Version} (offline)") { IsOffline = true };
 
     private async ValueTask<T?> GetJsonAsync<T>(string url, CancellationToken ct)
     {
@@ -439,8 +439,6 @@ public sealed class RemoteVaultSession : IVaultSession
     private static void Diagnostics(Exception exception, string? context = null) =>
         Doopass.Core.Diagnostics.AppLogger.Error(
             context is null ? "Remote vault call failed" : $"Remote vault call failed: {context}", exception);
-
-    private const string CoreVersion = "5.0.0";
 
     // JSON field names come from the host as camelCase ("unlocked", not
     // "isUnlocked") — the property name must match the wire name, otherwise the
