@@ -995,54 +995,76 @@ select {
 }
 
 /* Current host above the login form (thin clients only). Always visible, so
-   the saved address can be replaced even while it still answers. */
+   the saved address can be replaced even while it still answers. Laid out as
+   an icon + label/address stack + button row: the address wraps inside its own
+   column instead of pushing the button onto a second line, and the button
+   keeps the standard small height instead of being shrunk to fit. */
 .auth-host {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px 10px;
+    gap: 8px;
     min-width: 0;
     margin: 0 0 14px;
-    padding: 7px 8px 7px 12px;
+    padding: 7px 8px;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--bg-subtle);
-    font-size: 0.8rem;
     color: var(--text-muted);
+}
+
+.auth-host-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: var(--accent-soft);
+    color: var(--accent);
 }
 
 .auth-host .btn {
     flex: 0 0 auto;
-    margin-left: auto;
-    height: 32px;
-    padding: 0 12px;
-    font-size: 0.82rem;
+    padding: 0 10px;
 }
 
 .auth-host-main {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
+    display: flex;
     flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1px;
     min-width: 0;
 }
 
 .auth-host-label {
-    flex: 0 0 auto;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    font-size: 0.66rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.4;
 }
 
 .auth-host-url {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     color: var(--text);
     font-family: var(--mono);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+/* Very narrow phones / large system fonts: the address needs the room, so the
+   Change host button shrinks to its icon. aria-label keeps its name. */
+@media (max-width: 359px) {
+    .auth-host .btn {
+        width: 40px;
+        padding: 0;
+    }
+
+    .auth-host .btn span {
+        display: none;
+    }
 }
 
 /* The stale-host warning sits above the password field, so the reason the
@@ -1430,6 +1452,13 @@ select {
 }
 
 @media (max-width: 750px) {
+    /* Phones: the default 32px padding leaves the login card too narrow for
+       the host label/address stack next to the Change host button. */
+    .auth-card {
+        padding: 24px 20px 22px;
+        border-radius: 18px;
+    }
+
     /* The nested cards are gone; a slightly tighter auth card gives the host
        rows the full phone width. */
     .auth-card--connect {

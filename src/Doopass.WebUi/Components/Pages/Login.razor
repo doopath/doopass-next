@@ -16,14 +16,17 @@
     @* Always present on thin clients, not only after a failed probe: the host
        can be replaced at any time, even while this one still answers. *@
     <div class="auth-host">
+        <span class="auth-host-icon" aria-hidden="true">
+            <Icon Name="database" Size="16" />
+        </span>
         <span class="auth-host-main" title="@_host.Address">
-            <Icon Name="database" Size="14" />
             <span class="auth-host-label">Host</span>
             <span class="auth-host-url">@HostLabel(_host.Address)</span>
         </span>
-        <button type="button" class="btn btn-secondary btn-sm" disabled="@_busy" @onclick="ChangeHost">
+        <button type="button" class="btn btn-secondary btn-sm" disabled="@_busy"
+                aria-label="Change host" @onclick="ChangeHost">
             <Icon Name="edit" Size="14" />
-            <span>Change host</span>
+            <span>Change</span>
         </button>
     </div>
 }
