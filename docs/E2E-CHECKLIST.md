@@ -46,7 +46,7 @@ host side of each step is already covered above.
 - [ ] Discovery on the phone finds the running host (same Wi-Fi).
 - [ ] Manual entry works; on the emulator `http://10.0.2.2:7240`.
 - [ ] Login with the master password; full pair CRUD; copy to clipboard
-      (WebView clipboard + fallback reveal).
+      (native MAUI clipboard + fallback reveal).
 - [ ] Phone-side pair change appears in the browser without reload and vice
       versa (via `vaultChanged` through `/hubs/vault` + the per-circuit relay).
 - [ ] Backup restore on the phone: browser updates; safety backup created.

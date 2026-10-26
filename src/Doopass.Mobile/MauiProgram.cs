@@ -25,6 +25,10 @@ public static partial class MauiProgram
         builder.Services.AddScoped<IVaultEvents>(sp => sp.GetRequiredService<VaultEventRelay>());
         builder.Services.AddScoped<ToastService>();
 
+        // The WebView clipboard API is blocked outside a user gesture; copy
+        // secrets through the native clipboard instead.
+        builder.Services.AddScoped<ISecretClipboard, AndroidClipboard>();
+
         // The window content page is resolved from DI in App.CreateWindow.
         builder.Services.AddTransient<Vault>();
 

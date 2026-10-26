@@ -426,8 +426,10 @@ builder.Services.AddBlazorWebView();
   что с `/connect`→back приложение не закрывается неожиданно; при необходимости
   переопределить `OnBackPressed` в MainActivity.
 - Строки UI — English (как в веб-версии); типографика/темы наследуются от RCL CSS.
-- Copy-to-clipboard: в Hybrid `IJSRuntime`-интероп `navigator.clipboard` работает
-  в WebView; проверить и при необходимости fallback на MAUI `Clipboard`.
+- Copy-to-clipboard: `navigator.clipboard` в Hybrid WebView ненадёжен (после `await`
+  за чтением секрета user activation уже потерян, а `app.js` в mobile-хостинг не
+  подключён), поэтому используется `ISecretClipboard` → нативный MAUI `Clipboard`;
+  веб-хост копирует через тот же интерфейс, но реализацией `JsClipboard`.
 
 ### 3.8 Критерии приёмки Фазы 3
 

@@ -93,6 +93,7 @@ public static class WebHostFactory
         builder.Services.AddScoped<IVaultSession>(sp => sp.GetRequiredService<DoopassSession>());
         builder.Services.AddScoped<IVaultEvents>(sp => sp.GetRequiredService<VaultEventRelay>());
         builder.Services.AddScoped<Doopass.WebUi.Services.ToastService>();
+        builder.Services.AddScoped<ISecretClipboard, Doopass.WebUi.Services.JsClipboard>();
 
         builder.Services.AddSignalR();
         VaultAuth.AddVaultRateLimiter(builder.Services);

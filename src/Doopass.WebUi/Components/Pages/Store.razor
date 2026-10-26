@@ -3,7 +3,7 @@
 @inject IVaultSession Session
 @inject IVaultEvents Events
 @inject NavigationManager Nav
-@inject IJSRuntime JS
+@inject ISecretClipboard Clipboard
 @inject ToastService Toast
 
 <PageTitle>Doopass — Store</PageTitle>
@@ -342,13 +342,12 @@ else
         }
     }
 
-    // The old version called navigator.clipboard.writeText directly. Android Chrome
-    // gives the call no user-activation permission from the SignalR dispatch, the
-    // promise rejects, and Blazor ripples the JS exception through the whole
-    // circuit -- after that every button on the page stopped working. Copying now
-    // runs through wwwroot/app.js, which falls back to an internal <textarea> +
-    // execCommand('copy') and reports success/failure instead of throwing, so a
-    // blocked clipboard shows an error toast rather than killing the session.
+    // Copying goes through ISecretClipboard. The web host uses navigator.clipboard
+    // with an execCommand fallback (app.js); the Android client writes via the
+    // native ClipboardManager. The old direct JS call always ran after an
+    // awaited vault read, so the user gesture was gone and Android WebView
+    // answered "Clipboard is blocked"; the native path has no such requirement.
+    // A platform refusal still reveals the value instead of killing the session.
     private async Task CopyAsync(string key)
     {
         string value;
@@ -368,20 +367,11 @@ else
 
         try
         {
-            success = await JS.InvokeAsync<bool>("doopass.copyText", value);
-        }
-        catch (JSDisconnectedException)
-        {
-            // Circuit is gone; nothing left to notify.
-            return;
-        }
-        catch (OperationCanceledException)
-        {
-            return;
+            success = await Clipboard.SetTextAsync(value);
         }
         catch (Exception ex)
         {
-            AppLogger.Error($"doopass.copyText failed for '{key}'", ex);
+            AppLogger.Error($"Writing '{key}' to the clipboard failed", ex);
             success = false;
         }
 
