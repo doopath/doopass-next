@@ -226,6 +226,13 @@ Artifacts:
    password. Everything afterwards mirrors the web version, pushed live:
    pairs, copy, backups (incl. safety backups on restore), settings, themes.
 
+The login card always shows the current host with a **Change host** action
+that returns to the picker, so a moved host does not require reinstalling or
+clearing app data. If the saved address stops answering (for example the PC
+got a new IP), the app says so above the password field after a short probe
+and leaves the session token in place; pick the host again, or go back to the
+login screen without changing anything.
+
 Features and limitations:
 
 * the app reads `vaultChanged` / `backupsChanged` / `settingsChanged` /
@@ -233,6 +240,8 @@ Features and limitations:
   sync with the web UI and other phones;
 * a 30 min sliding session TTL relocks the vault; expired tokens land on the
   login screen automatically;
+* a stale host address is detected in about four seconds instead of waiting
+  for a long request timeout, and the login screen offers the host picker;
 * the emulator cannot reach LAN broadcasts — type `http://10.0.2.2:7240`
   manually there;
 * plain HTTP shows a permanent warning; IPSec rules of the router or at least

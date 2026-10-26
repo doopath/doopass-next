@@ -47,6 +47,12 @@ host side of each step is already covered above.
 - [ ] Manual entry works; on the emulator `http://10.0.2.2:7240`.
 - [ ] Login with the master password; full pair CRUD; copy to clipboard
       (native MAUI clipboard + fallback reveal).
+- [ ] Change host from the login screen → picker opens, Back to sign in
+      returns to the login card with the same saved host.
+- [ ] Stop the host (or move it to another IP) while the phone shows the login
+      screen → the offline banner appears in about four seconds, the saved
+      token is not cleared, and Change host finds the new address through
+      discovery or manual entry.
 - [ ] Phone-side pair change appears in the browser without reload and vice
       versa (via `vaultChanged` through `/hubs/vault` + the per-circuit relay).
 - [ ] Backup restore on the phone: browser updates; safety backup created.
