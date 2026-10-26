@@ -1,19 +1,28 @@
 # E2E verification — thin-client architecture
 
-Status after the four-phase implementation (see `THIN_CLIENT_PROMPT.md` for the
-spec). Environment: Windows host (MONSTERMACHINE), .NET SDK 10.0.402,
-`maui-android` workload 36.1.2.
+Status after the four-phase implementation (the API contract is documented in
+[the REST API section of the README](../README.md#rest-api-and-thin-clients)).
+Environment: Windows host (MONSTERMACHINE), .NET SDK 10.0.402, `maui-android`
+workload 36.1.2.
 
-## Automated coverage (`dotnet test`, 103 tests green)
+## Automated coverage (`dotnet test`, 196 tests green)
 
 | Area                              | Result                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------- |
-| Store format compatibility        | 34 / 34 Core.Tests (unchanged by this work)                                |
-| TUI behaviour                     | 50 / 50 Tui.Tests (unchanged by this work)                                 |
-| Auth flow (init/login/401/409)    | 19 / 19 Api.Tests incl. `T01`–`T05` auth lifecycle                         |
+| Store format compatibility        | 89 / 89 Core.Tests (incl. concurrency, corruption, settings policy)        |
+| TUI behaviour                     | 50 / 50 Tui.Tests                                                          |
+| API integration                   | 57 / 57 Api.Tests incl. `T01`–`T05` auth lifecycle                        |
 | Pair CRUD (unicode, 404, 409)     | covered in `VaultDataTests`                                                |
 | Backup lifecycle (safety backup)  | covered in `VaultDataTests.T02`                                            |
-| Settings round trip               | covered in `VaultSettingsTests`                                            |
+| Settings round trip               | `VaultSettingsTests` (path keys 403, bad extension 400)                    |
+| Backup name traversal             | `BackupNameTraversalTests` (404 everywhere, store hash unchanged)          |
+| Backup restore validation         | `BackupRestoreValidationTests` (422/401, store untouched)                  |
+| Corrupted store                   | `CorruptStoreTests`, `CorruptedStoreApiTests` (422, fast rejection)        |
+| Login throttle (API + Blazor)     | `AuthThrottleTests`, `DoopassSessionThrottleTests`                         |
+| Session/vault event semantics     | `VaultEventSemanticsTests`                                                 |
+| Absolute session cap              | `AbsoluteSessionTtlTests`                                                  |
+| Security headers                  | `SecurityHeadersTests`                                                     |
+| Error mapping (no internals)      | `ErrorMappingTests`                                                        |
 | Token logout → 401 everywhere     | covered in `VaultTokenTests`                                               |
 | Sliding TTL expiry + relock       | covered in `VaultTtlTests` (fake clock on the coordinator)                  |
 | Rate limit (5/min → 429)          | covered in `RateLimitTests`                                                |
@@ -29,7 +38,7 @@ spec). Environment: Windows host (MONSTERMACHINE), .NET SDK 10.0.402,
 | Wrong password login                           | 401 `{"error":"Incorrect password!"}`                      |
 | Pair add / duplicate / value / update / delete | 204 / 409 / 200 / 204 / 204–404                            |
 | Backup create / restore / delete               | 204 each; safety backup visible in the log                 |
-| Settings GET / PUT / restore-defaults          | 200 / 204; substituted paths round-trip                    |
+| Settings GET / PUT / restore-defaults          | 200 / 403 (path keys) / 400 (bad extension) / 204          |
 | Hub negotiate with token                       | 200, connectionId issued                                   |
 | Logout then protected calls                    | 204 → 401 `{error: "Session expired…"}`                     |
 | Discovery probe (`--lan`)                      | `{"service":"doopass","name":…,"port":…,"tls":false,"fingerprint":null,"version":"5.0.0"}` |

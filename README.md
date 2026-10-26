@@ -35,20 +35,25 @@ any migration — just point the new app at the same `~/doopass` folder.
 - **Three front-ends, one store** — the same vault is available in the terminal,
   in the browser and on an Android phone, with dated backups, restore and
   settings everywhere.
-- **Thin-client architecture** — the host is the single unlocked vault; every
-  client (browser session or API token) shares the encrypted file safely.
+- **Thin-client architecture** — the host owns the vault; the REST API keeps one
+  unlocked store for all tokens, while each browser circuit keeps its own
+  session. Every mutation takes a cross-process lock, re-reads `store.enc` and
+  writes it atomically, so concurrent clients cannot lose each other's entries.
 - **Self-contained single-file executables** for Windows and Linux — no .NET
   runtime required, and all web assets are embedded in the binary.
 - **Installable web app (PWA)** — opens as its own window on desktop and mobile,
   with a basic offline shell and its own icons.
 - **Launch at sign-in** — helper scripts install a Windows startup shortcut or a
   `systemd` user service.
-- **Plain, honest data** — everything lives in `~/doopass/appdata`, the log file
-  never records secrets, and it rotates at 5 MB.
+- **Plain, honest data** — everything lives in `~/doopass/appdata`; secrets are
+  never written to the log, only the names of the keys and the paths involved
+  (needed to debug a failed operation), and the log rotates at 5 MB.
 
 ## Requirements
 
 - [.NET SDK 10.0](https://dotnet.microsoft.com/) or newer
+
+Security fixes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Build and test
 
@@ -113,17 +118,37 @@ Android app) and a SignalR channel for change push, both on the same port:
 
 * `GET /api/vault/state` — anonymous: `{storeExists, unlocked, serverVersion, certFingerprint}`.
 * Everything else is `Authorization: Bearer <token>`; tokens come from
-  `POST /api/auth/login` / `POST /api/auth/init` and die on logout or a sliding
-  30 min TTL (configurable via the optional `api.session_ttl_minutes` key in
-  `settings.json`).
-* Vault pairs, backups and settings live under `/api/vault/*`, `/api/backups*`
-  and `/api/settings*` — full table in `THIN_CLIENT_PROMPT.md`.
+  `POST /api/auth/login` / `POST /api/auth/init` and die on logout, after a
+  sliding 30 min TTL (optional `api.session_ttl_minutes`) or at the absolute
+  8 h cap (optional `api.absolute_session_ttl_hours`) — an active token cannot
+  live forever.
+* Endpoints:
+
+  | Method + path                     | Purpose                                                  |
+  | --------------------------------- | -------------------------------------------------------- |
+  | `GET /api/vault/state`            | anonymous: store/unlock state, version, cert fingerprint  |
+  | `GET /api/vault/keys`             | list key names                                            |
+  | `GET /api/vault/value?key=…`      | read one value                                            |
+  | `POST /api/vault/pairs`           | add `{key, value}`                                 |
+  | `PUT /api/vault/pairs`            | update `{oldKey, newKey, newValue}`                |
+  | `DELETE /api/vault/pairs?key=…`   | remove a key                                              |
+  | `POST /api/vault/reload`          | re-read the store from disk                               |
+  | `GET/POST /api/backups`           | list / create a dated backup                              |
+  | `POST /api/backups/restore?name=…`| restore (validated first; a safety backup is written)     |
+  | `DELETE /api/backups?name=…`      | delete a backup                                           |
+  | `GET /api/settings`               | read every section                                        |
+  | `PUT /api/settings/{section}/{key}` | change an editable setting                              |
+  | `POST /api/settings/restore-defaults` | reset `settings.json` to the defaults                 |
+
 * Changes made by any client raise `vaultChanged` / `backupsChanged` /
   `settingsChanged` on the `/hubs/vault` SignalR channel, so every connected
-  device updates without reloads.
+  device updates without reloads. A token that expires is told on its own group;
+  `vaultLocked` is broadcast only when the last session goes away.
 * `secret` responses carry `Cache-Control: no-store`; errors are always
-  `{ "error": "<message>" }` with 400/401/404/409 semantics; login/init are
-  rate-limited to 5 requests per minute per IP (429 after that).
+  `{ "error": "<message>" }` with 400/401/403/404/409/422 semantics and a fixed
+  `Internal server error.` for unexpected failures; login/init are rate-limited
+  to 5 requests per minute per IP (429 after that), and the same counter applies
+  to the Blazor login page.
 
 ### LAN discovery
 
@@ -487,8 +512,12 @@ Installs a `systemd` **user service** (`~/.config/systemd/user/doopass.service`)
 started with `enable --now`.
 
 > [!WARNING]
-> `lan` mode listens on all network interfaces over plain HTTP and is only
-> appropriate on a trusted network.
+> `--lan` mode listens on all network interfaces over plain HTTP and is only
+> appropriate on a trusted network: the master password and every secret travel
+> unencrypted, and anyone on the network can reach the login screen. The host
+> prints a warning at startup when `--lan` is used without `--tls`; prefer
+> `--tls`, which binds every interface on its own (`--lan` then only adds the
+> discovery announce).
 
 ## Where your data lives
 
@@ -510,7 +539,34 @@ Application events (start/stop, store and backup operations, settings changes,
 errors) are appended to `doopass.log`, which rotates at 5 MB.
 
 > [!NOTE]
-> Secrets are never written to the log.
+> Secret values are never written to the log. Key names, file paths and exception
+> details are, because that is what makes a failed operation diagnosable.
+
+### Settings (`settings.json`)
+
+Every key lives in the `local` section and keeps the `APPDATA/...` placeholder,
+so the file stays portable between machines:
+
+| Key                | Meaning                                            | Editable in UI/API |
+| ------------------ | -------------------------------------------------- | ------------------ |
+| `store_file`       | encrypted store path                               | no                 |
+| `log_file`         | log file path                                      | no                 |
+| `backups`          | directory for dated backups                        | no                 |
+| `default_config`   | path of the default-config copy                    | no                 |
+| `backup_extension` | suffix of backup files (default `.enc.bak`)        | yes                |
+| `version`          | informational version string                       | yes                |
+
+Path settings are **read-only** in the UI and the REST API (the edit button is
+replaced by a lock icon). A writable path would let the settings endpoint
+redirect the encrypted store — or a delete — to any file on the machine. To move
+the store, stop Doopass and edit `settings.json` by hand. `backup_extension` must
+stay a real extension (one or two dot-separated alphanumeric parts, e.g.
+`.enc.bak`); empty or path-like values are rejected with 400.
+
+Optional `api` section keys: `session_ttl_minutes` (sliding token lifetime,
+default 30), `absolute_session_ttl_hours` (hard cap, default 8), `tls_pfx` /
+`tls_pass` (certificate used when `--tls` is not passed on the command line) and
+`announce` (`true` forces the discovery announce).
 
 ## The store file
 
