@@ -25,3 +25,18 @@ public sealed class IncorrectPasswordError : Exception
 
     public IncorrectPasswordError(string message, Exception innerException) : base(message, innerException) { }
 }
+
+/// <summary>
+/// Raised when a setting may not be changed through the UI/API (paths that decide
+/// where data is written are read-only by policy).
+/// </summary>
+public sealed class ReadOnlySettingError : Exception
+{
+    public ReadOnlySettingError(string message) : base(message) { }
+}
+
+/// <summary>Raised when a setting value fails its format validation.</summary>
+public sealed class InvalidSettingValueError : Exception
+{
+    public InvalidSettingValueError(string message) : base(message) { }
+}

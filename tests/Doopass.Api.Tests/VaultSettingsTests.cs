@@ -19,23 +19,44 @@ public sealed class VaultSettingsTests(ApiHostFixture fixture) : IClassFixture<A
             .ReadFromJsonAsync<SettingsPayload>())!.Sections;
         Assert.NotEmpty(sections);
 
-        var originalValue = sections.Single(section => section.Name == "local").Pairs["store_file"];
+        var local = sections.Single(section => section.Name == "local");
+        var originalStoreFile = local.Pairs["store_file"];
+        var originalExtension = local.Pairs["backup_extension"];
 
-        // Change the store path: the returned value reflects the change.
-        var put = await client.AuthSend(HttpMethod.Put, "/api/settings/local/store_file", token,
+        // Path settings are read-only: a writable store_file would let the settings
+        // endpoint overwrite any file with ciphertext on the next save.
+        var storeFilePut = await client.AuthSend(HttpMethod.Put, "/api/settings/local/store_file", token,
             VaultApiTestsHelpers.Json(new { value = "APPDATA/custom-store.enc" }));
-        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, storeFilePut.StatusCode);
+        Assert.Contains("read-only", await storeFilePut.Content.ReadAsStringAsync());
 
-        var afterPut = (await (await client.AuthSend(HttpMethod.Get, "/api/settings", token)).Content
-            .ReadFromJsonAsync<SettingsPayload>())!.Sections;
-        var changed = afterPut.Single(section => section.Name == "local").Pairs["store_file"];
-        Assert.NotEqual(originalValue, changed);
-        Assert.EndsWith("custom-store.enc", changed, StringComparison.OrdinalIgnoreCase);
+        // Unknown keys are read-only too (never persisted).
+        var unknownKey = await client.AuthSend(HttpMethod.Put, "/api/settings/local/nope_key", token,
+            VaultApiTestsHelpers.Json(new { value = "x" }));
+        Assert.Equal(HttpStatusCode.Forbidden, unknownKey.StatusCode);
 
-        // Unknown section -> 404.
+        // Unknown section -> 404 (resolved by Settings itself).
         var unknownSection = await client.AuthSend(HttpMethod.Put, "/api/settings/nope/store_file", token,
             VaultApiTestsHelpers.Json(new { value = "x" }));
         Assert.Equal(HttpStatusCode.NotFound, unknownSection.StatusCode);
+
+        // An empty backup extension is rejected: it would turn backup deletion into
+        // "delete any file with this name".
+        var badExtension = await client.AuthSend(HttpMethod.Put, "/api/settings/local/backup_extension", token,
+            VaultApiTestsHelpers.Json(new { value = "" }));
+        Assert.Equal(HttpStatusCode.BadRequest, badExtension.StatusCode);
+
+        // A valid extension is accepted and reported back.
+        var goodExtension = await client.AuthSend(HttpMethod.Put, "/api/settings/local/backup_extension", token,
+            VaultApiTestsHelpers.Json(new { value = ".enc.bak2" }));
+        Assert.Equal(HttpStatusCode.NoContent, goodExtension.StatusCode);
+
+        var afterPut = (await (await client.AuthSend(HttpMethod.Get, "/api/settings", token)).Content
+            .ReadFromJsonAsync<SettingsPayload>())!.Sections;
+        var changed = afterPut.Single(section => section.Name == "local").Pairs;
+
+        Assert.Equal(originalStoreFile, changed["store_file"]);
+        Assert.Equal(".enc.bak2", changed["backup_extension"]);
 
         // Restore defaults resets the section values to the default config.
         var restore = await client.AuthSend(HttpMethod.Post, "/api/settings/restore-defaults", token);
@@ -43,8 +64,10 @@ public sealed class VaultSettingsTests(ApiHostFixture fixture) : IClassFixture<A
 
         var afterRestore = (await (await client.AuthSend(HttpMethod.Get, "/api/settings", token)).Content
             .ReadFromJsonAsync<SettingsPayload>())!.Sections;
-        var restored = afterRestore.Single(section => section.Name == "local").Pairs["store_file"];
-        Assert.Equal(originalValue, restored);
+        var restored = afterRestore.Single(section => section.Name == "local").Pairs;
+
+        Assert.Equal(originalStoreFile, restored["store_file"]);
+        Assert.Equal(originalExtension, restored["backup_extension"]);
     }
 
     private sealed record SettingsPayload(IReadOnlyList<SectionDto> Sections);
