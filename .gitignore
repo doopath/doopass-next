@@ -40,6 +40,9 @@ scripts/.smoke-tls/
 # Diagnostics from the sandbox ACL skill
 .acl-recovery/
 
+# Local clone of the GitHub wiki used by scripts/publish-wiki.sh
+.wiki-work/
+
 # Logs
 *.log
 
