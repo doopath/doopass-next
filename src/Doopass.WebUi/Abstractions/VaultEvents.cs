@@ -25,17 +25,28 @@ public interface IVaultEvents
 /// <summary>Scoped relay implementation; a host wires its event source into it (public for cross-assembly wiring).</summary>
 public sealed class VaultEventRelay : IVaultEvents
 {
+    /// <inheritdoc />
     public event Action? VaultChanged;
+
+    /// <inheritdoc />
     public event Action? BackupsChanged;
+
+    /// <inheritdoc />
     public event Action? SettingsChanged;
+
+    /// <inheritdoc />
     public event Func<Task>? VaultLocked;
 
+    /// <summary>Raises <see cref="VaultChanged"/> for every subscriber.</summary>
     public void RaiseVaultChanged() => VaultChanged?.Invoke();
 
+    /// <summary>Raises <see cref="BackupsChanged"/> for every subscriber.</summary>
     public void RaiseBackupsChanged() => BackupsChanged?.Invoke();
 
+    /// <summary>Raises <see cref="SettingsChanged"/> for every subscriber.</summary>
     public void RaiseSettingsChanged() => SettingsChanged?.Invoke();
 
+    /// <summary>Raises <see cref="VaultLocked"/> without awaiting the handlers.</summary>
     public void RaiseVaultLocked()
     {
         var handler = VaultLocked;

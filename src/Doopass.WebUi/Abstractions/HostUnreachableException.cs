@@ -7,6 +7,9 @@ namespace Doopass.WebUi.Abstractions;
 /// </summary>
 public sealed class HostUnreachableException : Exception
 {
+    /// <summary>Creates the exception for a host that did not answer.</summary>
+    /// <param name="message">Diagnostic message.</param>
+    /// <param name="innerException">The timeout or socket failure that caused it.</param>
     public HostUnreachableException(string message, Exception? innerException = null)
         : base(message, innerException)
     {
