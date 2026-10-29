@@ -526,6 +526,47 @@ with a key derived from your master password (PBKDF2-HMAC-SHA256, 100 000
 iterations by default). The master password is kept in memory only and erased
 on lock (<kbd>G</kbd>), exit or server shutdown.
 
+## Documentation
+
+The full documentation lives in the **GitHub wiki**:
+<https://github.com/doopath/doopass-next/wiki> — product overview, architecture,
+business rules, one page per application, one page per feature, configuration,
+API reference and a generated code reference.
+
+The wiki sources are versioned with the code in [`docs/wiki/`](docs/wiki):
+
+| Page | Contents |
+| ---- | -------- |
+| [Overview](docs/wiki/Overview.md) | what Doopass is and what it guarantees |
+| [Architecture](docs/wiki/Architecture.md) | components, process model, data flow |
+| [Business Rules](docs/wiki/Business-Rules.md) | every rule the product enforces |
+| [Data Formats](docs/wiki/Data-Formats.md) | `store.enc`, `settings.json`, wire formats |
+| [Security Model](docs/wiki/Security-Model.md) | crypto, threat model, trust boundaries |
+| [Applications](docs/wiki/Application-Core.md) | Core, CLI host, web UI, REST API, TUI, Android |
+| [Features](docs/wiki/Feature-Store.md) | store, backups, settings, sessions, sync, discovery, TLS, PWA, logging, packaging |
+| [Reference](docs/wiki/Configuration.md) | configuration, API, testing, development, operations, limitations |
+| [Glossary](docs/wiki/Glossary.md) | project vocabulary |
+
+Publish or refresh the wiki (needs `gh auth login` and one page created in the
+web UI first):
+
+```bash
+scripts/publish-wiki.sh --dry-run   # preview
+scripts/publish-wiki.sh             # mirror docs/wiki/ into the wiki repo
+```
+
+API documentation is generated from the XML comments the compiler emits
+(`GenerateDocumentationFile=true` in `Directory.Build.props`):
+
+```bash
+dotnet build Doopass.slnx
+dotnet build src/Doopass.Mobile/Doopass.Mobile.csproj   # not in the solution
+python scripts/generate-api-docs.py
+```
+
+That rewrites `docs/wiki/API-Reference-*.md`; commit them together with the code
+change.
+
 ## Project layout
 
 | Project                      | Description                                                     |
