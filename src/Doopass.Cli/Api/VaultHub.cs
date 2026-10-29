@@ -11,6 +11,8 @@ namespace Doopass.Cli.Api;
 /// </summary>
 public sealed class VaultHub(ApiVaultCoordinator coordinator) : Hub
 {
+    /// <summary>Validates the <c>access_token</c> query parameter and joins the token's group.</summary>
+    /// <returns>A task that completes once the group membership is registered.</returns>
     public override Task OnConnectedAsync()
     {
         var http = Context.GetHttpContext();
@@ -32,6 +34,9 @@ public sealed class VaultHub(ApiVaultCoordinator coordinator) : Hub
 /// <summary>Relays server-side vault changes to connected hub clients.</summary>
 public sealed class VaultHubRelay(IHubContext<VaultHub> hub, IVaultChangeNotifier notifier) : BackgroundService
 {
+    /// <summary>Subscribes to the notifier and starts relaying events to hub clients.</summary>
+    /// <param name="stoppingToken">Host shutdown token.</param>
+    /// <returns>A completed task; the service is event-driven.</returns>
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         notifier.VaultChanged += () => Fire(stoppingToken, "vaultChanged");

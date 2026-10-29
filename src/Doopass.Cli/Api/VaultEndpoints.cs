@@ -22,6 +22,9 @@ public static class VaultEndpoints
 
     private sealed record SettingValueRequest(string Value);
 
+    /// <summary>Maps the whole <c>/api</c> group (auth, vault, backups, settings) onto the pipeline.</summary>
+    /// <param name="app">Endpoint route builder of the web host.</param>
+    /// <returns>The group, for further conventions if needed.</returns>
     public static IEndpointConventionBuilder MapDoopassApi(this IEndpointRouteBuilder app)
     {
         var coordinator = app.ServiceProvider.GetRequiredService<ApiVaultCoordinator>();

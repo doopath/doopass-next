@@ -10,6 +10,7 @@ namespace Doopass.Cli.Api;
 /// <summary>What the host announces on the LAN so phones can find it without typing an address.</summary>
 public sealed record DiscoveryAnnounce(string Name, int Port, bool Tls, string? Fingerprint, string Version)
 {
+    /// <summary>Whether the host should answer discovery probes at all.</summary>
     [JsonIgnore]
     public bool Enabled { get; init; }
 }
@@ -22,8 +23,10 @@ public sealed record DiscoveryAnnounce(string Name, int Port, bool Tls, string? 
 /// </summary>
 public sealed class DiscoveryService : IHostedService, IDisposable
 {
+    /// <summary>The exact ASCII datagram a client must send to be answered.</summary>
     public const string ProbeText = "DOOPASS_DISCOVER";
 
+    /// <summary><see cref="ProbeText"/> as bytes, for byte-exact comparison.</summary>
     public static readonly byte[] Probe = "DOOPASS_DISCOVER"u8.ToArray();
 
     private readonly DiscoveryAnnounce _announce;
@@ -37,6 +40,8 @@ public sealed class DiscoveryService : IHostedService, IDisposable
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
+    /// <summary>Creates the announcer; binds nothing until <see cref="StartAsync"/> runs.</summary>
+    /// <param name="announce">Payload to send back to probes, plus the enable flag.</param>
     public DiscoveryService(DiscoveryAnnounce announce)
     {
         _announce = announce;
@@ -60,6 +65,9 @@ public sealed class DiscoveryService : IHostedService, IDisposable
         }
     }
 
+    /// <summary>Binds UDP 7241 and starts answering probes; a bind failure disables announcing.</summary>
+    /// <param name="cancellationToken">Startup cancellation token (unused).</param>
+    /// <returns>A completed task; listening runs in the background.</returns>
     public Task StartAsync(CancellationToken cancellationToken)
     {
         if (_socket is null)
@@ -83,6 +91,9 @@ public sealed class DiscoveryService : IHostedService, IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>Stops listening and closes the socket.</summary>
+    /// <param name="cancellationToken">Shutdown cancellation token (unused).</param>
+    /// <returns>A completed task.</returns>
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _cts.Cancel();
@@ -162,6 +173,7 @@ public sealed class DiscoveryService : IHostedService, IDisposable
         }
     }
 
+    /// <summary>Cancels the listener and releases the socket and cancellation source.</summary>
     public void Dispose()
     {
         _cts.Cancel();

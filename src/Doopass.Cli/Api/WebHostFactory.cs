@@ -13,18 +13,22 @@ namespace Doopass.Cli.Api;
 /// <summary>Options for building the web host: ports, TLS, announce and browser behavior.</summary>
 public sealed record WebHostOptions
 {
+    /// <summary>TCP port for the web UI and the API (default <c>7240</c>).</summary>
     public int Port { get; init; } = 7240;
 
+    /// <summary>Bind all interfaces instead of loopback and enable LAN discovery.</summary>
     public bool Lan { get; init; }
 
     /// <summary>Bind host override (tests bind 127.0.0.1); when null LAN binds 0.0.0.0, otherwise localhost.</summary>
     public string? Host { get; init; }
 
+    /// <summary>Open the default browser on startup.</summary>
     public bool OpenBrowser { get; init; } = true;
 
     /// <summary>Path to the server TLS certificate (.pfx); null keeps plain HTTP.</summary>
     public string? TlsPfx { get; init; }
 
+    /// <summary>Password for <see cref="TlsPfx"/>; null when the file is unprotected.</summary>
     public string? TlsPassword { get; init; }
 
     /// <summary>Force LAN discovery announce even without --lan.</summary>
@@ -38,6 +42,13 @@ public sealed record WebHostOptions
 /// </summary>
 public static class WebHostFactory
 {
+    /// <summary>
+    /// Builds the web host (Blazor UI, REST API, SignalR hub and discovery)
+    /// without starting it, so tests can run the real pipeline on a free port.
+    /// </summary>
+    /// <param name="options">Port, bind address, TLS and discovery options.</param>
+    /// <returns>A configured, not yet started application.</returns>
+    /// <exception cref="InvalidOperationException">The TLS certificate is missing or cannot be loaded.</exception>
     public static WebApplication BuildWebHost(WebHostOptions options)
     {
         var settings = new Settings();

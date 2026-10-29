@@ -11,8 +11,10 @@ namespace Doopass.Cli.Api;
 /// <summary>An authenticated thin-client session over the REST API (sliding TTL).</summary>
 public sealed class ApiSession(string token)
 {
+    /// <summary>The opaque bearer token that identifies this session.</summary>
     public string Token { get; } = token;
 
+    /// <summary>UTC timestamp of the last authorized call; drives the sliding TTL.</summary>
     public DateTimeOffset LastSeenUtc { get; internal set; } = DateTimeOffset.UtcNow;
 }
 
@@ -25,6 +27,7 @@ public sealed class ApiSession(string token)
 /// </summary>
 public sealed class ApiVaultCoordinator
 {
+    /// <summary>Session lifetime used when <c>api.session_ttl_minutes</c> is absent (30 minutes).</summary>
     public static readonly TimeSpan DefaultSessionTtl = TimeSpan.FromMinutes(30);
 
     private readonly object _gate = new();
@@ -33,6 +36,9 @@ public sealed class ApiVaultCoordinator
     private readonly ConcurrentDictionary<string, ApiSession> _sessions = new();
     private Store? _store;
 
+    /// <summary>Creates the coordinator, reading the optional session TTL from settings.</summary>
+    /// <param name="settings">Host-wide settings (store path, backups, API options).</param>
+    /// <param name="notifier">Server-wide change notifier used to wake clients.</param>
     public ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier)
     {
         _settings = settings;
@@ -64,6 +70,7 @@ public sealed class ApiVaultCoordinator
     /// <summary>Sliding session TTL (reads <c>api.session_ttl_minutes</c> from settings.json when present).</summary>
     public TimeSpan SessionTtl { get; }
 
+    /// <summary>The host version reported to clients.</summary>
     public string ServerVersion => Doopass.Core.Constants.Version;
 
     /// <summary>Number of live sessions (exposed for tests and diagnostics).</summary>
@@ -208,22 +215,38 @@ public sealed class ApiVaultCoordinator
         }
     }
 
+    /// <summary>Lists every key; requires a live token.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <returns>Keys in storage order.</returns>
     public IReadOnlyList<string> GetKeys(string token)
     {
         return UseStore(token, static store => store.GetKeys());
     }
 
+    /// <summary>Reads one value; requires a live token.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <param name="key">Key to read.</param>
+    /// <returns>The stored value.</returns>
     public string GetValue(string token, string key)
     {
         return UseStore(token, store => store.GetValue(key));
     }
 
+    /// <summary>Adds a pair, persists it and notifies every client.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <param name="key">New key; must be unique.</param>
+    /// <param name="value">Secret value.</param>
     public void Add(string token, string key, string value)
     {
         UseStore(token, store => store.AddProperty(key, value));
         _notifier.NotifyVaultChanged();
     }
 
+    /// <summary>Renames a key and replaces its value (remove + add), then notifies clients.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <param name="oldKey">Existing key.</param>
+    /// <param name="newKey">Target key.</param>
+    /// <param name="newValue">New value.</param>
     public void Update(string token, string oldKey, string newKey, string newValue)
     {
         // Same semantics as the web session: remove + add.
@@ -235,6 +258,9 @@ public sealed class ApiVaultCoordinator
         _notifier.NotifyVaultChanged();
     }
 
+    /// <summary>Removes a key and notifies every client.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <param name="key">Key to remove.</param>
     public void Remove(string token, string key)
     {
         UseStore(token, store => store.RemoveProperty(key));
@@ -265,6 +291,8 @@ public sealed class ApiVaultCoordinator
         }
     }
 
+    /// <summary>Creates a dated snapshot of the vault and notifies clients.</summary>
+    /// <param name="token">Caller's bearer token.</param>
     public void CreateBackup(string token)
     {
         lock (_gate)
@@ -303,6 +331,9 @@ public sealed class ApiVaultCoordinator
         _notifier.NotifyVaultChanged();
     }
 
+    /// <summary>Deletes a snapshot by extensionless name and notifies clients.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <param name="backupName">Snapshot name without the configured extension.</param>
     public void DeleteBackup(string token, string backupName)
     {
         lock (_gate)
@@ -323,6 +354,9 @@ public sealed class ApiVaultCoordinator
         _notifier.NotifyBackupsChanged();
     }
 
+    /// <summary>Reads every settings section; requires a live token.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <returns>Section names paired with a copy of their key/value pairs.</returns>
     public IReadOnlyList<(string Section, IReadOnlyDictionary<string, string> Pairs)> GetSettings(string token)
     {
         return UseStore(token, _ =>
@@ -333,6 +367,11 @@ public sealed class ApiVaultCoordinator
         });
     }
 
+    /// <summary>Writes one setting value and notifies clients.</summary>
+    /// <param name="token">Caller's bearer token.</param>
+    /// <param name="section">Existing section name.</param>
+    /// <param name="key">Setting key (created when absent).</param>
+    /// <param name="value">New value.</param>
     public void SetSetting(string token, string section, string key, string value)
     {
         lock (_gate)
@@ -350,6 +389,8 @@ public sealed class ApiVaultCoordinator
         _notifier.NotifySettingsChanged();
     }
 
+    /// <summary>Rewrites <c>settings.json</c> from the embedded defaults and notifies clients.</summary>
+    /// <param name="token">Caller's bearer token.</param>
     public void RestoreDefaultSettings(string token)
     {
         lock (_gate)
