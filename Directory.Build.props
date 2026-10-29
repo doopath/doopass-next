@@ -6,6 +6,18 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
+
+    <!-- XML documentation is part of the build: every public type and member
+         carries a /// comment, and the compiler emits a .xml file next to each
+         assembly. Missing docs surface as CS1591, so the public API cannot
+         silently go undocumented. Test projects are exempt (see below). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1573;CS1587</NoWarn>
+  </PropertyGroup>
+
+  <!-- Tests exercise the API rather than publish it; documenting every test
+       method would add noise without helping a consumer. -->
+  <PropertyGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
