@@ -34,6 +34,10 @@ public sealed class RemoteVaultSession : IVaultSession
     private string? _clientHost;
     private string? _clientPin;
 
+    /// <summary>Creates the remote session over the phone's saved connection state.</summary>
+    /// <param name="connections">Persisted host, pin and token.</param>
+    /// <param name="host">Reachability tracker shared with the login screen.</param>
+    /// <param name="relay">Per-app event relay for lock notifications.</param>
     public RemoteVaultSession(ConnectionStore connections, HostConnectionState host, VaultEventRelay relay)
     {
         _connections = connections;
@@ -65,6 +69,7 @@ public sealed class RemoteVaultSession : IVaultSession
         }
     }
 
+    /// <inheritdoc />
     public async ValueTask<VaultState> GetStateAsync(CancellationToken ct = default)
     {
         if (!_connections.IsConfigured)
@@ -120,6 +125,7 @@ public sealed class RemoteVaultSession : IVaultSession
         }
     }
 
+    /// <inheritdoc />
     public async ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default)
     {
         using var response = await SendAuthAsync(HttpMethod.Post, "/api/auth/login", new { password }, ct);
@@ -135,6 +141,7 @@ public sealed class RemoteVaultSession : IVaultSession
         return (false, await ReadErrorMessageAsync(response.Content, response.StatusCode, ct));
     }
 
+    /// <inheritdoc />
     public async ValueTask<(bool Success, string Message)> InitAsync(string password, CancellationToken ct = default)
     {
         using var response = await SendAuthAsync(HttpMethod.Post, "/api/auth/init", new { password }, ct);
@@ -150,6 +157,7 @@ public sealed class RemoteVaultSession : IVaultSession
         return (false, await ReadErrorMessageAsync(response.Content, response.StatusCode, ct));
     }
 
+    /// <inheritdoc />
     public async ValueTask LogoutAsync(CancellationToken ct = default)
     {
         try
@@ -182,45 +190,56 @@ public sealed class RemoteVaultSession : IVaultSession
         await _connections.SetTokenAsync(null);
     }
 
+    /// <inheritdoc />
     public ValueTask ReloadAsync(CancellationToken ct = default) =>
         ValueTask.CompletedTask; // the remote session always reflects the host
 
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<string>> GetKeysAsync(CancellationToken ct = default)
     {
         var state = await GetJsonAsync<KeysDto>("/api/vault/keys", ct);
         return state!.Keys;
     }
 
+    /// <inheritdoc />
     public async ValueTask<string> GetValueAsync(string key, CancellationToken ct = default)
     {
         var payload = await GetJsonAsync<ValueDto>($"/api/vault/value?key={Uri.EscapeDataString(key)}", ct);
         return payload!.Value;
     }
 
+    /// <inheritdoc />
     public async ValueTask AddAsync(string key, string value, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/vault/pairs", new { key, value }, ct);
 
+    /// <inheritdoc />
     public async ValueTask UpdateAsync(string oldKey, string newKey, string newValue, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Put, "/api/vault/pairs", new { oldKey, newKey, newValue }, ct);
 
+    /// <inheritdoc />
     public async ValueTask RemoveAsync(string key, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Delete, $"/api/vault/pairs?key={Uri.EscapeDataString(key)}", content: null, ct);
 
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<string>> GetBackupNamesAsync(CancellationToken ct = default)
     {
         var state = await GetJsonAsync<NamesDto>("/api/backups", ct);
         return state!.Names;
     }
 
+    /// <inheritdoc />
     public async ValueTask CreateBackupAsync(CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/backups", content: null, ct);
 
+    /// <inheritdoc />
     public async ValueTask RestoreBackupAsync(string backupName, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, $"/api/backups/restore?name={Uri.EscapeDataString(backupName)}", content: null, ct);
 
+    /// <inheritdoc />
     public async ValueTask DeleteBackupAsync(string backupName, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Delete, $"/api/backups?name={Uri.EscapeDataString(backupName)}", content: null, ct);
 
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<(string Section, IReadOnlyDictionary<string, string> Pairs)>> GetSettingsAsync(CancellationToken ct = default)
     {
         var state = await GetJsonAsync<SettingsDto>("/api/settings", ct);
@@ -229,9 +248,11 @@ public sealed class RemoteVaultSession : IVaultSession
             .ToList();
     }
 
+    /// <inheritdoc />
     public async ValueTask SetSettingAsync(string section, string key, string value, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Put, $"/api/settings/{Uri.EscapeDataString(section)}/{Uri.EscapeDataString(key)}", new { value }, ct);
 
+    /// <inheritdoc />
     public async ValueTask RestoreDefaultSettingsAsync(CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/settings/restore-defaults", content: null, ct);
 

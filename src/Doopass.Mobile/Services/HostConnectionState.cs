@@ -13,21 +13,29 @@ public sealed class HostConnectionState : IHostConnection
     private readonly ConnectionStore _connections;
     private volatile bool _unreachable;
 
+    /// <summary>Creates the descriptor over the device's saved connection state.</summary>
+    /// <param name="connections">Persisted host, pin and token.</param>
     public HostConnectionState(ConnectionStore connections)
     {
         _connections = connections;
     }
 
+    /// <inheritdoc />
     public string? Address => _connections.Host;
 
+    /// <inheritdoc />
     public bool IsUnreachable => _unreachable;
 
+    /// <inheritdoc />
     public event Action? Changed;
 
+    /// <inheritdoc />
     public Task EnsureLoadedAsync() => _connections.LoadAsync();
 
+    /// <inheritdoc />
     public void MarkReachable() => SetUnreachable(false);
 
+    /// <inheritdoc />
     public void MarkUnreachable() => SetUnreachable(true);
 
     private void SetUnreachable(bool unreachable)

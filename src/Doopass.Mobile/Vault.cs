@@ -8,6 +8,8 @@ namespace Doopass.Mobile;
 /// </summary>
 public sealed class Vault : Microsoft.Maui.Controls.ContentPage
 {
+    /// <summary>Creates the page that hosts the Blazor WebView.</summary>
+    /// <param name="services">App service provider (the WebView resolves components from it).</param>
     public Vault(IServiceProvider services)
     {
         Title = "Doopass";

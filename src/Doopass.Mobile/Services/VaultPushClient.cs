@@ -20,6 +20,9 @@ public sealed class VaultPushClient : IAsyncDisposable
     private string? _connectionToken;
     private readonly SemaphoreSlim _startGate = new(1, 1);
 
+    /// <summary>Creates the push client over the device's saved host and token.</summary>
+    /// <param name="connections">Persisted connection state.</param>
+    /// <param name="relay">Per-app event relay the hub events are forwarded to.</param>
     public VaultPushClient(ConnectionStore connections, VaultEventRelay relay)
     {
         _connections = connections;
@@ -136,6 +139,8 @@ public sealed class VaultPushClient : IAsyncDisposable
         _connectionToken = null;
     }
 
+    /// <summary>Stops the hub connection and releases the start gate.</summary>
+    /// <returns>A task that completes when the connection is closed.</returns>
     public async ValueTask DisposeAsync()
     {
         await _startGate.WaitAsync();

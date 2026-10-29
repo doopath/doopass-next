@@ -8,6 +8,8 @@ namespace Doopass.Mobile;
 
 public static partial class MauiProgram
 {
+    /// <summary>Builds the MAUI app, registers services and installs crash handlers.</summary>
+    /// <returns>The configured <see cref="MauiApp"/>.</returns>
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder();

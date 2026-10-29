@@ -22,6 +22,7 @@ public sealed record HostCandidate(string Name, string Url, bool Tls, string? Fi
 /// </summary>
 public sealed class HostDiscovery
 {
+    /// <summary>UDP port the host listens on for discovery probes.</summary>
     public const int AnnouncePort = 7241;
 
     private const string Probe = "DOOPASS_DISCOVER";
@@ -36,6 +37,14 @@ public sealed class HostDiscovery
 
     private sealed record Reply(string? Service, string? Name, int Port, bool Tls, string? Fingerprint, string? Version);
 
+    /// <summary>
+    /// Broadcasts the discovery probe and collects host replies for the given
+    /// window (1.5 s by default). Never throws; failures are logged and an
+    /// empty list is returned.
+    /// </summary>
+    /// <param name="window">How long to listen for replies.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>One candidate per answering host, de-duplicated by URL.</returns>
     public async Task<IReadOnlyList<HostCandidate>> DiscoverAsync(TimeSpan? window = null, CancellationToken ct = default)
     {
         var found = new List<HostCandidate>();

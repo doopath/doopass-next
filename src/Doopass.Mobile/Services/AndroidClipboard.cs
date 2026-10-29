@@ -16,6 +16,7 @@ public sealed class AndroidClipboard : ISecretClipboard
 {
     private const string SensitiveExtra = "android.content.extra.IS_SENSITIVE";
 
+    /// <inheritdoc />
     public async Task<bool> SetTextAsync(string text, CancellationToken ct = default)
     {
         try

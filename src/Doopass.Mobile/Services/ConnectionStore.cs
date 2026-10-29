@@ -16,6 +16,7 @@ public sealed class ConnectionStore
     private const string PinKey = "doopass.pin";
     private const string TokenKey = "doopass.token";
 
+    /// <summary>Saved base URL of the host, or <c>null</c> when none is paired.</summary>
     public string? Host { get; private set; }
 
     /// <summary>Base URL of the host, e.g. <c>http://192.168.1.10:7240</c>.</summary>
@@ -24,8 +25,10 @@ public sealed class ConnectionStore
     /// <summary>SHA-256 hex fingerprint of the pinned TLS certificate; null for plain HTTP.</summary>
     public string? PinnedFingerprint { get; private set; }
 
+    /// <summary>Session token issued by the host, or <c>null</c> when logged out.</summary>
     public string? Token { get; private set; }
 
+    /// <summary>True when a host address has been saved on this device.</summary>
     public bool IsConfigured => !string.IsNullOrEmpty(Host);
 
     /// <summary>Loads stored configuration at application start.</summary>
@@ -48,6 +51,8 @@ public sealed class ConnectionStore
         await SetSecureAsync(TokenKey, null);
     }
 
+    /// <summary>Stores or clears the session token (persisted in SecureStorage).</summary>
+    /// <param name="token">New token, or <c>null</c> to forget it.</param>
     public async Task SetTokenAsync(string? token)
     {
         Token = token;
