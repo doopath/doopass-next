@@ -7,16 +7,26 @@ namespace Doopass.Tui;
 /// <summary>Result of a login attempt.</summary>
 public enum LoginStatus
 {
+    /// <summary>The store was decrypted and is now unlocked.</summary>
     Success,
+
+    /// <summary>The password did not decrypt the store.</summary>
     IncorrectPassword,
+
+    /// <summary>No store file exists yet.</summary>
     NotInitialized,
 }
 
 /// <summary>Result of an init-store attempt.</summary>
 public enum InitStatus
 {
+    /// <summary>The store was created and unlocked.</summary>
     Success,
+
+    /// <summary>A store file already exists.</summary>
     AlreadyExists,
+
+    /// <summary>The password failed <see cref="PasswordValidator"/>.</summary>
     InvalidPassword,
 }
 
