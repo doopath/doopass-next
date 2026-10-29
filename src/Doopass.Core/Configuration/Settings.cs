@@ -25,6 +25,10 @@ public sealed class Settings
 
     private Dictionary<string, Dictionary<string, string>> _settings = new();
 
+    /// <summary>
+    /// Loads <c>settings.json</c> for the current <see cref="AppPaths.AppDataDir"/>,
+    /// creating the directories and the default file on first run.
+    /// </summary>
     public Settings()
     {
         AppDir = AppPaths.AppDir;
@@ -34,10 +38,13 @@ public sealed class Settings
         Initialize();
     }
 
+    /// <summary>The application root directory (for example <c>~/doopass</c>).</summary>
     public string AppDir { get; }
 
+    /// <summary>The application data directory that holds the store, settings and logs.</summary>
     public string AppDataDir { get; }
 
+    /// <summary>Full path of the loaded <c>settings.json</c> file.</summary>
     public string SettingsFile { get; }
 
     /// <summary>The resolved path to the encrypted store file.</summary>

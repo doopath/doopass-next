@@ -21,12 +21,21 @@ public static class AppLogger
         }
     }
 
+    /// <summary>Writes an informational line.</summary>
+    /// <param name="message">Message to append; must not contain secrets.</param>
     public static void Info(string message) => Write("INFO", message);
 
+    /// <summary>Writes a debug line (used for non-fatal diagnostics).</summary>
+    /// <param name="message">Message to append; must not contain secrets.</param>
     public static void Debug(string message) => Write("DEBUG", message);
 
+    /// <summary>Writes an error line.</summary>
+    /// <param name="message">Message to append; must not contain secrets.</param>
     public static void Error(string message) => Write("ERROR", message);
 
+    /// <summary>Writes an error line including the exception's full text.</summary>
+    /// <param name="message">Context message.</param>
+    /// <param name="exception">Exception whose <c>ToString()</c> is appended.</param>
     public static void Error(string message, Exception exception) => Write("ERROR", $"{message}: {exception}");
 
     private static void Write(string level, string message)

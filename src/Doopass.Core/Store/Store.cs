@@ -12,10 +12,19 @@ namespace Doopass.Core.Storage;
 /// </summary>
 public sealed class Store
 {
+    /// <summary>Default PBKDF2 iteration count written into new store containers.</summary>
     public const int DefaultIterations = 100_000;
 
     private readonly List<Entry> _entries = new();
 
+    /// <summary>
+    /// Opens the store at <paramref name="storePath"/> with
+    /// <paramref name="password"/> and loads all entries. When the file does not
+    /// exist, an empty encrypted store is created first.
+    /// </summary>
+    /// <param name="password">The master password used to decrypt the file.</param>
+    /// <param name="storePath">Full path of the <c>store.enc</c> file.</param>
+    /// <exception cref="IncorrectPasswordError">The file cannot be decrypted with the password.</exception>
     public Store(string password, string storePath)
     {
         Password = password;

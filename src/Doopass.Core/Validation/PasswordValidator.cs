@@ -3,8 +3,11 @@ namespace Doopass.Core.Validation;
 /// <summary>Validates the master password using the original Doopass rules.</summary>
 public sealed class PasswordValidator
 {
+    /// <summary>Creates a validator for the given candidate password.</summary>
+    /// <param name="password">The password typed by the user.</param>
     public PasswordValidator(string password) => Password = password;
 
+    /// <summary>The password being validated.</summary>
     public string Password { get; }
 
     /// <summary>

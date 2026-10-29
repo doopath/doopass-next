@@ -13,6 +13,13 @@ public sealed class StoreBackup
     private readonly string _backupsDir;
     private readonly string _extension;
 
+    /// <summary>
+    /// Creates a backup helper for <paramref name="storePath"/> and makes sure
+    /// the backup directory exists.
+    /// </summary>
+    /// <param name="storePath">The encrypted store file to snapshot.</param>
+    /// <param name="backupsDir">Directory that holds the snapshots.</param>
+    /// <param name="extension">File-name suffix for snapshots (default <c>.enc.bak</c>).</param>
     public StoreBackup(string storePath, string backupsDir, string extension = Constants.StoreBackupExtension)
     {
         _storePath = storePath;
