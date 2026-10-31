@@ -37,6 +37,8 @@ any migration — just point the new app at the same `~/doopass` folder.
   settings everywhere.
 - **Thin-client architecture** — the host is the single unlocked vault; every
   client (browser session or API token) shares the encrypted file safely.
+  The web UI makes all HTTP calls from the browser (visible in the Network tab),
+  with token persistence in `localStorage` for cross-tab sync.
 - **Self-contained single-file executables** for Windows and Linux — no .NET
   runtime required, and all web assets are embedded in the binary.
 - **Installable web app (PWA)** — opens as its own window on desktop and mobile,
@@ -102,6 +104,11 @@ dotnet run --project src/Doopass.Cli -- serve --port 7240 --lan
 |                               | SHA-256 fingerprint, which thin clients pin for  |
 |                               | trust-on-first-use                               |
 | `--announce`                  | force LAN discovery announce (also on with `--lan`) |
+
+The web UI is a **thin client**: all HTTP calls to `/api/*` originate from the
+browser (visible in the browser's Network tab), and the session token is stored
+in `localStorage` for cross-tab sync. The server renders the Blazor components
+and relays real-time events via SignalR.
 
 The UI and all assets are embedded in the executable, so nothing else is needed
 to serve the app. Open <http://localhost:7240> and log in or initialize a store.
