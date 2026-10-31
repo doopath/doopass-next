@@ -10,12 +10,13 @@
  * activate. Precache misses are tolerated (allSettled) so one flaky
  * asset can never brick the install.
  */
-const CACHE = 'doopass-pwa-v2';
+const CACHE = 'doopass-pwa-v3';
 const PRECACHE = [
   '/',
   '/app.css',
   '/theme.js',
   '/app.js',
+  '/doopass-api.js',
   '/_framework/blazor.web.js',
   '/pwa/manifest.webmanifest',
   '/pwa/icon-192.png',
