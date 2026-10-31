@@ -1,5 +1,4 @@
 // Doopass browser HTTP client — thin-client bridge for Blazor Server.
-// Registered on window.doopass by BrowserHttpClient.RegisterAsync().
 // Called via IJSRuntime.InvokeAsync from LocalApiService so that HTTP
 // requests originate from the browser (visible in the Network tab).
 
@@ -7,33 +6,72 @@
 
 window.doopass = window.doopass || {};
 
-window.doopass.fetchGet = async function (url) {
-    const res = await fetch(url, { cache: "no-store" });
+window.doopass.fetchGet = async function (url, token) {
+    const headers = {};
+    if (token && typeof token === "string") {
+        // Blazor serializes C# strings as JSON values — a .NET string value
+        // arrives here as a plain JS string ("abc123"), not escaped.
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(url, {
+        method: "GET",
+        headers: headers,
+        cache: "no-store",
+    });
     return _wrapResponse(res);
 };
 
-window.doopass.fetchPost = async function (url, body) {
+window.doopass.fetchPost = async function (url, body, token) {
+    const headers = { "Content-Type": "application/json" };
+    if (token && typeof token === "string") {
+        const actualToken = token.startsWith('"') && token.endsWith('"')
+            ? JSON.parse(token)
+            : token;
+        headers["Authorization"] = `Bearer ${actualToken}`;
+    }
     const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body !== null ? JSON.stringify(body) : undefined,
+        headers: headers,
+        body: body !== null && body !== undefined
+            ? (typeof body === "string" ? body : JSON.stringify(body))
+            : undefined,
         cache: "no-store",
     });
     return _wrapResponse(res);
 };
 
-window.doopass.fetchPut = async function (url, body) {
+window.doopass.fetchPut = async function (url, body, token) {
+    const headers = { "Content-Type": "application/json" };
+    if (token && typeof token === "string") {
+        const actualToken = token.startsWith('"') && token.endsWith('"')
+            ? JSON.parse(token)
+            : token;
+        headers["Authorization"] = `Bearer ${actualToken}`;
+    }
     const res = await fetch(url, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: body !== null ? JSON.stringify(body) : undefined,
+        headers: headers,
+        body: body !== null && body !== undefined
+            ? (typeof body === "string" ? body : JSON.stringify(body))
+            : undefined,
         cache: "no-store",
     });
     return _wrapResponse(res);
 };
 
-window.doopass.fetchDelete = async function (url) {
-    const res = await fetch(url, { method: "DELETE", cache: "no-store" });
+window.doopass.fetchDelete = async function (url, token) {
+    const headers = {};
+    if (token && typeof token === "string") {
+        const actualToken = token.startsWith('"') && token.endsWith('"')
+            ? JSON.parse(token)
+            : token;
+        headers["Authorization"] = `Bearer ${actualToken}`;
+    }
+    const res = await fetch(url, {
+        method: "DELETE",
+        headers: headers,
+        cache: "no-store",
+    });
     return _wrapResponse(res);
 };
 
@@ -49,13 +87,13 @@ window.doopass.setToken = function (token) {
     }
 };
 
-function _wrapResponse(res) {
+async function _wrapResponse(res) {
     const headers = {};
     res.headers.forEach((v, k) => { headers[k] = v; });
     return {
         ok: res.ok,
         status: res.status,
         headers: headers,
-        body: res.text(),
+        body: await res.text(),
     };
 }

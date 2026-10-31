@@ -21,11 +21,14 @@ internal sealed class BrowserHttpClient : IDisposable
     private string? _localToken;
 
     /// <summary>
-    /// Production constructor: uses JS interop. Token comes from localStorage.
+    /// Production constructor: uses JS interop. The coordinator is resolved from DI
+    /// so that GetToken() can fall back to ActiveToken on page reload (where _localToken
+    /// is null because this is a fresh BrowserHttpClient instance).
     /// </summary>
-    public BrowserHttpClient(IJSRuntime js)
+    public BrowserHttpClient(IJSRuntime js, ApiVaultCoordinator coordinator)
     {
         _js = js;
+        _coordinator = coordinator;
     }
 
     /// <summary>
@@ -50,8 +53,10 @@ internal sealed class BrowserHttpClient : IDisposable
 
     private string? GetToken()
     {
-        // Priority: local override (set by LocalApiService after login) > coordinator > null
-        return _localToken ?? _coordinator?.ActiveToken;
+        // Priority: local override (set by LocalApiService after login) >
+        // coordinator ActiveToken (singleton, survives page reload).
+        if (_localToken is not null) return _localToken;
+        return _coordinator?.ActiveToken;
     }
 
     public async ValueTask<HttpResponse> GetAsync(string url, CancellationToken ct = default)
@@ -66,7 +71,7 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchGet", url);
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchGet", url, GetToken());
         return browserRes;
     }
 
@@ -85,7 +90,8 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.PostAsync(url, content, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchPost", url, body);
+        var browserToken = GetToken();
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchPost", url, body, browserToken);
         return browserRes;
     }
 
@@ -93,10 +99,10 @@ internal sealed class BrowserHttpClient : IDisposable
     {
         if (_httpClient is not null)
         {
-            var token = GetToken();
-            if (token is not null)
+            var putToken = GetToken();
+            if (putToken is not null)
             {
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", putToken);
             }
             var content = body is not null
                 ? new StringContent(JsonSerializer.Serialize(body, Json), System.Text.Encoding.UTF8, "application/json")
@@ -104,7 +110,7 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.PutAsync(url, content, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchPut", url, body);
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchPut", url, body, GetToken());
         return browserRes;
     }
 
@@ -120,7 +126,7 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.DeleteAsync(url, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchDelete", url);
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchDelete", url, GetToken());
         return browserRes;
     }
 
@@ -137,6 +143,7 @@ internal sealed class BrowserHttpClient : IDisposable
             SetLocalToken(token); // tests: use local override
             return;
         }
+        SetLocalToken(token); // JS interop: keep _localToken in sync so GetToken() works for subsequent calls
         await _js.InvokeVoidAsync("doopass.setToken", token);
     }
 

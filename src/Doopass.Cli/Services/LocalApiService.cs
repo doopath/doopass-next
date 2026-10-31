@@ -50,8 +50,21 @@ internal sealed class LocalApiService : IVaultSession, IDisposable
     private async ValueTask<string?> GetTokenAsync()
     {
         if (_currentToken is not null) return _currentToken;
+
+        // Coordinator ActiveToken should be available since LoginAsync adds a session.
+        // This is the primary fallback on page-reload where _currentToken is cleared.
         if (_coordinator?.ActiveToken is { } serverToken) return serverToken;
-        return await _http.GetTokenAsync();
+
+        // Last resort: read directly from localStorage via JS interop.
+        // Covers the rare case where coordinator isn't wired or ActiveToken returns null.
+        var stored = await _http.GetTokenAsync();
+        if (!string.IsNullOrEmpty(stored))
+        {
+            _currentToken = stored;
+            return stored;
+        }
+
+        return null;
     }
 
     /// <summary>Synchronises the token to localStorage so other tabs and the

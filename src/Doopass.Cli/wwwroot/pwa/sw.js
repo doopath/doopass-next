@@ -10,7 +10,7 @@
  * activate. Precache misses are tolerated (allSettled) so one flaky
  * asset can never brick the install.
  */
-const CACHE = 'doopass-pwa-v3';
+const CACHE = 'doopass-pwa-v7';
 const PRECACHE = [
   '/',
   '/app.css',
@@ -63,6 +63,13 @@ self.addEventListener('fetch', (event) => {
       }
     })());
     return;
+  }
+
+  // API endpoints must always hit the network — auth tokens change between
+  // requests and a stale cached response (e.g. 401 before unlock) would be
+  // returned on subsequent authenticated calls.
+  if (url.pathname.startsWith('/api')) {
+    return; // let the default fetch happen without interception
   }
 
   // Other same-origin assets: cache first, fill the cache on miss.

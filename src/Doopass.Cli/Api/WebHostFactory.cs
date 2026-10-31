@@ -139,8 +139,9 @@ public static class WebHostFactory
             new LocalApiService(sp.GetRequiredService<BrowserHttpClient>(), sp.GetRequiredService<ApiVaultCoordinator>()));
 
         // Production: BrowserHttpClient uses JS interop (IJSRuntime) to delegate fetch() to the browser.
+        // The coordinator is injected so GetToken() can fall back to ActiveToken on page reload.
         builder.Services.AddScoped<BrowserHttpClient>(sp =>
-            new BrowserHttpClient(sp.GetRequiredService<IJSRuntime>()));
+            new BrowserHttpClient(sp.GetRequiredService<IJSRuntime>(), sp.GetRequiredService<ApiVaultCoordinator>()));
 
         var app = builder.Build();
 
