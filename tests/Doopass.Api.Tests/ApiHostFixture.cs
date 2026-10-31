@@ -15,11 +15,14 @@ namespace Doopass.Api.Tests;
 public sealed class ApiHostFixture : IAsyncLifetime
 {
     private string? _home;
+    private int _port;
     private string? _previousHome;
 
     public WebApplication App { get; private set; } = null!;
 
     public HttpClient Client { get; private set; } = null!;
+
+    public int Port => _port;
 
     public ApiVaultCoordinator Coordinator => App.Services.GetRequiredService<ApiVaultCoordinator>();
 
@@ -48,6 +51,7 @@ public sealed class ApiHostFixture : IAsyncLifetime
 
         var address = App.Urls.First(address => address.StartsWith("http://127.0.0.1:", StringComparison.Ordinal));
         var port = int.Parse(address.Split(':')[^1], System.Globalization.CultureInfo.InvariantCulture);
+        _port = port;
         Client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
     }
 

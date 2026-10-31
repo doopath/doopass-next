@@ -19,6 +19,7 @@ internal sealed class LocalApiService : IVaultSession
 
     private readonly HttpClient _http;
     private readonly ApiVaultCoordinator _coordinator;
+    private string? _currentToken;
 
     public LocalApiService(IHttpClientFactory factory, int port, ApiVaultCoordinator coordinator)
     {
@@ -28,8 +29,8 @@ internal sealed class LocalApiService : IVaultSession
         _coordinator = coordinator;
     }
 
-    /// <summary>Returns any active session token (one per Blazor circuit).</summary>
-    private string? Token => _coordinator.ActiveToken;
+    /// <summary>Returns the current session token (set by LoginAsync/InitAsync or from the coordinator).</summary>
+    private string? Token => _currentToken ?? _coordinator.ActiveToken;
 
     // --- Vault state / auth -----------------------------------------------
 
@@ -52,6 +53,8 @@ internal sealed class LocalApiService : IVaultSession
 
         if (response.IsSuccessStatusCode)
         {
+            var dto = await ReadJsonAsync<TokenDto>(response.Content, response.StatusCode, ct);
+            _currentToken = dto?.Token;
             return (true, string.Empty);
         }
 
@@ -64,6 +67,8 @@ internal sealed class LocalApiService : IVaultSession
 
         if (response.IsSuccessStatusCode)
         {
+            var dto = await ReadJsonAsync<TokenDto>(response.Content, response.StatusCode, ct);
+            _currentToken = dto?.Token;
             return (true, string.Empty);
         }
 
@@ -79,6 +84,10 @@ internal sealed class LocalApiService : IVaultSession
         catch (HttpRequestException ex) when (ex.Message.Contains("no connection"))
         {
             // Host gone — local session still ends.
+        }
+        finally
+        {
+            _currentToken = null;
         }
     }
 
@@ -161,7 +170,9 @@ internal sealed class LocalApiService : IVaultSession
     {
         try
         {
-            using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AttachToken(request);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             await EnsureSuccessAsync(response, ct);
             return await ReadJsonAsync<T>(response.Content, response.StatusCode, ct);
         }
@@ -191,13 +202,23 @@ internal sealed class LocalApiService : IVaultSession
         }
 
         // Inject Bearer token so /api endpoints resolve the same session identity.
+        AttachToken(request);
+
+        return await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+    }
+
+    /// <summary>
+    /// Attaches the current session's Bearer token so /api endpoints resolve the
+    /// same session. Shared by the GET and body paths so neither can silently
+    /// drop the token again (the GET path previously had no attachment at all).
+    /// </summary>
+    private void AttachToken(HttpRequestMessage request)
+    {
         var token = Token;
         if (token is not null)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
-
-        return await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
     }
 
     private async ValueTask EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
