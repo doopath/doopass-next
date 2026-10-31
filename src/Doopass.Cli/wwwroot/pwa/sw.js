@@ -1,23 +1,15 @@
 /* Doopass service worker (PWA offline shell).
  *
- * Served from an embedded resource at /pwa/sw.js with
- * Service-Worker-Allowed: / (set by Program.cs), so the worker may take
- * the whole origin as its scope. Handles only same-origin GET requests;
- * the SignalR traffic (/_blazor) is passed through untouched so the
- * Blazor Server circuit always reconnects to the live server.
+ * Served from /pwa/sw.js with Service-Worker-Allowed: /, so the worker may take
+ * the whole origin as its scope. Handles only same-origin GET requests.
  *
  * Bump CACHE name when served assets change: old caches are evicted on
  * activate. Precache misses are tolerated (allSettled) so one flaky
  * asset can never brick the install.
  */
-const CACHE = 'doopass-pwa-v7';
+const CACHE = 'doopass-pwa-v8';
 const PRECACHE = [
   '/',
-  '/app.css',
-  '/theme.js',
-  '/app.js',
-  '/doopass-api.js',
-  '/_framework/blazor.web.js',
   '/pwa/manifest.webmanifest',
   '/pwa/icon-192.png',
   '/pwa/icon-512.png',
@@ -47,10 +39,39 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/_blazor')) return; // SignalR: never cached
 
-  // Change-of-page navigations prefer the network so a live server session
-  // always wins; the cached shell covers offline starts.
+  // API endpoints must always hit the network — auth tokens change between
+  // requests and a stale cached response would be returned.
+  if (url.pathname.startsWith('/api')) {
+    return; // let the default fetch happen without interception
+  }
+
+  // SignalR hub: never cached, always go to network.
+  if (url.pathname.startsWith('/hubs')) {
+    return;
+  }
+
+  // _framework/* (Blazor WASM runtime): cache with revalidation.
+  if (url.pathname.startsWith('/_framework')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      const cached = await cache.match(req);
+      if (cached) return cached;
+      try {
+        const resp = await fetch(req);
+        if (resp && resp.ok && resp.type === 'basic') {
+          await cache.put(req, resp.clone());
+        }
+        return resp;
+      } catch (err) {
+        return new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+      }
+    })());
+    return;
+  }
+
+  // Change-of-page navigations prefer the network so a live server always
+  // wins; the cached shell covers offline starts.
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
@@ -59,20 +80,13 @@ self.addEventListener('fetch', (event) => {
         const cache = await caches.open(CACHE);
         return (await cache.match(req)) ||
                (await cache.match('/')) ||
-               new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+               new Response('Offline — host unreachable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
       }
     })());
     return;
   }
 
-  // API endpoints must always hit the network — auth tokens change between
-  // requests and a stale cached response (e.g. 401 before unlock) would be
-  // returned on subsequent authenticated calls.
-  if (url.pathname.startsWith('/api')) {
-    return; // let the default fetch happen without interception
-  }
-
-  // Other same-origin assets: cache first, fill the cache on miss.
+  // Other assets: cache first, fill on miss.
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(req);
