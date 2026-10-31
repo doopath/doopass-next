@@ -8,6 +8,7 @@ using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
 using Doopass.WebUi.Abstractions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.JSInterop;
 
 namespace Doopass.Cli.Api;
 
@@ -137,8 +138,9 @@ public static class WebHostFactory
         builder.Services.AddScoped<LocalApiService>(sp =>
             new LocalApiService(sp.GetRequiredService<BrowserHttpClient>(), sp.GetRequiredService<ApiVaultCoordinator>()));
 
+        // Production: BrowserHttpClient uses JS interop (IJSRuntime) to delegate fetch() to the browser.
         builder.Services.AddScoped<BrowserHttpClient>(sp =>
-            new BrowserHttpClient(sp.GetRequiredService<IHttpClientFactory>(), options.Port, sp.GetRequiredService<ApiVaultCoordinator>()));
+            new BrowserHttpClient(sp.GetRequiredService<IJSRuntime>()));
 
         var app = builder.Build();
 
