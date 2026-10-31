@@ -1,15 +1,18 @@
 // Doopass browser HTTP client — thin-client bridge for Blazor Server.
-// Called via JS interop from LocalApiService so that HTTP requests
-// originate from the browser (visible in the Network tab).
+// Registered on window.doopass by BrowserHttpClient.RegisterAsync().
+// Called via IJSRuntime.InvokeAsync from LocalApiService so that HTTP
+// requests originate from the browser (visible in the Network tab).
 
 "use strict";
 
-export async function get(url) {
+window.doopass = window.doopass || {};
+
+window.doopass.fetchGet = async function (url) {
     const res = await fetch(url, { cache: "no-store" });
     return _wrapResponse(res);
-}
+};
 
-export async function post(url, body) {
+window.doopass.fetchPost = async function (url, body) {
     const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -17,9 +20,9 @@ export async function post(url, body) {
         cache: "no-store",
     });
     return _wrapResponse(res);
-}
+};
 
-export async function put(url, body) {
+window.doopass.fetchPut = async function (url, body) {
     const res = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -27,28 +30,24 @@ export async function put(url, body) {
         cache: "no-store",
     });
     return _wrapResponse(res);
-}
+};
 
-export async function deleteReq(url) {
+window.doopass.fetchDelete = async function (url) {
     const res = await fetch(url, { method: "DELETE", cache: "no-store" });
     return _wrapResponse(res);
-}
+};
 
-/**
- * Store and retrieve the vault auth token in localStorage.
- * This is the browser-side counterpart to ApiVaultCoordinator.ActiveToken.
- */
-export function getToken() {
+window.doopass.getToken = function () {
     return localStorage.getItem("doopass_vault_token") ?? null;
-}
+};
 
-export function setToken(token) {
+window.doopass.setToken = function (token) {
     if (token) {
         localStorage.setItem("doopass_vault_token", token);
     } else {
         localStorage.removeItem("doopass_vault_token");
     }
-}
+};
 
 function _wrapResponse(res) {
     const headers = {};

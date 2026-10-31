@@ -12,11 +12,13 @@ namespace Doopass.Cli.Services;
 /// </summary>
 internal sealed class BrowserHttpClient : IDisposable
 {
-    private readonly IJSRuntime? _js;
+    // Production constructor sets _js; test constructor sets _httpClient instead.
+#pragma warning disable CS8618
+    private readonly IJSRuntime _js;
+#pragma warning restore CS8618
     private readonly HttpClient? _httpClient;
     private readonly ApiVaultCoordinator? _coordinator;
     private string? _localToken;
-    private IJSObjectReference? _module;
 
     /// <summary>
     /// Production constructor: uses JS interop. Token comes from localStorage.
@@ -46,14 +48,6 @@ internal sealed class BrowserHttpClient : IDisposable
         _localToken = token;
     }
 
-    private async ValueTask<IJSObjectReference> ModuleAsync()
-    {
-        if (_module is not null) return _module;
-        var js = _js ?? throw new InvalidOperationException("BrowserHttpClient not initialized with IJSRuntime");
-        _module = await js.InvokeAsync<IJSObjectReference>("import", "./doopass-api.js");
-        return _module;
-    }
-
     private string? GetToken()
     {
         // Priority: local override (set by LocalApiService after login) > coordinator > null
@@ -72,8 +66,7 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("get", url);
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchGet", url);
         return browserRes;
     }
 
@@ -92,8 +85,7 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.PostAsync(url, content, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("post", url, body);
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchPost", url, body);
         return browserRes;
     }
 
@@ -112,8 +104,7 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.PutAsync(url, content, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("put", url, body);
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchPut", url, body);
         return browserRes;
     }
 
@@ -129,16 +120,14 @@ internal sealed class BrowserHttpClient : IDisposable
             var serverRes = await _httpClient.DeleteAsync(url, ct);
             return await ToHttpResponse(serverRes, ct);
         }
-        var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("deleteReq", url);
+        var browserRes = await _js.InvokeAsync<HttpResponse>("doopass.fetchDelete", url);
         return browserRes;
     }
 
     public async ValueTask<string?> GetTokenAsync(CancellationToken ct = default)
     {
         if (_httpClient is not null) return null; // tests don't need token
-        var mod = await ModuleAsync();
-        return await mod.InvokeAsync<string?>("getToken");
+        return await _js.InvokeAsync<string?>("doopass.getToken");
     }
 
     public async ValueTask SetTokenAsync(string? token, CancellationToken ct = default)
@@ -148,17 +137,12 @@ internal sealed class BrowserHttpClient : IDisposable
             SetLocalToken(token); // tests: use local override
             return;
         }
-        var mod = await ModuleAsync();
-        await mod.InvokeVoidAsync("setToken", token);
+        await _js.InvokeVoidAsync("doopass.setToken", token);
     }
 
     public void Dispose()
     {
         _httpClient?.Dispose();
-        if (_module is not null)
-        {
-            _ = _module.DisposeAsync();
-        }
     }
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
