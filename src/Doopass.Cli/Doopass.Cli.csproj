@@ -33,6 +33,7 @@
          master straight from assets\, served as-is so it stays sharp at any size. -->
     <EmbeddedResource Include="wwwroot\pwa\manifest.webmanifest" LogicalName="Doopass.Cli.wwwroot.pwa.manifest.webmanifest" />
     <EmbeddedResource Include="wwwroot\pwa\sw.js" LogicalName="Doopass.Cli.wwwroot.pwa.sw.js" />
+    <EmbeddedResource Include="wwwroot\doopass-api.js" LogicalName="Doopass.Cli.wwwroot.doopass-api.js" />
     <EmbeddedResource Include="..\..\assets\logo.svg" LogicalName="Doopass.Cli.wwwroot.pwa.favicon.svg" />
     <EmbeddedResource Include="..\..\.pwa-assets\favicon.ico" LogicalName="Doopass.Cli.wwwroot.pwa.favicon.ico" />
     <EmbeddedResource Include="..\..\.pwa-assets\icon-192.png" LogicalName="Doopass.Cli.wwwroot.pwa.icon-192.png" />
@@ -57,11 +58,15 @@
     <InternalsVisibleTo Include="Doopass.Api.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.14" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
+  </ItemGroup>
+
   <!-- A missing framework asset used to be a silent 404 in the published app; fail
        the build instead. The version comes from the SDK, so it tracks the framework. -->
   <Target Name="_RequireBlazorWebJs" BeforeTargets="CoreCompile">
-    <Error Condition="'@(_BlazorFrameworkAsset)' == ''"
-           Text="blazor.web.js was not restored: Microsoft.AspNetCore.App.Internal.Assets is missing from $(NuGetPackageRoot). Run 'dotnet restore' and rebuild." />
+    <Error Condition="'@(_BlazorFrameworkAsset)' == ''" Text="blazor.web.js was not restored: Microsoft.AspNetCore.App.Internal.Assets is missing from $(NuGetPackageRoot). Run 'dotnet restore' and rebuild." />
   </Target>
 
 </Project>

@@ -100,6 +100,10 @@ public static class WebHostFactory
         builder.Services.AddSingleton<IVaultChangeNotifier, VaultChangeNotifier>();
         builder.Services.AddSingleton<ApiVaultCoordinator>();
 
+        // Browser HTTP client: delegates fetch() to the browser so that /api/*
+        // requests appear in the browser's Network tab (thin-client behaviour).
+        builder.Services.AddScoped<BrowserHttpClient>();
+
         // One session type per circuit; IVaultSession / IVaultEvents resolve to
         // the same scoped instances the circuit actually lives on.
         builder.Services.AddScoped<VaultEventRelay>();
@@ -125,13 +129,16 @@ public static class WebHostFactory
 
         builder.Services.AddHostedService<VaultHubRelay>();
 
-        // LocalApiService talks to the /api/* endpoints; tokens come from the
-        // coordinator's live session list (HttpContext is null during SignalR callbacks).
+        // LocalApiService talks to the /api/* endpoints via the browser HTTP
+        // client; tokens are persisted in localStorage for cross-tab sync.
         var httpAccessor = new HttpContextAccessor();
         builder.Services.AddSingleton<IHttpContextAccessor>(httpAccessor);
 
         builder.Services.AddScoped<LocalApiService>(sp =>
-            new LocalApiService(sp.GetRequiredService<IHttpClientFactory>(), options.Port, sp.GetRequiredService<ApiVaultCoordinator>()));
+            new LocalApiService(sp.GetRequiredService<BrowserHttpClient>(), sp.GetRequiredService<ApiVaultCoordinator>()));
+
+        builder.Services.AddScoped<BrowserHttpClient>(sp =>
+            new BrowserHttpClient(sp.GetRequiredService<IHttpClientFactory>(), options.Port, sp.GetRequiredService<ApiVaultCoordinator>()));
 
         var app = builder.Build();
 
@@ -165,6 +172,8 @@ public static class WebHostFactory
         app.MapGet("/_content/Doopass.WebUi/brand.svg", (HttpContext ctx) =>
             ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.brand.svg", "image/svg+xml; charset=utf-8", revalidate: true));
         app.MapGet("/_framework/blazor.web.js", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.blazor.web.js", "text/javascript; charset=utf-8"));
+        // Thin-client API bridge: fetch() calls from the browser (Network tab visible).
+        app.MapGet("/doopass-api.js", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.doopass-api.js", "text/javascript; charset=utf-8", revalidate: true));
 
         // PWA: installable web app (manifest, service worker, icons), all embedded.
         app.MapGet("/pwa/manifest.webmanifest", (HttpContext ctx) =>
