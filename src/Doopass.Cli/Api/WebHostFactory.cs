@@ -7,6 +7,7 @@ using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
 using Doopass.WebUi.Abstractions;
+using Microsoft.AspNetCore.Http;
 
 namespace Doopass.Cli.Api;
 
@@ -100,8 +101,8 @@ public static class WebHostFactory
         // One session type per circuit; IVaultSession / IVaultEvents resolve to
         // the same scoped instances the circuit actually lives on.
         builder.Services.AddScoped<VaultEventRelay>();
-        builder.Services.AddScoped<DoopassSession>();
-        builder.Services.AddScoped<IVaultSession>(sp => sp.GetRequiredService<DoopassSession>());
+        builder.Services.AddScoped<LocalApiService>();
+        builder.Services.AddScoped<IVaultSession>(sp => sp.GetRequiredService<LocalApiService>());
         builder.Services.AddScoped<IVaultEvents>(sp => sp.GetRequiredService<VaultEventRelay>());
         builder.Services.AddScoped<Doopass.WebUi.Services.ToastService>();
         builder.Services.AddScoped<ISecretClipboard, Doopass.WebUi.Services.JsClipboard>();
@@ -122,6 +123,12 @@ public static class WebHostFactory
         builder.Services.AddSingleton(announce);
 
         builder.Services.AddHostedService<VaultHubRelay>();
+
+        // Wire up the static context reference so LocalApiService can read tokens
+        // even when called during host initialization (before request scope exists).
+        var httpAccessor = new HttpContextAccessor();
+        builder.Services.AddSingleton<IHttpContextAccessor>(httpAccessor);
+        LocalApiService.RegisterStaticAccessor(httpAccessor);
 
         var app = builder.Build();
 
@@ -145,7 +152,7 @@ public static class WebHostFactory
         // revalidated on every load -- otherwise a browser keeps running a stale theme.js /
         // app.css for an hour after an upgrade.
         var webUi = typeof(Doopass.WebUi.Components.App).Assembly;
-        var cli = typeof(DoopassSession).Assembly;
+        var cli = typeof(WebHostFactory).Assembly;
         app.MapGet("/app.css", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.app.css", "text/css; charset=utf-8", revalidate: true));
         app.MapGet("/theme.js", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.theme.js", "text/javascript; charset=utf-8", revalidate: true));
         app.MapGet("/app.js", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.app.js", "text/javascript; charset=utf-8", revalidate: true));
