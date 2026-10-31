@@ -73,7 +73,7 @@ internal sealed class BrowserHttpClient : IDisposable
             return await ToHttpResponse(serverRes, ct);
         }
         var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("doopass.api.get", url);
+        var browserRes = await mod.InvokeAsync<HttpResponse>("get", url);
         return browserRes;
     }
 
@@ -93,7 +93,7 @@ internal sealed class BrowserHttpClient : IDisposable
             return await ToHttpResponse(serverRes, ct);
         }
         var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("doopass.api.post", url, body);
+        var browserRes = await mod.InvokeAsync<HttpResponse>("post", url, body);
         return browserRes;
     }
 
@@ -113,7 +113,7 @@ internal sealed class BrowserHttpClient : IDisposable
             return await ToHttpResponse(serverRes, ct);
         }
         var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("doopass.api.put", url, body);
+        var browserRes = await mod.InvokeAsync<HttpResponse>("put", url, body);
         return browserRes;
     }
 
@@ -130,7 +130,7 @@ internal sealed class BrowserHttpClient : IDisposable
             return await ToHttpResponse(serverRes, ct);
         }
         var mod = await ModuleAsync();
-        var browserRes = await mod.InvokeAsync<HttpResponse>("doopass.api.delete", url);
+        var browserRes = await mod.InvokeAsync<HttpResponse>("deleteReq", url);
         return browserRes;
     }
 
@@ -138,7 +138,7 @@ internal sealed class BrowserHttpClient : IDisposable
     {
         if (_httpClient is not null) return null; // tests don't need token
         var mod = await ModuleAsync();
-        return await mod.InvokeAsync<string?>("doopass.api.token.get");
+        return await mod.InvokeAsync<string?>("getToken");
     }
 
     public async ValueTask SetTokenAsync(string? token, CancellationToken ct = default)
@@ -149,7 +149,7 @@ internal sealed class BrowserHttpClient : IDisposable
             return;
         }
         var mod = await ModuleAsync();
-        await mod.InvokeVoidAsync("doopass.api.token.set", token);
+        await mod.InvokeVoidAsync("setToken", token);
     }
 
     public void Dispose()
