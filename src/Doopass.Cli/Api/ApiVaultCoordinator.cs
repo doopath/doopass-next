@@ -76,6 +76,19 @@ public sealed class ApiVaultCoordinator
     /// <summary>Number of live sessions (exposed for tests and diagnostics).</summary>
     public int SessionCount { get { lock (_gate) { return _sessions.Count; } } }
 
+    /// <summary>Any active session token, or <c>null</c> when the vault is locked.</summary>
+    public string? ActiveToken
+    {
+        get
+        {
+            lock (_gate)
+            {
+                PruneExpired_locked(Clock());
+                return _sessions.FirstOrDefault(kv => kv.Value.LastSeenUtc + SessionTtl > Clock()).Key;
+            }
+        }
+    }
+
     /// <summary>
     /// Per-test isolation: drops every token, relocks and removes the store file,
     /// restoring the clock source. Not part of the production surface.

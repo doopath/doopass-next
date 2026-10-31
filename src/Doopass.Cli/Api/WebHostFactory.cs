@@ -94,6 +94,8 @@ public static class WebHostFactory
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
+        builder.Services.AddHttpClient();
+
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton<IVaultChangeNotifier, VaultChangeNotifier>();
         builder.Services.AddSingleton<ApiVaultCoordinator>();
@@ -101,7 +103,6 @@ public static class WebHostFactory
         // One session type per circuit; IVaultSession / IVaultEvents resolve to
         // the same scoped instances the circuit actually lives on.
         builder.Services.AddScoped<VaultEventRelay>();
-        builder.Services.AddScoped<LocalApiService>();
         builder.Services.AddScoped<IVaultSession>(sp => sp.GetRequiredService<LocalApiService>());
         builder.Services.AddScoped<IVaultEvents>(sp => sp.GetRequiredService<VaultEventRelay>());
         builder.Services.AddScoped<Doopass.WebUi.Services.ToastService>();
@@ -124,11 +125,13 @@ public static class WebHostFactory
 
         builder.Services.AddHostedService<VaultHubRelay>();
 
-        // Wire up the static context reference so LocalApiService can read tokens
-        // even when called during host initialization (before request scope exists).
+        // LocalApiService talks to the /api/* endpoints; tokens come from the
+        // coordinator's live session list (HttpContext is null during SignalR callbacks).
         var httpAccessor = new HttpContextAccessor();
         builder.Services.AddSingleton<IHttpContextAccessor>(httpAccessor);
-        LocalApiService.RegisterStaticAccessor(httpAccessor);
+
+        builder.Services.AddScoped<LocalApiService>(sp =>
+            new LocalApiService(sp.GetRequiredService<IHttpClientFactory>(), options.Port, sp.GetRequiredService<ApiVaultCoordinator>()));
 
         var app = builder.Build();
 

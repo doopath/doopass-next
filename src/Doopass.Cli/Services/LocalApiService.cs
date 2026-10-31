@@ -5,54 +5,31 @@ using Doopass.Cli.Api;
 using Doopass.Core;
 using Doopass.Core.Diagnostics;
 using Doopass.WebUi.Abstractions;
-using Microsoft.AspNetCore.Http;
 
 namespace Doopass.Cli.Services;
 
 /// <summary>
 /// IVaultSession that talks to the local REST API (/api/*) of the same process.
-/// Every operation is an HTTP call with a Bearer token taken from the current
-/// Blazor circuit's authentication identity, so /api endpoints see the same
-/// session context as the originating request.
+/// Every operation is an HTTP call with a Bearer token resolved from the
+/// coordinator's live session list (same pattern as mobile's RemoteVaultSession).
 /// </summary>
 internal sealed class LocalApiService : IVaultSession
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http;
-    private readonly object _gate = new();
-    private HttpContext? _currentContext;
-    private string? _token;
+    private readonly ApiVaultCoordinator _coordinator;
 
-    public LocalApiService(IHttpClientFactory factory, int port, IHttpContextAccessor ctx)
+    public LocalApiService(IHttpClientFactory factory, int port, ApiVaultCoordinator coordinator)
     {
         _http = factory.CreateClient();
         _http.BaseAddress = new Uri($"http://localhost:{port}/");
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        _currentContext = ctx.HttpContext;
+        _coordinator = coordinator;
     }
 
-    private string? Token
-    {
-        get
-        {
-            lock (_gate)
-            {
-                if (_token is not null) return _token;
-                var ctx = _currentContext ?? _staticCtx;
-                _token = ctx?.Items[Api.VaultAuth.TokenItemKey] as string;
-                return _token;
-            }
-        }
-    }
-
-    // Captured once for calls before DI wiring completes (e.g., during host build).
-    private static HttpContext? _staticCtx;
-
-    internal static void RegisterStaticAccessor(IHttpContextAccessor accessor)
-    {
-        if (_staticCtx is null) _staticCtx = accessor.HttpContext;
-    }
+    /// <summary>Returns any active session token (one per Blazor circuit).</summary>
+    private string? Token => _coordinator.ActiveToken;
 
     // --- Vault state / auth -----------------------------------------------
 
