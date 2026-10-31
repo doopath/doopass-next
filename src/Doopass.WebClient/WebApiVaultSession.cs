@@ -121,19 +121,6 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         }
     }
 
-    /// <summary>Reads the token back from sessionStorage once, without touching local state.</summary>
-    private async ValueTask<string?> ReadStoredTokenAsync()
-    {
-        try
-        {
-            return await _js.InvokeAsync<string?>("sessionStorage.getItem", "doopass_vault_token");
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     // --- Vault state / auth -----------------------------------------------
 
     private static VaultState OfflineState() =>
@@ -153,11 +140,20 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
             return OfflineState();
         }
 
-        await EnsureSuccessAsync(response, ct);
-        var dto = await ReadJsonAsync<StateDto>(response.Content, response.StatusCode, ct);
-        return dto is StateDto parsed
-            ? new VaultState(parsed.StoreExists, parsed.Unlocked, parsed.ServerVersion ?? Constants.Version)
-            : throw new InvalidOperationException("Empty state response.");
+        using (response)
+        {
+            await EnsureSuccessAsync(response, ct);
+            var dto = await ReadJsonAsync<StateDto>(response.Content, response.StatusCode, ct);
+            if (dto is not StateDto parsed)
+            {
+                throw new InvalidOperationException("Empty state response.");
+            }
+
+            // This tab has no token, so it must stay locked even if another tab
+            // unlocked the vault on the server; Store would 401 without a bearer.
+            var unlocked = parsed.Unlocked && !string.IsNullOrEmpty(_token);
+            return new VaultState(parsed.StoreExists, unlocked, parsed.ServerVersion ?? Constants.Version);
+        }
     }
 
     public async ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default)
@@ -165,7 +161,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         HttpResponseMessage response;
         try
         {
-            response = await PostAuthJsonAsync(new { password }, ct);
+            response = await PostAuthJsonAsync("/api/auth/login", new { password }, ct);
         }
         catch (HostUnreachableException) when (ct.IsCancellationRequested is false)
         {
@@ -190,7 +186,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         HttpResponseMessage response;
         try
         {
-            response = await PostAuthJsonAsync(new { password }, ct);
+            response = await PostAuthJsonAsync("/api/auth/init", new { password }, ct);
         }
         catch (HostUnreachableException) when (ct.IsCancellationRequested is false)
         {
@@ -217,7 +213,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         try
         {
             // Send with the current bearer so the host can revoke this server session.
-            await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         }
         catch
         {
@@ -295,9 +291,9 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
     }
 
     /// <summary>Sends a login/init body; transport failures surface as <see cref="HostUnreachableException"/> so the login screen shows the host banner.</summary>
-    private async ValueTask<HttpResponseMessage> PostAuthJsonAsync(object payload, CancellationToken ct)
+    private async ValueTask<HttpResponseMessage> PostAuthJsonAsync(string endpoint, object payload, CancellationToken ct)
     {
-        using var request = BuildRequest(HttpMethod.Post, "/api/auth/login", new StringContent(
+        using var request = BuildRequest(HttpMethod.Post, endpoint, new StringContent(
             JsonSerializer.Serialize(payload, Json), Encoding.UTF8, "application/json"));
 
         HttpResponseMessage response;
@@ -330,8 +326,11 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         // Server errors are raised by EnsureSuccessAsync and must stay as plain
         // HttpRequestException (not HostUnreachable), so this wrapper only covers
         // genuine transport failures, not 5xx responses.
-        await EnsureSuccessAsync(response, ct);
-        return await ReadJsonAsync<T>(response.Content, response.StatusCode, ct);
+        using (response)
+        {
+            await EnsureSuccessAsync(response, ct);
+            return await ReadJsonAsync<T>(response.Content, response.StatusCode, ct);
+        }
     }
 
     private async ValueTask SendAsync(HttpMethod method, string url, object? content, CancellationToken ct)
@@ -351,7 +350,10 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
             throw new HostUnreachableException($"Host is unreachable: {ex.Message}", ex);
         }
 
-        await EnsureSuccessAsync(response, ct);
+        using (response)
+        {
+            await EnsureSuccessAsync(response, ct);
+        }
     }
 
     private async ValueTask EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)

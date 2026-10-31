@@ -1,4 +1,3 @@
-using System.Net.Http;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.JSInterop;
 using Doopass.Core.Diagnostics;
@@ -15,7 +14,6 @@ namespace Doopass.WebClient;
 /// </summary>
 public sealed class WebVaultPushClient : IAsyncDisposable
 {
-    private readonly HttpClient _httpClient;
     private readonly IJSRuntime _js;
     private readonly VaultEventRelay _relay;
     private readonly string _hubBaseAddress;
@@ -23,18 +21,12 @@ public sealed class WebVaultPushClient : IAsyncDisposable
     private string? _connectionToken;
     private readonly SemaphoreSlim _startGate = new(1, 1);
 
-    public WebVaultPushClient(HttpClient httpClient, IJSRuntime js, VaultEventRelay relay, string hubBaseAddress)
+    public WebVaultPushClient(IJSRuntime js, VaultEventRelay relay, string hubBaseAddress)
     {
-        _httpClient = httpClient;
         _js = js;
         _relay = relay;
         _hubBaseAddress = hubBaseAddress;
     }
-
-    /// <summary>True when a live connection exists for the current session token.</summary>
-    public bool IsCurrentSession =>
-        _connection?.State == HubConnectionState.Connected
-        && !string.IsNullOrEmpty(_connectionToken);
 
     /// <summary>Opens the SignalR hub for the token stored in sessionStorage.</summary>
     public async Task StartAsync()
@@ -157,6 +149,24 @@ public sealed class WebVaultPushClient : IAsyncDisposable
 
         _connection = null;
         _connectionToken = null;
+    }
+
+    /// <summary>
+    /// Stops the channel when the session ends, but keeps the gate alive so a
+    /// later login in the same tab can start it again.
+    /// </summary>
+    public async Task StopAsync()
+    {
+        await _startGate.WaitAsync();
+
+        try
+        {
+            await StopCoreAsync();
+        }
+        finally
+        {
+            _startGate.Release();
+        }
     }
 
     public async ValueTask DisposeAsync()

@@ -27,7 +27,7 @@ builder.Services.AddScoped<ISecretClipboard>(sp => sp.GetRequiredService<Doopass
 // BaseAddress, which cannot be read in Blazor WebAssembly.
 var baseAddress = builder.HostEnvironment.BaseAddress;
 builder.Services.AddScoped(sp => new WebVaultPushClient(
-    sp.GetRequiredService<HttpClient>(), sp.GetRequiredService<IJSRuntime>(), sp.GetRequiredService<VaultEventRelay>(), baseAddress));
+    sp.GetRequiredService<IJSRuntime>(), sp.GetRequiredService<VaultEventRelay>(), baseAddress));
 
 var host = builder.Build();
 
@@ -41,6 +41,6 @@ var push = host.Services.GetRequiredService<WebVaultPushClient>();
 await push.StartAsync();
 
 session.SessionActivated += async () => await push.StartAsync();
-session.SessionCleared += async () => await push.DisposeAsync();
+session.SessionCleared += async () => await push.StopAsync();
 
 await host.RunAsync();

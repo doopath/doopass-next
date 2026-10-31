@@ -48,6 +48,9 @@ public sealed class TestHandler : HttpMessageHandler
     /// <summary>The bearer token (without scheme) sent on the most recent request.</summary>
     public string? LastAuthorization => _authorizations.Count > 0 ? _authorizations[^1] : null;
 
+    /// <summary>The request URI of the most recent request.</summary>
+    public Uri? LastRequestUri { get; private set; }
+
     public void Queue(HttpResponseMessage response) => _responses.Add(response);
     public void QueueException(Exception ex) => _responses.Add(null!); // marker
     public bool HasExceptions { get; private set; }
@@ -60,6 +63,7 @@ public sealed class TestHandler : HttpMessageHandler
                 throw new InvalidOperationException($"TestHandler: no more responses queued. Request was {request.Method} {request.RequestUri}");
             var response = _responses[_index++];
             _authorizations.Add(ParseBearer(request));
+            LastRequestUri = request.RequestUri;
             if (response is null)
             {
                 HasExceptions = true;
@@ -165,6 +169,62 @@ public sealed class WebApiVaultSessionTests : IDisposable
         var (success, message) = await Session.InitAsync("pass123");
         Assert.False(success);
         Assert.Equal("Store already exists!", message);
+    }
+
+    [Fact]
+    public async Task InitAsync_posts_to_init_endpoint()
+    {
+        Setup();
+        _handler.Queue(JsonResponses.Token("tok-init"));
+        _httpClient = new HttpClient(_handler) { BaseAddress = new Uri("http://localhost:7240/") };
+
+        var (success, message) = await Session.InitAsync("pass123");
+
+        Assert.True(success, message);
+        Assert.Equal("/api/auth/init", _handler.LastRequestUri?.AbsolutePath);
+        Assert.Equal("tok-init", _js.Token);
+    }
+
+    [Fact]
+    public async Task LoginAsync_posts_to_login_endpoint()
+    {
+        Setup();
+        _handler.Queue(JsonResponses.Token("tok-login"));
+        _httpClient = new HttpClient(_handler) { BaseAddress = new Uri("http://localhost:7240/") };
+
+        var (success, message) = await Session.LoginAsync("pass123");
+
+        Assert.True(success, message);
+        Assert.Equal("/api/auth/login", _handler.LastRequestUri?.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task GetStateAsync_without_local_token_stays_locked_even_if_server_says_unlocked()
+    {
+        Setup();
+        _handler.Queue(JsonResponses.State(storeExists: true, unlocked: true));
+        _httpClient = new HttpClient(_handler) { BaseAddress = new Uri("http://localhost:7240/") };
+
+        var state = await Session.GetStateAsync();
+
+        Assert.True(state.StoreExists);
+        Assert.False(state.IsUnlocked);
+    }
+
+    [Fact]
+    public async Task GetStateAsync_with_restored_token_reports_unlocked()
+    {
+        Setup();
+        _js.InvokeCore("sessionStorage.setItem", new object[] { "doopass_vault_token", "tok-restored" });
+        _handler.Queue(JsonResponses.State(storeExists: true, unlocked: true));
+        _httpClient = new HttpClient(_handler) { BaseAddress = new Uri("http://localhost:7240/") };
+
+        await Session.InitializeAsync();
+        var state = await Session.GetStateAsync();
+
+        Assert.True(state.StoreExists);
+        Assert.True(state.IsUnlocked);
+        Assert.Equal("tok-restored", _handler.LastAuthorization);
     }
 
     [Fact]
