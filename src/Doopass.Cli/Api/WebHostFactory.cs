@@ -2,13 +2,11 @@ using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Doopass.Cli.Services;
 using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
-using Doopass.WebUi.Abstractions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.JSInterop;
+using Microsoft.Extensions.FileProviders;
 
 namespace Doopass.Cli.Api;
 
@@ -38,19 +36,16 @@ public sealed record WebHostOptions
 }
 
 /// <summary>
-/// Builds (and runs) the Doopass web host: Blazor Server UI, REST API under
+/// Builds (and runs) the Doopass web host: static Blazor WebAssembly UI, REST API under
 /// /api, the vault SignalR hub and LAN discovery. Split from <c>Program.cs</c>
 /// so integration tests can build the same pipeline on a random port.
 /// </summary>
 public static class WebHostFactory
 {
     /// <summary>
-    /// Builds the web host (Blazor UI, REST API, SignalR hub and discovery)
+    /// Builds the web host (static WASM UI, REST API, SignalR hub and discovery)
     /// without starting it, so tests can run the real pipeline on a free port.
     /// </summary>
-    /// <param name="options">Port, bind address, TLS and discovery options.</param>
-    /// <returns>A configured, not yet started application.</returns>
-    /// <exception cref="InvalidOperationException">The TLS certificate is missing or cannot be loaded.</exception>
     public static WebApplication BuildWebHost(WebHostOptions options)
     {
         var settings = new Settings();
@@ -59,7 +54,6 @@ public static class WebHostFactory
         var host = options.Host ?? (options.Lan ? "0.0.0.0" : "localhost");
         AppLogger.Info($"Doopass web server starting (v{Constants.Version}, bind {host}, port {options.Port})");
 
-        // --tls on the command line wins over the settings.json designation.
         var tlsPfx = options.TlsPfx ?? ReadApiSetting(settings, "tls_pfx");
         var tlsPassword = options.TlsPassword ?? ReadApiSetting(settings, "tls_pass");
         var fingerprint = ValidateTlsCertificate(tlsPfx, tlsPassword);
@@ -75,9 +69,6 @@ public static class WebHostFactory
         }
         else
         {
-            // TLS mode: bind Kestrel explicitly with the caller-supplied certificate.
-            // Remote clients are the whole point of --tls, so it binds all interfaces
-            // unless the (test) host override carries a bindable IP address.
             IPAddress bindAddress = IPAddress.Any;
 
             if (options.Host is not null && IPAddress.TryParse(options.Host, out var parsed))
@@ -92,26 +83,12 @@ public static class WebHostFactory
             });
         }
 
-        builder.Services.AddRazorComponents()
-            .AddInteractiveServerComponents();
-
         builder.Services.AddHttpClient();
 
+        // Server-side services: coordinator + notifier.
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton<IVaultChangeNotifier, VaultChangeNotifier>();
         builder.Services.AddSingleton<ApiVaultCoordinator>();
-
-        // Browser HTTP client: delegates fetch() to the browser so that /api/*
-        // requests appear in the browser's Network tab (thin-client behaviour).
-        builder.Services.AddScoped<BrowserHttpClient>();
-
-        // One session type per circuit; IVaultSession / IVaultEvents resolve to
-        // the same scoped instances the circuit actually lives on.
-        builder.Services.AddScoped<VaultEventRelay>();
-        builder.Services.AddScoped<IVaultSession>(sp => sp.GetRequiredService<LocalApiService>());
-        builder.Services.AddScoped<IVaultEvents>(sp => sp.GetRequiredService<VaultEventRelay>());
-        builder.Services.AddScoped<Doopass.WebUi.Services.ToastService>();
-        builder.Services.AddScoped<ISecretClipboard, Doopass.WebUi.Services.JsClipboard>();
 
         builder.Services.AddSignalR();
         VaultAuth.AddVaultRateLimiter(builder.Services);
@@ -124,24 +101,9 @@ public static class WebHostFactory
             Enabled = announceEnabled,
         };
         builder.Services.AddHostedService(_ => new DiscoveryService(announce));
-        // Registered for the state endpoint as well: the trust-on-first-use flow
-        // on thin clients reads the fingerprint from /api/vault/state.
         builder.Services.AddSingleton(announce);
 
         builder.Services.AddHostedService<VaultHubRelay>();
-
-        // LocalApiService talks to the /api/* endpoints via the browser HTTP
-        // client; tokens are persisted in localStorage for cross-tab sync.
-        var httpAccessor = new HttpContextAccessor();
-        builder.Services.AddSingleton<IHttpContextAccessor>(httpAccessor);
-
-        builder.Services.AddScoped<LocalApiService>(sp =>
-            new LocalApiService(sp.GetRequiredService<BrowserHttpClient>(), sp.GetRequiredService<ApiVaultCoordinator>()));
-
-        // Production: BrowserHttpClient uses JS interop (IJSRuntime) to delegate fetch() to the browser.
-        // The coordinator is injected so GetToken() can fall back to ActiveToken on page reload.
-        builder.Services.AddScoped<BrowserHttpClient>(sp =>
-            new BrowserHttpClient(sp.GetRequiredService<IJSRuntime>(), sp.GetRequiredService<ApiVaultCoordinator>()));
 
         var app = builder.Build();
 
@@ -153,37 +115,22 @@ public static class WebHostFactory
         }
 
         app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-        app.UseAntiforgery();
         app.UseRateLimiter();
+
+        // --- REST API + SignalR hub ------------------------------------------
 
         app.MapDoopassApi();
         app.MapHub<VaultHub>("/hubs/vault");
 
-        // Serve the web assets from embedded resources (works in single-file deployments too).
-        // The root UI assets live in the Doopass.WebUi RCL; the web host owns the framework
-        // script and PWA assets. The asset URLs carry no content hash, so they must be
-        // revalidated on every load -- otherwise a browser keeps running a stale theme.js /
-        // app.css for an hour after an upgrade.
-        var webUi = typeof(Doopass.WebUi.Components.App).Assembly;
-        var cli = typeof(WebHostFactory).Assembly;
-        app.MapGet("/app.css", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.app.css", "text/css; charset=utf-8", revalidate: true));
-        app.MapGet("/theme.js", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.theme.js", "text/javascript; charset=utf-8", revalidate: true));
-        app.MapGet("/app.js", (HttpContext ctx) => ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.app.js", "text/javascript; charset=utf-8", revalidate: true));
-        // Brand mark for the shared layouts. Served at the same _content/... URL the
-        // MAUI WebView resolves, so MainLayout / AuthLayout keep one image source in
-        // both hosts instead of branching on which one is rendering.
-        app.MapGet("/_content/Doopass.WebUi/brand.svg", (HttpContext ctx) =>
-            ServeAsset(ctx, webUi, "Doopass.WebUi.wwwroot.brand.svg", "image/svg+xml; charset=utf-8", revalidate: true));
-        app.MapGet("/_framework/blazor.web.js", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.blazor.web.js", "text/javascript; charset=utf-8"));
-        // Thin-client API bridge: fetch() calls from the browser (Network tab visible).
-        app.MapGet("/doopass-api.js", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.doopass-api.js", "text/javascript; charset=utf-8", revalidate: true));
+        // --- PWA assets (embedded resources) ----------------------------------
 
-        // PWA: installable web app (manifest, service worker, icons), all embedded.
+        var cli = typeof(WebHostFactory).Assembly;
+
+        // PWA: installable web app (manifest, service worker, icons).
         app.MapGet("/pwa/manifest.webmanifest", (HttpContext ctx) =>
             ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.manifest.webmanifest", "application/manifest+json; charset=utf-8", revalidate: true));
         app.MapGet("/pwa/sw.js", (HttpContext ctx) =>
         {
-            // Lets a worker under /pwa/ claim the whole site ("https://host/") as scope.
             ctx.Response.Headers["Service-Worker-Allowed"] = "/";
             return ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.sw.js", "text/javascript; charset=utf-8", revalidate: true);
         });
@@ -193,14 +140,34 @@ public static class WebHostFactory
         app.MapGet("/pwa/icon-maskable-512.png", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.icon-maskable-512.png", "image/png"));
         app.MapGet("/pwa/apple-touch-icon.png", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.apple-touch-icon.png", "image/png"));
 
-        // Browser icon: the SVG master is what modern browsers use, the .ico covers
-        // legacy agents and the /favicon.ico probe that some of them make anyway.
+        // Browser icon.
         app.MapGet("/pwa/favicon.svg", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.favicon.svg", "image/svg+xml; charset=utf-8"));
         app.MapGet("/pwa/favicon.ico", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.favicon.ico", "image/x-icon"));
         app.MapGet("/favicon.ico", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.favicon.ico", "image/x-icon"));
 
-        app.MapRazorComponents<Doopass.WebUi.Components.App>()
-            .AddInteractiveServerRenderMode();
+        // --- Static WASM UI -------------------------------------------------
+
+        // Development: StaticWebAssets from Doopass.WebClient project.
+        // Production single-file: physical files extracted on startup.
+        var wwwroot = GetWasmRoot();
+
+        if (wwwroot is not null)
+        {
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(wwwroot),
+                RequestPath = string.Empty,
+            });
+        }
+        else
+        {
+            // Dev mode fallback: serve a minimal index.html that warns about missing WASM.
+            app.MapGet("/", (HttpContext ctx) =>
+            {
+                ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                return Results.Text("Blazor WebAssembly UI not found. Run 'dotnet publish' to generate it.", "text/plain");
+            });
+        }
 
         var scheme = fingerprint is not null ? "https" : "http";
         var url = $"{scheme}://localhost:{options.Port}";
@@ -208,11 +175,77 @@ public static class WebHostFactory
 
         if (fingerprint is not null)
         {
-            // Trust-on-first-use: clients pin this SHA-256 certificate fingerprint.
             app.Logger.LogInformation("TLS certificate SHA-256 fingerprint: {Fingerprint}", fingerprint);
         }
 
         return app;
+    }
+
+    private static string? GetWasmRoot()
+    {
+        // Development: resolve from StaticWebAssets (Doopass.WebClient output).
+        var path = AppDomain.CurrentDomain.GetData("Microsoft.AspNetCore.StaticWebAssetsPath") as string;
+        if (path is not null && Directory.Exists(path))
+        {
+            return path;
+        }
+
+        // Production single-file: WASM bundle extracted to a temp directory on startup.
+        // See _ExtractWasmOnStartup MSBuild target in Doopass.Cli.csproj.
+        var version = typeof(WebHostFactory).Assembly.GetName().Version?.ToString(3) ?? "5.0.0";
+        var dir = Path.Combine(Path.GetTempPath(), "doopass-web", version);
+
+        if (Directory.Exists(dir))
+        {
+            return dir;
+        }
+
+        // Single-file: no WASM yet — this path is taken when running from a
+        // single-file exe that hasn't extracted the bundle.  The _ExtractWasmOnStartup
+        // MSBuild target creates an embedded zip that gets unzipped to <temp>/doopass-web/<version>
+        // during publish (or can be unpacked manually before the first run).
+        return null;
+    }
+
+    private static string? ReadApiSetting(Settings settings, string key)
+    {
+        if (!settings.Sections.Contains("api", StringComparer.Ordinal))
+        {
+            return null;
+        }
+
+        return settings.GetSection("api").TryGetValue(key, out var value) && value.Length > 0 ? value : null;
+    }
+
+    private static string? ValidateTlsCertificate(string? tlsPfx, string? tlsPassword)
+    {
+        if (string.IsNullOrEmpty(tlsPfx))
+        {
+            return null;
+        }
+
+        if (!File.Exists(tlsPfx))
+        {
+            throw new InvalidOperationException($"TLS certificate file not found: {tlsPfx}");
+        }
+
+        using var certificate = X509CertificateLoader.LoadPkcs12FromFile(tlsPfx, tlsPassword);
+        var fingerprint = Convert.ToHexString(certificate.GetCertHash(HashAlgorithmName.SHA256)).ToLowerInvariant();
+        AppLogger.Info($"TLS enabled; certificate SHA-256 fingerprint: {fingerprint}");
+        return fingerprint;
+    }
+
+    private static IResult ServeAsset(HttpContext ctx, System.Reflection.Assembly assembly, string resourceName, string contentType, bool revalidate = false)
+    {
+        var stream = assembly.GetManifestResourceStream(resourceName);
+
+        if (stream is null)
+        {
+            return Results.NotFound();
+        }
+
+        ctx.Response.Headers["Cache-Control"] = revalidate ? "no-cache" : "public, max-age=3600";
+        return Results.Stream(stream, contentType);
     }
 
     /// <summary>Runs a built host to completion (SIGTERM/CTRL-C handled by the runtime).</summary>
@@ -243,47 +276,5 @@ public static class WebHostFactory
 
         app.Run();
         return 0;
-    }
-
-    private static string? ReadApiSetting(Settings settings, string key)
-    {
-        if (!settings.Sections.Contains("api", StringComparer.Ordinal))
-        {
-            return null;
-        }
-
-        return settings.GetSection("api").TryGetValue(key, out var value) && value.Length > 0 ? value : null;
-    }
-
-    /// <summary>Checks the TLS certificate exists and is loadable; returns its SHA-256 fingerprint.</summary>
-    private static string? ValidateTlsCertificate(string? tlsPfx, string? tlsPassword)
-    {
-        if (string.IsNullOrEmpty(tlsPfx))
-        {
-            return null;
-        }
-
-        if (!File.Exists(tlsPfx))
-        {
-            throw new InvalidOperationException($"TLS certificate file not found: {tlsPfx}");
-        }
-
-        using var certificate = X509CertificateLoader.LoadPkcs12FromFile(tlsPfx, tlsPassword);
-        var fingerprint = Convert.ToHexString(certificate.GetCertHash(HashAlgorithmName.SHA256)).ToLowerInvariant();
-        AppLogger.Info($"TLS enabled; certificate SHA-256 fingerprint: {fingerprint}");
-        return fingerprint;
-    }
-
-    private static IResult ServeAsset(HttpContext ctx, System.Reflection.Assembly assembly, string resourceName, string contentType, bool revalidate = false)
-    {
-        var stream = assembly.GetManifestResourceStream(resourceName);
-
-        if (stream is null)
-        {
-            return Results.NotFound();
-        }
-
-        ctx.Response.Headers["Cache-Control"] = revalidate ? "no-cache" : "public, max-age=3600";
-        return Results.Stream(stream, contentType);
     }
 }

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Doopass.WebClient</RootNamespace>
+    <AssemblyName>Doopass.WebClient</AssemblyName>
+    <Version>5.0.0</Version>
+    <Description>Doopass Blazor WebAssembly thin client: runs UI in the browser, calls the REST API and SignalR hub of Doopass.Cli.</Description>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.14" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.14" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Doopass.WebUi\Doopass.WebUi.csproj" />
+    <ProjectReference Include="..\Doopass.Core\Doopass.Core.csproj" />
+  </ItemGroup>
+
+</Project>
