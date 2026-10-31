@@ -50,18 +50,42 @@
     <InternalsVisibleTo Include="Doopass.Api.Tests" />
   </ItemGroup>
 
-  <!--
-    Single-file publish: the host references the Blazor WebAssembly client, whose
-    static web assets (index.html, _framework/*, _content/*) flow into the publish
-    graph. When the host itself is a single-file build, the SDK still runs an inner
-    compute pass over the referenced client and forwards PublishSingleFile=true,
-    which trips NETSDK1098 on this non-executable project. Drop that global from the
-    referenced-project compute only during single-file builds; the client assets are
-    bundled into the single file by IncludeAllContentForSelfExtract (see
-    scripts/publish-portable.sh) and served at runtime via UseStaticFiles().
-  -->
+  <!-- Keep the client's own build from inheriting the host's single-file globals. -->
   <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
     <_GlobalPropertiesToRemoveFromProjectReferences>$(_GlobalPropertiesToRemoveFromProjectReferences);PublishSingleFile</_GlobalPropertiesToRemoveFromProjectReferences>
   </PropertyGroup>
+
+  <!--
+    The single-file host must not depend on a loose wwwroot/ directory next to the
+    executable. Publish the Blazor client into an intermediate directory, zip its
+    wwwroot into the host assembly as an embedded resource, and extract it to a
+    per-version temp directory at startup. This keeps dev runs and folder publishes
+    working too: the host simply serves the extracted bundle.
+  -->
+  <Target Name="PackWasmBundle" BeforeTargets="SplitResourcesByCulture;CreateManifestResourceNames"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_WasmPublishDir>$(MSBuildProjectDirectory)/obj/wasm-publish/$(Configuration)/</_WasmPublishDir>
+      <_WasmZip>$(IntermediateOutputPath)doopass-wasm.zip</_WasmZip>
+    </PropertyGroup>
+    <RemoveDir Directories="$(_WasmPublishDir)" />
+    <MSBuild Projects="$(MSBuildProjectDirectory)/../Doopass.WebClient/Doopass.WebClient.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);PublishDir=$(_WasmPublishDir);TargetFramework=net10.0"
+             RemoveProperties="PublishSingleFile;PublishTrimmed;RuntimeIdentifier;SelfContained" />
+    <ZipDirectory SourceDirectory="$(_WasmPublishDir)wwwroot" DestinationFile="$(_WasmZip)" Overwrite="true" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(_WasmZip)" LogicalName="Doopass.Cli.wwwroot.wasm.zip" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The UI is inside the embedded bundle for single-file builds, so the
+       published wwwroot/ and static-web-asset manifest are redundant. Removing
+       them keeps the portable output to one executable. -->
+  <Target Name="TrimSingleFilePublishOutput" AfterTargets="Publish"
+          Condition="'$(PublishSingleFile)' == 'true'">
+    <RemoveDir Directories="$(PublishDir)wwwroot" />
+    <Delete Files="$(PublishDir)doopass.staticwebassets.endpoints.json" />
+  </Target>
 
 </Project>

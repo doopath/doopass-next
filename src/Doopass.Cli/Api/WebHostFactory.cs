@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -7,6 +8,8 @@ using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.FileProviders;
 
 namespace Doopass.Cli.Api;
 
@@ -147,15 +150,31 @@ public static class WebHostFactory
 
         // --- Static WASM UI + SPA fallback ------------------------------------
 
-        // One pipeline serves both build modes. Dev/folder publish gets the client
-        // assets (index.html, _framework/*) from the referenced projects' static web
-        // assets; a single-file build gets them extracted to <base>/wwwroot via
-        // IncludeAllContentForSelfExtract — UseStaticFiles() serves either with no
-        // code split. API (/api/*) and SignalR (/hubs/vault) are mapped above and
-        // never reach this fallback.
-        app.UseStaticFiles();
-        app.UseBlazorFrameworkFiles();
-        app.MapFallbackToFile("index.html");
+        // The client bundle is embedded in this assembly by the PackWasmBundle
+        // MSBuild target, so a single-file executable never needs a loose
+        // wwwroot/ directory. Folder builds and dev runs use the same extracted
+        // bundle; if extraction is unavailable (design-time build), fall back to
+        // the SDK's static web assets.
+        var wasmRoot = ExtractEmbeddedWasmBundle();
+        IFileProvider? wasmProvider = null;
+
+        if (wasmRoot is not null)
+        {
+            wasmProvider = new PhysicalFileProvider(wasmRoot);
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = wasmProvider,
+                ContentTypeProvider = WasmContentTypes,
+            });
+        }
+        else
+        {
+            app.UseStaticFiles();
+            app.UseBlazorFrameworkFiles();
+            wasmProvider = app.Environment.WebRootFileProvider;
+        }
+
+        MapSpaFallback(app, wasmProvider);
 
         var scheme = fingerprint is not null ? "https" : "http";
         var url = $"{scheme}://localhost:{options.Port}";
@@ -167,6 +186,100 @@ public static class WebHostFactory
         }
 
         return app;
+    }
+
+    private const string WasmBundleResource = "Doopass.Cli.wwwroot.wasm.zip";
+
+    private static readonly FileExtensionContentTypeProvider WasmContentTypes = CreateWasmContentTypes();
+
+    private static FileExtensionContentTypeProvider CreateWasmContentTypes()
+    {
+        var provider = new FileExtensionContentTypeProvider();
+        provider.Mappings[".wasm"] = "application/wasm";
+        provider.Mappings[".dat"] = "application/octet-stream";
+        provider.Mappings[".blazor"] = "text/plain; charset=utf-8";
+        provider.Mappings[".webcil"] = "application/octet-stream";
+        provider.Mappings[".dll"] = "application/octet-stream";
+        return provider;
+    }
+
+    /// <summary>
+    /// Extracts the embedded WASM bundle to a version-addressed temp directory and
+    /// returns its path. A marker file makes repeat starts cheap; failures fall back
+    /// to the SDK static web assets instead of taking the host down.
+    /// </summary>
+    private static string? ExtractEmbeddedWasmBundle()
+    {
+        var assembly = typeof(WebHostFactory).Assembly;
+        using var resource = assembly.GetManifestResourceStream(WasmBundleResource);
+
+        if (resource is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var buffer = new MemoryStream();
+            resource.CopyTo(buffer);
+            var hash = Convert.ToHexString(SHA256.HashData(buffer.ToArray())).ToLowerInvariant()[..16];
+            var version = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+            var root = Path.Combine(Path.GetTempPath(), "doopass-web", $"{version}-{hash}");
+            var marker = Path.Combine(root, ".complete");
+
+            if (!File.Exists(marker))
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+
+                Directory.CreateDirectory(root);
+                buffer.Position = 0;
+                using var archive = new ZipArchive(buffer, ZipArchiveMode.Read);
+                archive.ExtractToDirectory(root);
+                File.WriteAllText(marker, hash);
+            }
+
+            return root;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Extracting the embedded web UI bundle failed", ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Serves index.html for client-side routes, but leaves API, hub, PWA and
+    /// file-shaped paths as real 404s instead of masking them with the SPA shell.
+    /// </summary>
+    private static void MapSpaFallback(WebApplication app, IFileProvider provider)
+    {
+        app.MapFallback(async context =>
+        {
+            var path = context.Request.Path;
+
+            if (path.StartsWithSegments("/api")
+                || path.StartsWithSegments("/hubs")
+                || path.StartsWithSegments("/pwa")
+                || (path.Value?.Contains('.') ?? false))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
+            var index = provider.GetFileInfo("index.html");
+
+            if (!index.Exists)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
+            context.Response.ContentType = "text/html; charset=utf-8";
+            await context.Response.SendFileAsync(index);
+        });
     }
 
     private static string? ReadApiSetting(Settings settings, string key)
