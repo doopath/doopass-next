@@ -1,5 +1,6 @@
 @page "/store"
 @implements IDisposable
+@using Doopass.Core
 @inject IVaultSession Session
 @inject IVaultEvents Events
 @inject NavigationManager Nav
@@ -336,7 +337,7 @@ else
 
             _showEditor = false;
         }
-        catch (Exception ex) when (ex is Doopass.Core.PropertyAlreadyExistError or Doopass.Core.PropertyDoesNotExistError)
+        catch (Exception ex) when (ex is PropertyAlreadyExistError or PropertyDoesNotExistError)
         {
             _formError = ex.Message;
         }
