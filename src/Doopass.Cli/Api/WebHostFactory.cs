@@ -5,8 +5,8 @@ using System.Security.Cryptography.X509Certificates;
 using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.FileProviders;
 
 namespace Doopass.Cli.Api;
 
@@ -83,8 +83,6 @@ public static class WebHostFactory
             });
         }
 
-        builder.Services.AddHttpClient();
-
         // Server-side services: coordinator + notifier.
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton<IVaultChangeNotifier, VaultChangeNotifier>();
@@ -114,7 +112,9 @@ public static class WebHostFactory
             app.UseExceptionHandler("/Error", createScopeForErrors: true);
         }
 
-        app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+        // API paths are JSON-first and must keep their own error shape; the SPA
+        // fallback below is only for client routes, so status-code pages are not
+        // used (a stray client path falling back to index.html is fine).
         app.UseRateLimiter();
 
         // --- REST API + SignalR hub ------------------------------------------
@@ -145,29 +145,17 @@ public static class WebHostFactory
         app.MapGet("/pwa/favicon.ico", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.favicon.ico", "image/x-icon"));
         app.MapGet("/favicon.ico", (HttpContext ctx) => ServeAsset(ctx, cli, "Doopass.Cli.wwwroot.pwa.favicon.ico", "image/x-icon"));
 
-        // --- Static WASM UI -------------------------------------------------
+        // --- Static WASM UI + SPA fallback ------------------------------------
 
-        // Development: StaticWebAssets from Doopass.WebClient project.
-        // Production single-file: physical files extracted on startup.
-        var wwwroot = GetWasmRoot();
-
-        if (wwwroot is not null)
-        {
-            app.UseStaticFiles(new StaticFileOptions
-            {
-                FileProvider = new PhysicalFileProvider(wwwroot),
-                RequestPath = string.Empty,
-            });
-        }
-        else
-        {
-            // Dev mode fallback: serve a minimal index.html that warns about missing WASM.
-            app.MapGet("/", (HttpContext ctx) =>
-            {
-                ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-                return Results.Text("Blazor WebAssembly UI not found. Run 'dotnet publish' to generate it.", "text/plain");
-            });
-        }
+        // One pipeline serves both build modes. Dev/folder publish gets the client
+        // assets (index.html, _framework/*) from the referenced projects' static web
+        // assets; a single-file build gets them extracted to <base>/wwwroot via
+        // IncludeAllContentForSelfExtract — UseStaticFiles() serves either with no
+        // code split. API (/api/*) and SignalR (/hubs/vault) are mapped above and
+        // never reach this fallback.
+        app.UseStaticFiles();
+        app.UseBlazorFrameworkFiles();
+        app.MapFallbackToFile("index.html");
 
         var scheme = fingerprint is not null ? "https" : "http";
         var url = $"{scheme}://localhost:{options.Port}";
@@ -179,43 +167,6 @@ public static class WebHostFactory
         }
 
         return app;
-    }
-
-    private static string? GetWasmRoot()
-    {
-        // Development: resolve from StaticWebAssets (Doopass.WebClient output).
-        var path = AppDomain.CurrentDomain.GetData("Microsoft.AspNetCore.StaticWebAssetsPath") as string;
-        if (path is not null && Directory.Exists(path))
-        {
-            return path;
-        }
-
-        // Published app: wwwroot lives alongside the assembly in the publish output.
-        var dir = Path.GetDirectoryName(typeof(WebHostFactory).Assembly.Location);
-        if (dir is not null)
-        {
-            var wwwroot = Path.Combine(dir, "wwwroot");
-            if (Directory.Exists(wwwroot))
-            {
-                return wwwroot;
-            }
-        }
-
-        // Production single-file: WASM bundle extracted to a temp directory on startup.
-        // See _ExtractWasmOnStartup MSBuild target in Doopass.Cli.csproj.
-        var version = typeof(WebHostFactory).Assembly.GetName().Version?.ToString(3) ?? "5.0.0";
-        var dir2 = Path.Combine(Path.GetTempPath(), "doopass-web", version);
-
-        if (Directory.Exists(dir2))
-        {
-            return dir2;
-        }
-
-        // Single-file: no WASM yet — this path is taken when running from a
-        // single-file exe that hasn't extracted the bundle.  The _ExtractWasmOnStartup
-        // MSBuild target creates an embedded zip that gets unzipped to <temp>/doopass-web/<version>
-        // during publish (or can be unpacked manually before the first run).
-        return null;
     }
 
     private static string? ReadApiSetting(Settings settings, string key)

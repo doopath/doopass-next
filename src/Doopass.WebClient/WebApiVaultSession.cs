@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Doopass.Core;
+using Doopass.Core.Diagnostics;
 using Doopass.WebUi.Abstractions;
 using Microsoft.JSInterop;
 
@@ -11,8 +12,9 @@ namespace Doopass.WebClient;
 /// <summary>
 /// IVaultSession for the Blazor WebAssembly thin client: every call is a direct
 /// HTTP request against the host REST API. HTTP statuses map back to Core
-/// exceptions so the shared RCL pages behave identically across hosts.
-/// Token lives in memory + sessionStorage (per-tab, survives reload, never cross-tab).
+/// exceptions so the shared RCL pages behave identically across hosts. Token
+/// lives only in memory plus sessionStorage (per-tab, survives reload, never
+/// cross-tab), and the bearer header is attached to each outgoing request.
 /// </summary>
 public sealed class WebApiVaultSession : IVaultSession, IDisposable
 {
@@ -31,27 +33,79 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         _relay = relay;
     }
 
+    /// <summary>Raised after the local session is created (login or init), so hosts can open per-session resources such as the push channel.</summary>
+    public event Func<Task>? SessionActivated;
+
+    /// <summary>Raised after the local session ended (logout or a server 401/lock), so hosts can stop per-session resources.</summary>
+    public event Func<Task>? SessionCleared;
+
     // --- Token persistence ------------------------------------------------
+
+    private AuthenticationHeaderValue? BearerHeader() =>
+        string.IsNullOrEmpty(_token) ? null : new AuthenticationHeaderValue("Bearer", _token);
 
     private void SetLocalToken(string? token) => _token = token;
 
+    /// <summary>
+    /// Stores the token in memory and sessionStorage, and ends the local session
+    /// when clearing. Raising <see cref="SessionCleared"/> lets the host stop the
+    /// SignalR push connection that belongs to the now-absent token.
+    /// </summary>
     private async ValueTask PersistTokenAsync(string? token)
     {
         SetLocalToken(token);
+
         try
         {
             if (token is not null)
                 await _js.InvokeVoidAsync("sessionStorage.setItem", "doopass_vault_token", token);
             else
+            {
                 await _js.InvokeVoidAsync("sessionStorage.removeItem", "doopass_vault_token");
+                await RaiseSessionClearedAsync();
+            }
         }
-        catch { /* sessionStorage unavailable in some edge cases */ }
+        catch
+        {
+            // sessionStorage unavailable in some edge cases; the in-memory token still drives the next request.
+        }
 
-        if (token is null)
-            _httpClient.DefaultRequestHeaders.Authorization = null;
+        if (token is not null)
+        {
+            await RaiseSessionActivatedAsync();
+        }
     }
 
-    private async ValueTask RestoreTokenAsync()
+    private async Task RaiseSessionClearedAsync()
+    {
+        try
+        {
+            await (SessionCleared?.Invoke() ?? Task.CompletedTask);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Stopping the session after a clear failed", ex);
+        }
+    }
+
+    private async Task RaiseSessionActivatedAsync()
+    {
+        try
+        {
+            await (SessionActivated?.Invoke() ?? Task.CompletedTask);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Starting the session after a login failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// Restores the local session from sessionStorage before the first render,
+    /// so an unlocked tab survives a reload (or opens in a fresh one) without a
+    /// new login. The bearer is then attached to each outgoing request.
+    /// </summary>
+    public async ValueTask InitializeAsync()
     {
         try
         {
@@ -59,78 +113,113 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
             if (!string.IsNullOrEmpty(stored))
             {
                 SetLocalToken(stored);
-                _httpClient.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", stored);
             }
         }
-        catch { /* sessionStorage unavailable */ }
+        catch
+        {
+            // sessionStorage unavailable; start locked.
+        }
+    }
+
+    /// <summary>Reads the token back from sessionStorage once, without touching local state.</summary>
+    private async ValueTask<string?> ReadStoredTokenAsync()
+    {
+        try
+        {
+            return await _js.InvokeAsync<string?>("sessionStorage.getItem", "doopass_vault_token");
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // --- Vault state / auth -----------------------------------------------
 
+    private static VaultState OfflineState() =>
+        new(false, false, $"{Constants.Version} (offline)") { IsOffline = true };
+
     public async ValueTask<VaultState> GetStateAsync(CancellationToken ct = default)
     {
+        using var request = BuildRequest(HttpMethod.Get, "/api/vault/state");
+
+        HttpResponseMessage response;
         try
         {
-            using var response = await _httpClient.GetAsync("/api/vault/state",
-                HttpCompletionOption.ResponseHeadersRead, ct);
-            await EnsureSuccessAsync(response, ct, authOnly: false);
-            return await ReadJsonAsync<StateDto>(response.Content, response.StatusCode, ct)
-                is StateDto dto
-                    ? new VaultState(dto.StoreExists, dto.Unlocked, dto.ServerVersion ?? "5.0.0")
-                    : throw new InvalidOperationException("Empty state response.");
-        }
-        catch (HostUnreachableException) when (ct.IsCancellationRequested is false)
-        {
-            return new VaultState(false, false, "5.0.0 (offline)") { IsOffline = true };
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         }
         catch (HttpRequestException) when (ct.IsCancellationRequested is false)
         {
-            return new VaultState(false, false, "5.0.0 (offline)") { IsOffline = true };
+            return OfflineState();
         }
+
+        await EnsureSuccessAsync(response, ct);
+        var dto = await ReadJsonAsync<StateDto>(response.Content, response.StatusCode, ct);
+        return dto is StateDto parsed
+            ? new VaultState(parsed.StoreExists, parsed.Unlocked, parsed.ServerVersion ?? Constants.Version)
+            : throw new InvalidOperationException("Empty state response.");
     }
 
     public async ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default)
     {
-        var content = new StringContent(
-            JsonSerializer.Serialize(new { password }, Json), Encoding.UTF8, "application/json");
-
-        using var response = await _httpClient.PostAsync("/api/auth/login", content, ct);
-
-        if (response.IsSuccessStatusCode)
+        HttpResponseMessage response;
+        try
         {
-            var dto = await ReadJsonAsync<TokenDto>(response.Content, response.StatusCode, ct);
-            await PersistTokenAsync(dto?.Token);
-            return (true, string.Empty);
+            response = await PostAuthJsonAsync(new { password }, ct);
+        }
+        catch (HostUnreachableException) when (ct.IsCancellationRequested is false)
+        {
+            return (false, "You can't reach the Doopass host. Make sure it's running and try again.");
         }
 
-        return (false, await ReadErrorMessageAsync(response.Content, response.StatusCode, ct));
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                var dto = await ReadJsonAsync<TokenDto>(response.Content, response.StatusCode, ct);
+                await PersistTokenAsync(dto?.Token);
+                return (true, string.Empty);
+            }
+
+            return (false, await ReadErrorMessageAsync(response.Content, response.StatusCode, ct));
+        }
     }
 
     public async ValueTask<(bool Success, string Message)> InitAsync(string password, CancellationToken ct = default)
     {
-        var content = new StringContent(
-            JsonSerializer.Serialize(new { password }, Json), Encoding.UTF8, "application/json");
-
-        using var response = await _httpClient.PostAsync("/api/auth/init", content, ct);
-
-        if (response.IsSuccessStatusCode)
+        HttpResponseMessage response;
+        try
         {
-            var dto = await ReadJsonAsync<TokenDto>(response.Content, response.StatusCode, ct);
-            await PersistTokenAsync(dto?.Token);
-            return (true, string.Empty);
+            response = await PostAuthJsonAsync(new { password }, ct);
+        }
+        catch (HostUnreachableException) when (ct.IsCancellationRequested is false)
+        {
+            return (false, "You can't reach the Doopass host. Make sure it's running and try again.");
         }
 
-        return (false, await ReadErrorMessageAsync(response.Content, response.StatusCode, ct));
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                var dto = await ReadJsonAsync<TokenDto>(response.Content, response.StatusCode, ct);
+                await PersistTokenAsync(dto?.Token);
+                return (true, string.Empty);
+            }
+
+            return (false, await ReadErrorMessageAsync(response.Content, response.StatusCode, ct));
+        }
     }
 
     public async ValueTask LogoutAsync(CancellationToken ct = default)
     {
+        using var request = BuildRequest(HttpMethod.Post, "/api/auth/logout");
+
         try
         {
-            using var response = await _httpClient.PostAsync("/api/auth/logout", null, ct);
+            // Send with the current bearer so the host can revoke this server session.
+            await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         }
-        catch (Exception)
+        catch
         {
             // Host gone — local session still ends.
         }
@@ -145,17 +234,11 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
 
     // --- Vault pairs ------------------------------------------------------
 
-    public async ValueTask<IReadOnlyList<string>> GetKeysAsync(CancellationToken ct = default)
-    {
-        var dto = await GetJsonAsync<KeysDto>("/api/vault/keys", ct);
-        return dto!.Keys;
-    }
+    public async ValueTask<IReadOnlyList<string>> GetKeysAsync(CancellationToken ct = default) =>
+        (await GetJsonAsync<KeysDto>("/api/vault/keys", ct))!.Keys;
 
-    public async ValueTask<string> GetValueAsync(string key, CancellationToken ct = default)
-    {
-        var dto = await GetJsonAsync<ValueDto>($"/api/vault/value?key={Uri.EscapeDataString(key)}", ct);
-        return dto!.Value;
-    }
+    public async ValueTask<string> GetValueAsync(string key, CancellationToken ct = default) =>
+        (await GetJsonAsync<ValueDto>($"/api/vault/value?key={Uri.EscapeDataString(key)}", ct))!.Value;
 
     public async ValueTask AddAsync(string key, string value, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/vault/pairs", new { key, value }, ct);
@@ -168,11 +251,8 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
 
     // --- Backups ----------------------------------------------------------
 
-    public async ValueTask<IReadOnlyList<string>> GetBackupNamesAsync(CancellationToken ct = default)
-    {
-        var dto = await GetJsonAsync<NamesDto>("/api/backups", ct);
-        return dto!.Names;
-    }
+    public async ValueTask<IReadOnlyList<string>> GetBackupNamesAsync(CancellationToken ct = default) =>
+        (await GetJsonAsync<NamesDto>("/api/backups", ct))!.Names;
 
     public async ValueTask CreateBackupAsync(CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/backups", null, ct);
@@ -201,35 +281,80 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
 
     // --- Request/response plumbing ----------------------------------------
 
-    private async ValueTask<T?> GetJsonAsync<T>(string url, CancellationToken ct)
+    /// <summary>Builds a request for the current bearer token. No token means no Authorization header.</summary>
+    private HttpRequestMessage BuildRequest(HttpMethod method, string url, HttpContent? content = null)
     {
+        var request = new HttpRequestMessage(method, url) { Content = content };
+        var auth = BearerHeader();
+        if (auth is not null)
+        {
+            request.Headers.Authorization = auth;
+        }
+
+        return request;
+    }
+
+    /// <summary>Sends a login/init body; transport failures surface as <see cref="HostUnreachableException"/> so the login screen shows the host banner.</summary>
+    private async ValueTask<HttpResponseMessage> PostAuthJsonAsync(object payload, CancellationToken ct)
+    {
+        using var request = BuildRequest(HttpMethod.Post, "/api/auth/login", new StringContent(
+            JsonSerializer.Serialize(payload, Json), Encoding.UTF8, "application/json"));
+
+        HttpResponseMessage response;
         try
         {
-            using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-            await EnsureSuccessAsync(response, ct);
-            return await ReadJsonAsync<T>(response.Content, response.StatusCode, ct);
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException ex) when (ct.IsCancellationRequested is false)
         {
             throw new HostUnreachableException($"Host is unreachable: {ex.Message}", ex);
         }
+
+        return response;
+    }
+
+    private async ValueTask<T?> GetJsonAsync<T>(string url, CancellationToken ct)
+    {
+        using var request = BuildRequest(HttpMethod.Get, url);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (HttpRequestException ex) when (ct.IsCancellationRequested is false)
+        {
+            throw new HostUnreachableException($"Host is unreachable: {ex.Message}", ex);
+        }
+
+        // Server errors are raised by EnsureSuccessAsync and must stay as plain
+        // HttpRequestException (not HostUnreachable), so this wrapper only covers
+        // genuine transport failures, not 5xx responses.
+        await EnsureSuccessAsync(response, ct);
+        return await ReadJsonAsync<T>(response.Content, response.StatusCode, ct);
     }
 
     private async ValueTask SendAsync(HttpMethod method, string url, object? content, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(method, url);
+        var payload = content is null ? null : new StringContent(
+            JsonSerializer.Serialize(content, Json), Encoding.UTF8, "application/json");
 
-        if (content is not null)
+        using var request = BuildRequest(method, url, payload);
+
+        HttpResponseMessage response;
+        try
         {
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(content, Json), Encoding.UTF8, "application/json");
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (HttpRequestException ex) when (ct.IsCancellationRequested is false)
+        {
+            throw new HostUnreachableException($"Host is unreachable: {ex.Message}", ex);
         }
 
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         await EnsureSuccessAsync(response, ct);
     }
 
-    private async ValueTask EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct, bool authOnly = false)
+    private async ValueTask EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -242,7 +367,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         switch (status)
         {
             case 401:
-                // Session gone (logout elsewhere, TTL): clear token and raise lock.
+                // Session gone (logout elsewhere, TTL): clear the token and raise lock.
                 await PersistTokenAsync(null);
                 _relay.RaiseVaultLocked();
                 throw new UnauthorizedAccessException(message);
@@ -253,6 +378,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
             case 429:
                 throw new InvalidOperationException(message);
             default:
+                // 5xx (and anything else): a server problem, not a dead host.
                 throw new HttpRequestException($"{status} {(HttpStatusCode)status}: {message}");
         }
     }
@@ -305,6 +431,6 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _httpClient.DefaultRequestHeaders.Authorization = null;
+        _httpClient.Dispose();
     }
 }

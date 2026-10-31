@@ -4,11 +4,13 @@
     <Project Path="src/Doopass.Core/Doopass.Core.csproj" />
     <Project Path="src/Doopass.Mobile/Doopass.Mobile.csproj" />
     <Project Path="src/Doopass.Tui/Doopass.Tui.csproj" />
+    <Project Path="src/Doopass.WebClient/Doopass.WebClient.csproj" />
     <Project Path="src/Doopass.WebUi/Doopass.WebUi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Doopass.Api.Tests/Doopass.Api.Tests.csproj" />
     <Project Path="tests/Doopass.Core.Tests/Doopass.Core.Tests.csproj" />
     <Project Path="tests/Doopass.Tui.Tests/Doopass.Tui.Tests.csproj" />
+    <Project Path="tests/Doopass.WebClient.Tests/Doopass.WebClient.Tests.csproj" />
   </Folder>
 </Solution>

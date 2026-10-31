@@ -33,26 +33,35 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Doopass.Core\Doopass.Core.csproj" />
     <ProjectReference Include="..\Doopass.Tui\Doopass.Tui.csproj" />
     <ProjectReference Include="..\Doopass.WebUi\Doopass.WebUi.csproj" />
-    <ProjectReference Include="..\Doopass.WebClient\Doopass.WebClient.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- The client is referenced normally so its published output (index.html,
+         _framework/*) flows to the host for UseBlazorFrameworkFiles(), and the
+         RCL Doopass.WebUi assets flow as _content/* references. -->
+    <ProjectReference Include="..\Doopass.WebClient\Doopass.WebClient.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Doopass.Api.Tests" />
   </ItemGroup>
 
-  <!-- Publish: extract the WASM bundle to temp dir for single-file deployment. -->
-  <Target Name="_ExtractWasmForSingleFile" AfterTargets="Publish">
-    <PropertyGroup>
-      <_WasmStaging>$(MSBuildProjectDirectory)\wasm-staging\$(Version)</_WasmStaging>
-    </PropertyGroup>
-    <MakeDir Directories="$(_WasmStaging)" />
-    <Copy SourceFiles="@(StaticWebAssets->'$(PublishDir)staticwebassets\%(RecursiveDir)%(Filename)%(Extension)')"
-          DestinationFolder="$(_WasmStaging)\%(RecursiveDir)"
-          Condition="'@(_WasmStaging)' != '' and '%(StaticWebAssetContentRoot)Doopass.WebClient' == ''" />
-    <!-- Move WASM assets to the staging root (they live in _framework/ subdirs) -->
-  </Target>
+  <!--
+    Single-file publish: the host references the Blazor WebAssembly client, whose
+    static web assets (index.html, _framework/*, _content/*) flow into the publish
+    graph. When the host itself is a single-file build, the SDK still runs an inner
+    compute pass over the referenced client and forwards PublishSingleFile=true,
+    which trips NETSDK1098 on this non-executable project. Drop that global from the
+    referenced-project compute only during single-file builds; the client assets are
+    bundled into the single file by IncludeAllContentForSelfExtract (see
+    scripts/publish-portable.sh) and served at runtime via UseStaticFiles().
+  -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <_GlobalPropertiesToRemoveFromProjectReferences>$(_GlobalPropertiesToRemoveFromProjectReferences);PublishSingleFile</_GlobalPropertiesToRemoveFromProjectReferences>
+  </PropertyGroup>
 
 </Project>

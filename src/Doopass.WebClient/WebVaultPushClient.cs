@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.JSInterop;
 using Doopass.Core.Diagnostics;
@@ -7,28 +8,35 @@ namespace Doopass.WebClient;
 
 /// <summary>
 /// SignalR push channel for the Blazor WebAssembly thin client: keeps open
-/// pages fresh. The token comes from sessionStorage (per-tab); a lock event
-/// clears it and raises VaultLocked so the guard navigates to login.
+/// pages fresh. The token comes from sessionStorage (per-tab, survives reload);
+/// a lock event clears it and raises <c>VaultLocked</c> so the guard routes to
+/// login. The connection is started explicitly after the session is ready and
+/// stopped when the session ends.
 /// </summary>
 public sealed class WebVaultPushClient : IAsyncDisposable
 {
+    private readonly HttpClient _httpClient;
     private readonly IJSRuntime _js;
     private readonly VaultEventRelay _relay;
+    private readonly string _hubBaseAddress;
     private HubConnection? _connection;
     private string? _connectionToken;
     private readonly SemaphoreSlim _startGate = new(1, 1);
 
-    public WebVaultPushClient(IJSRuntime js, VaultEventRelay relay)
+    public WebVaultPushClient(HttpClient httpClient, IJSRuntime js, VaultEventRelay relay, string hubBaseAddress)
     {
+        _httpClient = httpClient;
         _js = js;
         _relay = relay;
+        _hubBaseAddress = hubBaseAddress;
     }
 
-    /// <summary>True when the live connection belongs to the current session token.</summary>
+    /// <summary>True when a live connection exists for the current session token.</summary>
     public bool IsCurrentSession =>
         _connection?.State == HubConnectionState.Connected
-        && string.Equals(_connectionToken, GetStoredTokenAsync().Result, StringComparison.Ordinal);
+        && !string.IsNullOrEmpty(_connectionToken);
 
+    /// <summary>Opens the SignalR hub for the token stored in sessionStorage.</summary>
     public async Task StartAsync()
     {
         await _startGate.WaitAsync();
@@ -37,15 +45,21 @@ public sealed class WebVaultPushClient : IAsyncDisposable
         {
             await StopCoreAsync();
 
-            var token = await GetStoredTokenAsync();
+            var token = await ReadStoredTokenAsync();
             if (string.IsNullOrEmpty(token))
             {
                 return;
             }
 
-            // The WASM host is served from the same origin as the API/hub.
+            // WASM UI is served from the same origin as the API/hub, so the hub lives
+            // at <origin>/hubs/vault on any SPA route. HttpClient.BaseAddress cannot be
+            // *read* in Blazor WebAssembly (the getter throws), so the host base address
+            // is captured in the constructor and used here (no Uri(string,string) overload
+            // that works reliably on the trimmed WASM BCL).
+            var hubUri = _hubBaseAddress.TrimEnd('/') + "/hubs/vault";
+
             _connection = new HubConnectionBuilder()
-                .WithUrl("/hubs/vault", options =>
+                .WithUrl(hubUri, options =>
                 {
                     options.AccessTokenProvider = () => Task.FromResult<string?>(token);
                 })
@@ -57,14 +71,16 @@ public sealed class WebVaultPushClient : IAsyncDisposable
             _connection.On("vaultChanged", () => _relay.RaiseVaultChanged());
             _connection.On("backupsChanged", () => _relay.RaiseBackupsChanged());
             _connection.On("settingsChanged", () => _relay.RaiseSettingsChanged());
-            _connection.On("vaultLocked", () => OnVaultLocked(token));
+            _connection.On("vaultLocked", () => OnVaultLocked(_connectionToken));
 
-            _connection.Closed += async exception =>
+            _connection.Closed += exception =>
             {
                 if (exception is not null)
                 {
                     AppLogger.Error("Web vault push connection closed with an error", exception);
                 }
+
+                return Task.CompletedTask;
             };
 
             try
@@ -82,27 +98,45 @@ public sealed class WebVaultPushClient : IAsyncDisposable
         }
     }
 
-    private async ValueTask<string?> GetStoredTokenAsync()
+    private async ValueTask<string?> ReadStoredTokenAsync()
     {
         try
         {
             return await _js.InvokeAsync<string?>("sessionStorage.getItem", "doopass_vault_token");
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     private void OnVaultLocked(string token)
     {
         // A late event from a token the user already left must not end the new session.
-        var currentToken = GetStoredTokenAsync().Result;
-        if (!string.Equals(currentToken, token, StringComparison.Ordinal))
+        _ = InvokeCurrentTokenAsync(async current =>
         {
-            return;
-        }
+            if (!string.Equals(current, token, StringComparison.Ordinal))
+            {
+                return;
+            }
 
-        // Clear the token so the guard routes to login.
-        _ = _js.InvokeVoidAsync("sessionStorage.removeItem", "doopass_vault_token");
-        _relay.RaiseVaultLocked();
+            // Clear the token so the guard routes to login.
+            await _js.InvokeVoidAsync("sessionStorage.removeItem", "doopass_vault_token");
+            _relay.RaiseVaultLocked();
+        });
+    }
+
+    private async Task InvokeCurrentTokenAsync(Func<string?, Task> action)
+    {
+        try
+        {
+            var current = await _js.InvokeAsync<string?>("sessionStorage.getItem", "doopass_vault_token");
+            await action(current);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("Reading the current vault token failed", ex);
+        }
     }
 
     private async Task StopCoreAsync()

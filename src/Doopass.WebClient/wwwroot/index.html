@@ -18,7 +18,10 @@
     <HeadOutlet />
 </head>
 <body>
-    <Routes />
+    <!-- The Blazor WebAssembly host mounts the shared app here. -->
+    <div id="app" role="application" aria-busy="true">
+        <div class="app-splash" aria-hidden="true">Loading Doopass…</div>
+    </div>
     <div id="blazor-error-ui">
         An unhandled error has occurred.
         <a href="." class="reload">Reload</a>

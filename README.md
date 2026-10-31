@@ -17,8 +17,8 @@ Doopass keeps everything in a single encrypted `store.enc` file and offers
 three front-ends for it:
 
 * a **TUI** built on Terminal.Gui v2 that mirrors the original Textual interface;
-* a **custom-styled web UI** (ASP.NET Core Blazor Server) with light and dark
-  themes, served as a local web app;
+* a **Blazor WebAssembly thin client** — browser-side UI with light and dark
+  themes, served by the host as static assets;
 * an **Android thin client** (MAUI + Blazor) that connects to the same host
   over a private REST API — the phone stores nothing but the host address,
   its certificate pin and the session token.
@@ -38,7 +38,8 @@ any migration — just point the new app at the same `~/doopass` folder.
 - **Thin-client architecture** — the host is the single unlocked vault; every
   client (browser session or API token) shares the encrypted file safely.
   The web UI makes all HTTP calls from the browser (visible in the Network tab),
-  with token persistence in `localStorage` for cross-tab sync.
+  and the session token is kept in `sessionStorage` per tab — it survives a page
+  reload but is never shared between tabs.
 - **Self-contained single-file executables** for Windows and Linux — no .NET
   runtime required, and all web assets are embedded in the binary.
 - **Installable web app (PWA)** — opens as its own window on desktop and mobile,
@@ -106,9 +107,13 @@ dotnet run --project src/Doopass.Cli -- serve --port 7240 --lan
 | `--announce`                  | force LAN discovery announce (also on with `--lan`) |
 
 The web UI is a **thin client**: all HTTP calls to `/api/*` originate from the
-browser (visible in the browser's Network tab), and the session token is stored
-in `localStorage` for cross-tab sync. The server renders the Blazor components
-and relays real-time events via SignalR.
+browser (visible in the Network tab), and the session token is kept in
+`sessionStorage` per tab — it survives a reload but is never shared between
+tabs. The host renders no Razor: it serves the compiled Blazor WebAssembly
+bundle as static assets (`index.html`, `_framework/*`, `_content/*`). In a
+self-contained single-file build the whole bundle is embedded in the executable
+and extracted to a temp folder on first start; real-time events still arrive via
+SignalR.
 
 The UI and all assets are embedded in the executable, so nothing else is needed
 to serve the app. Open <http://localhost:7240> and log in or initialize a store.
@@ -188,8 +193,8 @@ files to `.pwa-assets/`, which the csprojs embed), refreshes
 
 #### PWA vs the Android thin client
 
-The PWA runs the **web** UI in a browser window — it needs the Blazor Server
-connection. The Android app is a **native** thin client with its own icon and
+The PWA runs the **web** UI in a browser window — it talks to the host over
+REST + SignalR. The Android app is a **native** thin client with its own icon and
 its own discovery flow; installing one does not conflict with the other. If you
 manage secrets mainly from a phone, the Android app is the stronger choice: it
 survives browser sessions, pins the host certificate and warns clearly before
