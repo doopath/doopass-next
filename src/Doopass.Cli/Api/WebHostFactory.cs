@@ -190,14 +190,25 @@ public static class WebHostFactory
             return path;
         }
 
+        // Published app: wwwroot lives alongside the assembly in the publish output.
+        var dir = Path.GetDirectoryName(typeof(WebHostFactory).Assembly.Location);
+        if (dir is not null)
+        {
+            var wwwroot = Path.Combine(dir, "wwwroot");
+            if (Directory.Exists(wwwroot))
+            {
+                return wwwroot;
+            }
+        }
+
         // Production single-file: WASM bundle extracted to a temp directory on startup.
         // See _ExtractWasmOnStartup MSBuild target in Doopass.Cli.csproj.
         var version = typeof(WebHostFactory).Assembly.GetName().Version?.ToString(3) ?? "5.0.0";
-        var dir = Path.Combine(Path.GetTempPath(), "doopass-web", version);
+        var dir2 = Path.Combine(Path.GetTempPath(), "doopass-web", version);
 
-        if (Directory.Exists(dir))
+        if (Directory.Exists(dir2))
         {
-            return dir;
+            return dir2;
         }
 
         // Single-file: no WASM yet — this path is taken when running from a
