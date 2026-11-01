@@ -1,7 +1,6 @@
 @page "/connect"
 @layout ConnectLayout
 @implements IDisposable
-@using System.Security.Cryptography
 @inject ConnectionStore Connections
 @inject HostDiscovery Discovery
 @inject IVaultSession Session
@@ -551,18 +550,9 @@
     {
         string? presented = null;
 
-        var handler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
-            {
-                if (certificate is not null)
-                {
-                    presented = Convert.ToHexString(SHA256.HashData(certificate.RawData)).ToLowerInvariant();
-                }
-
-                return true;
-            },
-        };
+        // SocketsHttpHandler: the Android native handler ignores the callback,
+        // so a self-signed certificate would never reach the fingerprint step.
+        var handler = CertificatePinning.Probe(fingerprint => presented = fingerprint);
 
         HttpClient client;
 

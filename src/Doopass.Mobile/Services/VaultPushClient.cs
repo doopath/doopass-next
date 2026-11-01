@@ -56,11 +56,26 @@ public sealed class VaultPushClient : IAsyncDisposable
             var host = _connections.Host!;
             var url = $"{host.TrimEnd('/')}/hubs/vault";
             var token = _connections.Token;
+            var pin = _connections.HostUrl?.Scheme == Uri.UriSchemeHttps
+                ? _connections.PinnedFingerprint
+                : null;
 
             _connection = new HubConnectionBuilder()
                 .WithUrl(url, options =>
                 {
                     options.AccessTokenProvider = () => Task.FromResult<string?>(token);
+
+                    // The hub must trust the same self-signed certificate as the
+                    // REST calls, and only that one. Both the negotiate request
+                    // and the WebSocket need the pin; SocketsHttpHandler is the
+                    // handler whose callback Android actually invokes.
+                    if (!string.IsNullOrEmpty(pin))
+                    {
+                        options.HttpMessageHandlerFactory = _ => CertificatePinning.Pinned(pin);
+                        options.WebSocketConfiguration = socket =>
+                            socket.RemoteCertificateValidationCallback =
+                                (_, certificate, _, _) => CertificatePinning.Matches(certificate, pin);
+                    }
                 })
                 .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30) })
                 .Build();
