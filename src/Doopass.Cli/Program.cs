@@ -1,6 +1,7 @@
 using Doopass.Cli;
 using Doopass.Cli.Api;
 using Doopass.Tui;
+using Microsoft.AspNetCore.Connections;
 
 // Single entry point for Doopass.
 //   doopass                         -> run the terminal UI
@@ -70,9 +71,30 @@ static int Run(string[] args)
             options = options with { TlsPassword = args[i + 1] };
             i++;
         }
+        else if (args[i] is "--tls" or "--tls-pfx" or "--tls-pass" or "--port" or "-p")
+        {
+            Console.Error.WriteLine($"{args[i]} needs a value (see doopass serve --help).");
+            return 2;
+        }
+        else if (args[i].StartsWith('-'))
+        {
+            Console.Error.WriteLine($"Unknown option: {args[i]} (see doopass serve --help).");
+            return 2;
+        }
     }
 
-    return WebHostFactory.RunWebHost(options);
+    try
+    {
+        return WebHostFactory.RunWebHost(options);
+    }
+    catch (IOException ex) when (ex.InnerException is AddressInUseException)
+    {
+        Console.Error.WriteLine(
+            $"Port {options.Port} is already in use. Stop the other Doopass instance " +
+            $"(systemctl --user stop doopass, or the process shown by " +
+            $"'ss -ltnp | grep :{options.Port}') or start with --port <other>.");
+        return 1;
+    }
 }
 
 static int ShowHelp()
