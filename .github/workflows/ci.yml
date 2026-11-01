@@ -15,6 +15,17 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # .pwa-assets/ is generated and gitignored, but Doopass.Cli embeds the
+      # icons at build time, so a clean clone cannot build without them.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate the icon set
+        run: |
+          python -m pip install --quiet --disable-pip-version-check pillow numpy
+          python scripts/generate-icons.py
+
       # The mobile project needs the maui-android workload, the Android SDK and a
       # JDK, so it is built locally only. The solution file is not used here for
       # the same reason: it includes Doopass.Mobile.
