@@ -90,22 +90,41 @@ public sealed class SettingsTests : IDisposable
     public void ModifyProperty_PersistsAcrossReloads()
     {
         var settings = new Settings();
-        settings.ModifyProperty("local", "version", "9.9.9");
+        settings.ModifyProperty("local", "backup_extension", ".enc.bak2");
 
         var reloaded = new Settings();
 
-        Assert.Equal("9.9.9", reloaded.GetValue("local", "version"));
+        Assert.Equal(".enc.bak2", reloaded.GetValue("local", "backup_extension"));
     }
 
     [Fact]
     public void RestoreDefaults_ResetsModifiedValues()
     {
         var settings = new Settings();
-        settings.ModifyProperty("local", "version", "9.9.9");
+        settings.ModifyProperty("local", "backup_extension", ".enc.bak2");
 
         settings.RestoreDefaults();
 
-        Assert.Equal(Constants.Version, settings.GetValue("local", "version"));
+        Assert.Equal(".enc.bak", settings.GetValue("local", "backup_extension"));
+    }
+
+    [Fact]
+    public void LegacyVersionSetting_IsDroppedOnLoad()
+    {
+        var settings = new Settings();
+        var path = settings.SettingsFile;
+
+        File.WriteAllText(path,
+            """
+            {
+              "local": { "version": "5.0.0", "backup_extension": ".enc.bak" }
+            }
+            """);
+
+        var reloaded = new Settings();
+
+        Assert.DoesNotContain("version", reloaded.GetSection("local").Keys);
+        Assert.DoesNotContain("version", File.ReadAllText(path));
     }
 
     /// <summary>
@@ -120,7 +139,6 @@ public sealed class SettingsTests : IDisposable
             """
             {
               "local": {
-                "version": "5.0.0",
                 "store_file": "APPDATA/custom.enc"
               }
             }
@@ -135,7 +153,7 @@ public sealed class SettingsTests : IDisposable
     public void SettingsFile_HasNoUtf8Bom()
     {
         var settings = new Settings();
-        settings.ModifyProperty("local", "version", "5.0.0");
+        settings.ModifyProperty("local", "backup_extension", ".enc.bak2");
 
         var bytes = File.ReadAllBytes(settings.SettingsFile);
 

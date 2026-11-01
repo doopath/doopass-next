@@ -114,6 +114,9 @@ dotnet test tests/Doopass.WebClient.Tests/Doopass.WebClient.Tests.csproj
 
 ## Run it
 
+`doopass --help` lists every mode and option; `doopass serve --help` shows the
+host options only.
+
 ### Terminal UI
 
 ```bash
@@ -633,7 +636,6 @@ so the file stays portable between machines:
 | `backups`          | directory for dated backups                        | no                 |
 | `default_config`   | path of the default-config copy                    | no                 |
 | `backup_extension` | suffix of backup files (default `.enc.bak`)        | yes                |
-| `version`          | informational version string                       | yes                |
 
 Path settings are **read-only** in the UI and the REST API (the edit button is
 replaced by a lock icon). A writable path would let the settings endpoint

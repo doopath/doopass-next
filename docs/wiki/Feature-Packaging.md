@@ -134,11 +134,10 @@ Version `5.1.0` appears in several places; keep them in sync:
 
 1. `src/Doopass.Core/Constants.cs` → `Version`;
 2. `Directory.Build.props` is version-free, but every `.csproj` sets `<Version>`;
-3. `src/Doopass.Core/Configuration/DefaultConfig.json` → `local.version`;
-4. `src/Doopass.Mobile/Doopass.Mobile.csproj` →
+3. `src/Doopass.Mobile/Doopass.Mobile.csproj` →
    `ApplicationDisplayVersion`, `ApplicationVersion`;
-5. `src/Doopass.Cli/wwwroot/pwa/sw.js` → bump `CACHE` when assets change;
-6. `README.md` and this wiki if behaviour changed.
+4. `src/Doopass.Cli/wwwroot/pwa/sw.js` → bump `CACHE` when assets change;
+5. `README.md` and this wiki if behaviour changed.
 
 `/api/vault/state` reports the constant, so a client can detect a version skew.
 

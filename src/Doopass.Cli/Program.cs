@@ -12,10 +12,16 @@ using Doopass.Tui;
 //   doopass setup-tls [--pfx <path>] [--pass <pwd>] [--force]
 //                                  -> create a self-signed certificate and store it
 //                                     in settings.json for a later serve
+//   doopass --help                 -> this list
 return Run(args);
 
 static int Run(string[] args)
 {
+    if (args.Length > 0 && args[0] is "--help" or "-h" or "help")
+    {
+        return ShowHelp();
+    }
+
     if (args.Length > 0 && args[0] == "setup-tls")
     {
         return TlsSetup.Run(args[1..]);
@@ -32,6 +38,11 @@ static int Run(string[] args)
 
     for (var i = 1; i < args.Length; i++)
     {
+        if (args[i] is "--help" or "-h")
+        {
+            return ShowHelp();
+        }
+
         if (args[i] is "--port" or "-p" && i + 1 < args.Length && int.TryParse(args[i + 1], out var parsed))
         {
             options = options with { Port = parsed };
@@ -62,4 +73,34 @@ static int Run(string[] args)
     }
 
     return WebHostFactory.RunWebHost(options);
+}
+
+static int ShowHelp()
+{
+    Console.WriteLine("""
+        Doopass - encrypted password manager
+
+        Usage:
+          doopass                        run the terminal UI
+          doopass serve [options]        run the web UI, REST API and discovery
+          doopass setup-tls [options]    create a self-signed TLS certificate
+          doopass --help                 show this help
+
+        serve options:
+          -p, --port N        HTTP port (default 7240)
+          --no-browser        do not open the browser
+          --lan, --network    listen on 0.0.0.0 and announce discovery
+          --announce          force discovery announce
+          --tls <pfx>         serve HTTPS from a PKCS#12 certificate
+          --tls-pass <pwd>    certificate password
+          -h, --help          show this help
+
+        setup-tls options:
+          --pfx <path>        certificate path (default ~/doopass/doopass.pfx)
+          --pass <pwd>        PKCS#12 password (default random, stored in settings.json)
+          --force             replace an existing certificate (phones must re-pair)
+          -h, --help          show this help
+        """);
+
+    return 0;
 }

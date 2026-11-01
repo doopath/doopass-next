@@ -19,7 +19,6 @@ The web page also hosts the **Install as app** card for the PWA (see
 ```json
 {
   "local": {
-    "version": "5.1.0",
     "backup_extension": ".enc.bak",
     "store_file": "APPDATA/store.enc",
     "log_file": "APPDATA/doopass.log",

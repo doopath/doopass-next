@@ -53,7 +53,7 @@ public sealed class SettingsPolicyTests : IDisposable
     {
         var settings = new Settings();
 
-        Assert.Throws<PropertyDoesNotExistError>(() => settings.ModifyProperty("nope", "version", "1.0.0"));
+        Assert.Throws<PropertyDoesNotExistError>(() => settings.ModifyProperty("nope", "anything", "1.0.0"));
     }
 
     [Theory]
@@ -96,14 +96,12 @@ public sealed class SettingsPolicyTests : IDisposable
     }
 
     [Fact]
-    public void Version_IsEditable()
+    public void Version_IsNoLongerEditable()
     {
         var settings = new Settings();
 
-        Assert.True(Settings.IsEditable("local", "version"));
-        settings.ModifyProperty("local", "version", "9.9.9");
-
-        Assert.Equal("9.9.9", new Settings().GetValue("local", "version"));
+        Assert.False(Settings.IsEditable("local", "version"));
+        Assert.DoesNotContain("version", settings.GetSection("local").Keys);
     }
 }
 

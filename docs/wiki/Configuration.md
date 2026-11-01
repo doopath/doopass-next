@@ -49,7 +49,6 @@ validation error path.
 ```json
 {
   "local": {
-    "version": "5.1.0",
     "backup_extension": ".enc.bak",
     "store_file": "APPDATA/store.enc",
     "log_file": "APPDATA/doopass.log",
@@ -69,7 +68,6 @@ validation error path.
 
 | Key | Default | Meaning |
 | --- | ------- | ------- |
-| `version` | `5.1.0` | informational; not checked at runtime |
 | `backup_extension` | `.enc.bak` | suffix for snapshots |
 | `store_file` | `APPDATA/store.enc` | vault path |
 | `log_file` | `APPDATA/doopass.log` | log path (`AppLogger.Initialize`) |

@@ -86,7 +86,6 @@ Location: `<AppDataDir>/settings.json`, default `~/doopass/appdata/settings.json
 ```json
 {
   "local": {
-    "version": "5.1.0",
     "backup_extension": ".enc.bak",
     "store_file": "APPDATA/store.enc",
     "log_file": "APPDATA/doopass.log",

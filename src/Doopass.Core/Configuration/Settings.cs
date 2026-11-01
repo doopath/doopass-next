@@ -32,8 +32,13 @@ public sealed class Settings
     /// </summary>
     private static readonly HashSet<string> EditableKeys = new(StringComparer.Ordinal)
     {
-        "version",            // informational
         "backup_extension",   // validated below
+    };
+
+    /// <summary>Old keys that no longer drive anything and are dropped on load.</summary>
+    private static readonly HashSet<string> ObsoleteKeys = new(StringComparer.Ordinal)
+    {
+        "version",
     };
 
     private static readonly Regex BackupExtensionPattern =
@@ -199,6 +204,12 @@ public sealed class Settings
 
             foreach (var (key, value) in pairs)
             {
+                if (ObsoleteKeys.Contains(key))
+                {
+                    droppedObsolete = true;
+                    continue;
+                }
+
                 substituted[key] = SubstituteAppData(value);
             }
 
