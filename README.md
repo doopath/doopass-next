@@ -108,7 +108,16 @@ Hotkeys (press <kbd>F1</kbd> any time for the built-in help):
 ```bash
 dotnet run --project src/Doopass.Cli -- serve            # http://localhost:7240
 dotnet run --project src/Doopass.Cli -- serve --port 7240 --lan
+# HTTPS on every interface (see Self-signed HTTPS with certificate pinning):
+dotnet run --project src/Doopass.Cli -- serve --tls ~/doopass/doopass.pfx --tls-pass CHANGE-ME
 ```
+
+> [!WARNING]
+> Use `--tls` whenever the host is reachable beyond `localhost`. Plain `--lan`
+> sends the master password, every secret and the session token unencrypted over
+> Wi-Fi. Do **not** run the host on a network you do not trust — public, café or
+> hotel Wi-Fi, shared and corporate LANs alike. Even with TLS, only run it on
+> your own trusted home network; never expose it to the internet.
 
 `serve` options:
 
@@ -315,8 +324,8 @@ Features and limitations:
   global broadcast;
 * the emulator cannot reach LAN broadcasts — type `http://10.0.2.2:7240`
   manually there;
-* plain HTTP shows a permanent warning; IPSec rules of the router or at least
-  `--tls` are recommended on shared networks.
+* plain HTTP shows a permanent warning; use `--tls` for anything beyond
+  `localhost`, and only on a trusted home network (never public Wi-Fi).
 
 #### Self-signed HTTPS with certificate pinning
 

@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Doopass.Core;
@@ -425,22 +424,14 @@ public sealed class RemoteVaultSession : IVaultSession
 
     private HttpClient BuildClient()
     {
-        var handler = new HttpClientHandler();
+        // SocketsHttpHandler, not the Android native handler: the native one
+        // ignores the validation callback, so the pin would never be checked.
+        var handler = new SocketsHttpHandler();
 
-        if (_connections.HostUrl?.Scheme == Uri.UriSchemeHttps && !string.IsNullOrEmpty(_connections.PinnedFingerprint))
+        if (_connections.HostUrl?.Scheme == Uri.UriSchemeHttps && _connections.PinnedFingerprint is { } pin)
         {
-            var pin = _connections.PinnedFingerprint;
-
-            handler.ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
-            {
-                if (certificate is null)
-                {
-                    return false;
-                }
-
-                var fingerprint = Convert.ToHexString(SHA256.HashData(certificate.RawData)).ToLowerInvariant();
-                return string.Equals(fingerprint, pin, StringComparison.OrdinalIgnoreCase);
-            };
+            handler.SslOptions.RemoteCertificateValidationCallback =
+                (_, certificate, _, _) => CertificatePinning.Matches(certificate, pin);
         }
 
         var url = _connections.HostUrl ?? new Uri("http://localhost:7240");

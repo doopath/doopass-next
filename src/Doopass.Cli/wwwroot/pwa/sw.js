@@ -11,7 +11,7 @@
  * activate. Precache misses are tolerated (allSettled) so one flaky
  * asset can never brick the install.
  */
-const CACHE = 'doopass-pwa-v9';
+const CACHE = 'doopass-pwa-v10';
 const PRECACHE = [
   '/',
   '/pwa/manifest.webmanifest',
@@ -54,12 +54,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // _framework/* (Blazor WASM runtime): cache with revalidation.
+  // _framework/* (Blazor WASM runtime): network first, cache for offline.
+  // Cache-first used to pin the framework of an older host build forever:
+  // after an update the page mixed old runtime files with new app assemblies
+  // ("Method not found" on the first page that touched the missing member).
   if (url.pathname.startsWith('/_framework')) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE);
-      const cached = await cache.match(req);
-      if (cached) return cached;
       try {
         const resp = await fetch(req);
         if (resp && resp.ok && resp.type === 'basic') {
@@ -67,7 +68,8 @@ self.addEventListener('fetch', (event) => {
         }
         return resp;
       } catch (err) {
-        return new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+        const cached = await cache.match(req);
+        return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
       }
     })());
     return;
