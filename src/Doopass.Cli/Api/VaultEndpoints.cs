@@ -1,4 +1,5 @@
 using Doopass.Core;
+using Doopass.Core.Diagnostics;
 using Doopass.WebUi.Abstractions;
 
 namespace Doopass.Cli.Api;
@@ -39,12 +40,22 @@ public static class VaultEndpoints
 
         // --- Auth -----------------------------------------------------------
 
-        group.MapPost("/auth/login", (PasswordRequest? body) =>
-            Guard(() =>
+        group.MapPost("/auth/login", async (PasswordRequest? body) =>
+            await GuardAsync(async () =>
             {
                 if (body is null || string.IsNullOrEmpty(body.Password))
                 {
                     return Error(StatusCodes.Status400BadRequest, "Password is required!");
+                }
+
+                // Repeated failures pause the attempt instead of refusing it: the
+                // owner may wait a few seconds, but can always get in. The hard
+                // cap on REST volume is the per-IP rate limiter below.
+                var delay = coordinator.LoginDelay();
+
+                if (delay > TimeSpan.Zero)
+                {
+                    await Task.Delay(delay);
                 }
 
                 var (success, token, error) = coordinator.Login(body.Password);
@@ -194,7 +205,20 @@ public static class VaultEndpoints
         }
     }
 
-    private static IResult MapStoreError(Exception ex)
+    /// <summary>Async sibling of <see cref="Guard"/> for handlers that wait before touching the store.</summary>
+    private static async Task<IResult> GuardAsync(Func<Task<IResult>> action)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (Exception ex)
+        {
+            return MapStoreError(ex);
+        }
+    }
+
+    internal static IResult MapStoreError(Exception ex)
     {
         var (status, message) = ex switch
         {
@@ -202,14 +226,33 @@ public static class VaultEndpoints
             PropertyDoesNotExistError => (StatusCodes.Status404NotFound, ex.Message),
             IncorrectPasswordError => (StatusCodes.Status401Unauthorized, ex.Message),
             StoreIsNotInitializedError => (StatusCodes.Status409Conflict, ex.Message),
+            StoreBusyError => (StatusCodes.Status409Conflict, "The vault is busy, try again."),
+            StoreCorruptedError => (StatusCodes.Status422UnprocessableEntity, ex.Message),
+            ReadOnlySettingError => (StatusCodes.Status403Forbidden, ex.Message),
+            InvalidSettingValueError => (StatusCodes.Status400BadRequest, ex.Message),
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Session expired or unauthorized."),
-            _ => (StatusCodes.Status500InternalServerError, ex.Message),
+            _ => Unexpected(ex),
         };
 
         return Error(status, message);
     }
 
-    /// <summary>Auth outcomes carry their message in the coordinator result; missing store is a conflict.</summary>
+    /// <summary>
+    /// Anything we did not plan for may carry file-system paths, .NET type names
+    /// or other internals; the client gets a fixed message and the details go to
+    /// the log only.
+    /// </summary>
+    private static (int Status, string Message) Unexpected(Exception ex)
+    {
+        AppLogger.Error("Vault API failure", ex);
+        return (StatusCodes.Status500InternalServerError, "Internal server error.");
+    }
+
+    /// <summary>
+    /// Auth outcomes carry their message in the coordinator result; a missing
+    /// store is a conflict. Failures never turn into a refusal any more — they
+    /// only delay the attempt — so there is no "too many attempts" status here.
+    /// </summary>
     private static int CanonicalStatus(string? error) =>
         error is null or "Incorrect password!" ? StatusCodes.Status401Unauthorized
         : error.Contains("already exists", StringComparison.OrdinalIgnoreCase) ? StatusCodes.Status409Conflict

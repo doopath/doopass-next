@@ -1,3 +1,4 @@
+using Doopass.Core.Configuration;
 using Doopass.Tui.Ui;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -74,6 +75,12 @@ internal sealed class SettingsScreen : ScreenBase
         }
 
         var (section, key, value) = row;
+
+        if (!Settings.IsEditable(section, key))
+        {
+            _status.Text = "  read-only setting - edit settings.json with doopass stopped";
+            return;
+        }
 
         Shell.Push(new ValueFormScreen(Context, Shell, "Edit setting", $"{section}.{key}", value, newValue =>
         {

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The mobile project needs the maui-android workload, the Android SDK and a
+      # JDK, so it is built locally only. The solution file is not used here for
+      # the same reason: it includes Doopass.Mobile.
+      - name: Build the CLI host
+        run: dotnet build src/Doopass.Cli/Doopass.Cli.csproj
+
+      - name: Core tests
+        run: dotnet test tests/Doopass.Core.Tests/Doopass.Core.Tests.csproj
+
+      - name: TUI tests
+        run: dotnet test tests/Doopass.Tui.Tests/Doopass.Tui.Tests.csproj
+
+      - name: API tests
+        run: dotnet test tests/Doopass.Api.Tests/Doopass.Api.Tests.csproj

@@ -36,3 +36,41 @@ public sealed class IncorrectPasswordError : Exception
     /// <param name="innerException">The original exception (format or padding error).</param>
     public IncorrectPasswordError(string message, Exception innerException) : base(message, innerException) { }
 }
+
+/// <summary>
+/// Raised when a setting may not be changed through the UI/API (paths that decide
+/// where data is written are read-only by policy).
+/// </summary>
+public sealed class ReadOnlySettingError : Exception
+{
+    /// <summary>Creates the error with a user-facing message.</summary>
+    /// <param name="message">Message shown to the caller.</param>
+    public ReadOnlySettingError(string message) : base(message) { }
+}
+
+/// <summary>Raised when a setting value fails its format validation.</summary>
+public sealed class InvalidSettingValueError : Exception
+{
+    /// <summary>Creates the error with a user-facing message.</summary>
+    /// <param name="message">Message shown to the caller.</param>
+    public InvalidSettingValueError(string message) : base(message) { }
+}
+
+/// <summary>Raised when the store file is locked by another writer for longer than the lock timeout.</summary>
+public sealed class StoreBusyError : Exception
+{
+    /// <summary>Creates the error with a user-facing message.</summary>
+    /// <param name="message">Message shown to the caller.</param>
+    public StoreBusyError(string message) : base(message) { }
+}
+
+/// <summary>
+/// Raised when the store file is not a valid Doopass payload: not base64, too
+/// short to hold a token, or declaring an absurd key-derivation cost.
+/// </summary>
+public sealed class StoreCorruptedError : Exception
+{
+    /// <summary>Creates the error with a user-facing message.</summary>
+    /// <param name="message">Message shown to the caller.</param>
+    public StoreCorruptedError(string message) : base(message) { }
+}

@@ -30,9 +30,18 @@
             <div class="setting-row">
                 <span class="setting-key">@pair.Key</span>
                 <span class="setting-value">@pair.Value</span>
-                <button type="button" class="icon-btn" title="Change" @onclick="@(() => BeginEdit(section.Section, pair.Key, pair.Value))">
-                    <Icon Name="edit" Size="18" />
-                </button>
+                @if (Doopass.Core.Configuration.Settings.IsEditable(section.Section, pair.Key))
+                {
+                    <button type="button" class="icon-btn" title="Change" @onclick="@(() => BeginEdit(section.Section, pair.Key, pair.Value))">
+                        <Icon Name="edit" Size="18" />
+                    </button>
+                }
+                else
+                {
+                    <span class="icon-btn" title="Read-only — edit settings.json with Doopass stopped">
+                        <Icon Name="lock" Size="18" />
+                    </span>
+                }
             </div>
         }
     </div>

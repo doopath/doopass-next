@@ -1,13 +1,17 @@
 /* Doopass service worker (PWA offline shell).
  *
- * Served from /pwa/sw.js with Service-Worker-Allowed: /, so the worker may take
- * the whole origin as its scope. Handles only same-origin GET requests.
+ * Served from an embedded resource at /pwa/sw.js with
+ * Service-Worker-Allowed: / (set by WebHostFactory), so the worker may take
+ * the whole origin as its scope. Handles only same-origin GET requests;
+ * the hub and REST traffic (/hubs, /api) is passed through untouched: a
+ * cached /api/vault/value?key=... would put a decrypted secret into Cache
+ * Storage on disk.
  *
  * Bump CACHE name when served assets change: old caches are evicted on
  * activate. Precache misses are tolerated (allSettled) so one flaky
  * asset can never brick the install.
  */
-const CACHE = 'doopass-pwa-v8';
+const CACHE = 'doopass-pwa-v9';
 const PRECACHE = [
   '/',
   '/pwa/manifest.webmanifest',
@@ -39,7 +43,6 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-
   // API endpoints must always hit the network — auth tokens change between
   // requests and a stale cached response would be returned.
   if (url.pathname.startsWith('/api')) {

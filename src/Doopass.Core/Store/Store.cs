@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Doopass.Core.Crypto;
@@ -17,6 +18,12 @@ public sealed class Store
 
     private readonly List<Entry> _entries = new();
 
+    /// <summary>Guards <see cref="_entries"/> and <see cref="_stamp"/> and serialises disk I/O.</summary>
+    private readonly object _io = new();
+
+    /// <summary>"mtime ticks:length" of the file the in-memory entries came from.</summary>
+    private string? _stamp;
+
     /// <summary>
     /// Opens the store at <paramref name="storePath"/> with
     /// <paramref name="password"/> and loads all entries. When the file does not
@@ -25,6 +32,7 @@ public sealed class Store
     /// <param name="password">The master password used to decrypt the file.</param>
     /// <param name="storePath">Full path of the <c>store.enc</c> file.</param>
     /// <exception cref="IncorrectPasswordError">The file cannot be decrypted with the password.</exception>
+    /// <exception cref="StoreCorruptedError">The file is not a valid vault container.</exception>
     public Store(string password, string storePath)
     {
         Password = password;
@@ -38,7 +46,7 @@ public sealed class Store
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllText(storePath, Encrypt(password, []), TextFile.Utf8NoBom);
+            AtomicFile.WriteAllText(storePath, Encrypt(password, []), TextFile.Utf8NoBom);
             AppLogger.Info($"Store initialized: {storePath}");
         }
 
@@ -53,67 +61,101 @@ public sealed class Store
     public string StorePath { get; }
 
     /// <summary>Returns all keys in insertion order.</summary>
-    public IReadOnlyList<string> GetKeys() => _entries.Select(e => e.Key).ToList();
+    public IReadOnlyList<string> GetKeys()
+    {
+        lock (_io)
+        {
+            EnsureFresh_locked();
+            return _entries.Select(e => e.Key).ToList();
+        }
+    }
 
     /// <summary>Returns true when a property with the given name exists.</summary>
     public bool DoesPropertyExist(string name)
     {
-        return _entries.Any(e => e.Key == name);
+        lock (_io)
+        {
+            EnsureFresh_locked();
+            return _entries.Any(e => e.Key == name);
+        }
     }
 
     /// <summary>Returns the value for the given key.</summary>
     public string GetValue(string name)
     {
-        var index = FindIndex(name);
-
-        if (index < 0)
+        lock (_io)
         {
-            throw new PropertyDoesNotExistError($"The property '{name}' is not set in the store!");
-        }
+            EnsureFresh_locked();
 
-        return _entries[index].Value;
+            var index = FindIndex(name);
+
+            if (index < 0)
+            {
+                throw new PropertyDoesNotExistError($"The property '{name}' is not set in the store!");
+            }
+
+            return _entries[index].Value;
+        }
     }
 
     /// <summary>Adds a new key/value pair to the store.</summary>
     public void AddProperty(string name, string value)
     {
-        if (DoesPropertyExist(name))
+        lock (_io)
         {
-            throw new PropertyAlreadyExistError($"This property ({name}) already exists!");
+            Mutate_locked(entries =>
+            {
+                if (entries.Any(e => e.Key == name))
+                {
+                    throw new PropertyAlreadyExistError($"This property ({name}) already exists!");
+                }
+
+                entries.Add(new Entry(name, value));
+            });
         }
 
-        _entries.Add(new Entry(name, value));
-        Save();
         AppLogger.Info($"Property added: {name}");
     }
 
     /// <summary>Updates the value of an existing key.</summary>
     public void SetValue(string name, string value)
     {
-        var index = FindIndex(name);
-
-        if (index < 0)
+        lock (_io)
         {
-            throw new PropertyDoesNotExistError($"The property ({name}) does not exist!");
+            Mutate_locked(entries =>
+            {
+                var index = entries.FindIndex(e => e.Key == name);
+
+                if (index < 0)
+                {
+                    throw new PropertyDoesNotExistError($"The property ({name}) does not exist!");
+                }
+
+                entries[index] = new Entry(name, value);
+            });
         }
 
-        _entries[index] = new Entry(name, value);
-        Save();
         AppLogger.Info($"Property updated: {name}");
     }
 
     /// <summary>Removes an existing key.</summary>
     public void RemoveProperty(string name)
     {
-        var index = FindIndex(name);
-
-        if (index < 0)
+        lock (_io)
         {
-            throw new PropertyDoesNotExistError($"The property ({name}) does not exist!");
+            Mutate_locked(entries =>
+            {
+                var index = entries.FindIndex(e => e.Key == name);
+
+                if (index < 0)
+                {
+                    throw new PropertyDoesNotExistError($"The property ({name}) does not exist!");
+                }
+
+                entries.RemoveAt(index);
+            });
         }
 
-        _entries.RemoveAt(index);
-        Save();
         AppLogger.Info($"Property removed: {name}");
     }
 
@@ -140,10 +182,33 @@ public sealed class Store
     /// <summary>Decrypts a full store payload (salt + iterations + token).</summary>
     public static byte[] Decrypt(string password, string source)
     {
-        var decoded = Base64Url.Decode(source.Trim());
+        byte[] decoded;
+
+        try
+        {
+            decoded = Base64Url.Decode(source.Trim());
+        }
+        catch (FormatException)
+        {
+            throw new StoreCorruptedError("The store file is corrupted.");
+        }
+
+        // salt(16) + iterations(4) + minimal Fernet token (1 + 8 + 16 + 16 + 32 = 73)
+        if (decoded.Length < 20 + 73)
+        {
+            throw new StoreCorruptedError("The store file is corrupted or truncated.");
+        }
+
+        var iterations = BinaryPrimitives.ReadInt32BigEndian(decoded.AsSpan(16, 4));
+
+        // Checked before Pbkdf2.DeriveKey: a tampered cost would otherwise burn
+        // minutes of CPU on every login attempt.
+        if (iterations is < 10_000 or > 10_000_000)
+        {
+            throw new StoreCorruptedError("The store file declares an unsupported key-derivation cost.");
+        }
 
         var salt = decoded.AsSpan(0, 16).ToArray();
-        var iterations = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(decoded.AsSpan(16, 4));
         var token = Base64Url.Encode(decoded.AsSpan(20).ToArray());
 
         var key = Pbkdf2.DeriveKey(password, salt, iterations);
@@ -160,6 +225,7 @@ public sealed class Store
         }
         catch (IncorrectPasswordError)
         {
+            // Only a wrong password is "try again"; a corrupted file must surface.
             AppLogger.Debug($"Store open failed (incorrect password): {storePath}");
             return null;
         }
@@ -186,7 +252,19 @@ public sealed class Store
     {
         _entries.Clear();
 
-        var content = File.ReadAllText(StorePath, Encoding.UTF8);
+        string content;
+
+        try
+        {
+            content = File.ReadAllText(StorePath, Encoding.UTF8);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Another process removed the store between the freshness check and the
+            // read: report the same error the rest of the app expects, not a .NET one.
+            throw new StoreIsNotInitializedError("Store isn't initialized!");
+        }
+
         var plaintext = Encoding.UTF8.GetString(Decrypt(Password, content));
 
         foreach (var rawLine in plaintext.Split('\n'))
@@ -204,13 +282,55 @@ public sealed class Store
 
             _entries.Add(new Entry(key, value));
         }
+
+        _stamp = StampOf(StorePath);
     }
 
-    private void Save()
+    /// <summary>"&lt;mtime ticks&gt;:&lt;length&gt;": cheap enough to check on every read.</summary>
+    private static string StampOf(string path)
+    {
+        var info = new FileInfo(path);
+        return $"{info.LastWriteTimeUtc.Ticks}:{info.Length}";
+    }
+
+    /// <summary>Reloads from disk when the file changed since the last read/write.</summary>
+    private void EnsureFresh_locked()
+    {
+        if (!File.Exists(StorePath))
+        {
+            throw new StoreIsNotInitializedError("Store isn't initialized!");
+        }
+
+        if (StampOf(StorePath) != _stamp)
+        {
+            Load();
+        }
+    }
+
+    /// <summary>
+    /// Runs a mutation against the on-disk state, not against whatever this
+    /// instance happens to have cached: two Store instances (web sessions, TUI,
+    /// another process) must not overwrite each other's entries.
+    /// </summary>
+    private void Mutate_locked(Action<List<Entry>> change)
+    {
+        using var lease = StoreFileLock.Acquire(StorePath + ".lock", TimeSpan.FromSeconds(5));
+
+        // Unconditional re-read under the lock. Mutations are rare (one per user
+        // action) and cost a single PBKDF2 (~10 ms), which buys independence from
+        // mtime accuracy: the change can never be applied to a stale snapshot.
+        Load();
+        change(_entries);
+        Save_locked();
+    }
+
+    private void Save_locked()
     {
         var plaintext = string.Join("\n", _entries.Select(e => $"{e.Key} = {e.Value}"));
         var encrypted = Encrypt(Password, Encoding.UTF8.GetBytes(plaintext));
-        File.WriteAllText(StorePath, encrypted, TextFile.Utf8NoBom);
+
+        AtomicFile.WriteAllText(StorePath, encrypted, TextFile.Utf8NoBom);
+        _stamp = StampOf(StorePath);
     }
 
     private int FindIndex(string name) => _entries.FindIndex(e => e.Key == name);

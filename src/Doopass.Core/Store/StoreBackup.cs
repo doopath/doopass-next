@@ -51,9 +51,35 @@ public sealed class StoreBackup
             .ToList();
     }
 
+    /// <summary>
+    /// True for a plain, extensionless backup name (letters, digits, '_', '-', '.').
+    /// Rejects anything that could escape the backups directory.
+    /// </summary>
+    public static bool IsSafeBackupName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 255)
+        {
+            return false;
+        }
+
+        if (name is "." or ".." || name.Contains("..", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // An array, not a collection expression: IndexOfAny has overloads for
+        // both char[] and ReadOnlySpan<char>, so the compiler has no ambiguity.
+        if (name.IndexOfAny(new[] { '/', '\\', ':', '\0' }) >= 0)
+        {
+            return false;
+        }
+
+        return Path.GetFileName(name) == name;
+    }
+
     /// <summary>Reads the raw content of a backup by name (including extension).</summary>
     public string GetBackupContent(string backupName) =>
-        File.ReadAllText(Path.Combine(_backupsDir, backupName), Encoding.UTF8);
+        File.ReadAllText(ResolvePath(backupName), Encoding.UTF8);
 
     /// <summary>Creates a new dated backup of the current store.</summary>
     public void MakeBackup()
@@ -65,41 +91,71 @@ public sealed class StoreBackup
             : storeName;
 
         var basePath = Path.Combine(_backupsDir, $"{currentDate}_{storeBase}");
-        var backupPath = $"{basePath}_1{_extension}";
 
         var storeContent = GetStoreContent();
         var datedBackups = GetDatedBackups($"{currentDate}_{storeBase}");
 
-        if (datedBackups.Count > 0)
-        {
-            var lastNumber = ExtractBackupNumber(datedBackups[^1]);
-            backupPath = $"{basePath}_{lastNumber + 1}{_extension}";
-        }
+        // Max+1, not "last sorted name + 1": ordinal sorting puts "_9" after "_10",
+        // so the old scheme silently overwrote _10 on the eleventh backup of a day.
+        var nextNumber = datedBackups.Count == 0
+            ? 1
+            : datedBackups.Max(ExtractBackupNumber) + 1;
+        var backupPath = $"{basePath}_{nextNumber}{_extension}";
 
-        File.WriteAllText(backupPath, storeContent, TextFile.Utf8NoBom);
+        AtomicFile.WriteAllText(backupPath, storeContent, TextFile.Utf8NoBom);
         AppLogger.Info($"Backup created: {Path.GetFileName(backupPath)}");
     }
 
-    /// <summary>Replaces the current store with a backup (making a backup first).</summary>
+    /// <summary>
+    /// Replaces the current store with a backup (making a backup first). Holds the
+    /// same cross-process lock as <see cref="Store"/> mutations, so a pair added by
+    /// another client cannot land between the read and the swap and be lost.
+    /// </summary>
     public void SwapStoreWithBackup(string backupName)
     {
+        // Store.Mutate_locked never calls back into this class, so taking the lock
+        // here cannot deadlock with a mutation.
+        using var lease = StoreFileLock.Acquire(_storePath + ".lock", TimeSpan.FromSeconds(5));
+
         var backupContent = GetBackupContent(backupName);
         MakeBackup();
 
-        File.WriteAllText(_storePath, backupContent, TextFile.Utf8NoBom);
+        AtomicFile.WriteAllText(_storePath, backupContent, TextFile.Utf8NoBom);
         AppLogger.Info($"Store restored from backup: {backupName}");
     }
 
     /// <summary>Deletes a backup by name (including extension).</summary>
     public void DeleteBackup(string backupName)
     {
-        var path = Path.Combine(_backupsDir, backupName);
+        var path = ResolvePath(backupName);
 
         if (File.Exists(path))
         {
             File.Delete(path);
             AppLogger.Info($"Backup deleted: {backupName}");
         }
+    }
+
+    /// <summary>
+    /// Resolves a backup file name inside the backups directory and rejects any
+    /// name whose resolved path would leave it (defence in depth: TUI, web-UI and
+    /// API all end up here). The error deliberately matches "no such backup" so
+    /// a rejected path is indistinguishable from a missing one.
+    /// </summary>
+    private string ResolvePath(string fileName)
+    {
+        var root = Path.GetFullPath(_backupsDir);
+        var prefix = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+        var full = Path.GetFullPath(Path.Combine(root, fileName));
+
+        if (!full.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            throw new PropertyDoesNotExistError($"Backup '{Path.GetFileName(fileName)}' does not exist!");
+        }
+
+        return full;
     }
 
     private IReadOnlyList<string> GetDatedBackups(string baseName)

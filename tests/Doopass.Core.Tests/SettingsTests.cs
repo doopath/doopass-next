@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Doopass.Core.Tests;
 
+[Collection(AppPathsCollection.Name)]
 public sealed class SettingsTests : IDisposable
 {
     private readonly string _root;
@@ -107,16 +108,27 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal(Constants.Version, settings.GetValue("local", "version"));
     }
 
+    /// <summary>
+    /// Path settings are read-only through the API/UI, but a hand-edited
+    /// settings.json (Doopass stopped) must still round-trip its APPDATA placeholder.
+    /// </summary>
     [Fact]
     public void ModifyPathProperty_PersistsAsPlaceholder()
     {
         var settings = new Settings();
-        var custom = Path.Combine(settings.AppDataDir, "custom.enc");
-        settings.ModifyProperty("local", "store_file", custom);
+        File.WriteAllText(settings.SettingsFile,
+            """
+            {
+              "local": {
+                "version": "5.0.0",
+                "store_file": "APPDATA/custom.enc"
+              }
+            }
+            """);
 
         var reloaded = new Settings();
 
-        Assert.Equal(custom, reloaded.StoreFile);
+        Assert.Equal(Path.Combine(reloaded.AppDataDir, "custom.enc"), reloaded.StoreFile);
     }
 
     [Fact]

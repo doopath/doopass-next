@@ -42,7 +42,8 @@ public sealed class VaultHubRelay(IHubContext<VaultHub> hub, IVaultChangeNotifie
         notifier.VaultChanged += () => Fire(stoppingToken, "vaultChanged");
         notifier.BackupsChanged += () => Fire(stoppingToken, "backupsChanged");
         notifier.SettingsChanged += () => Fire(stoppingToken, "settingsChanged");
-        notifier.VaultLocked += token => FireVaultLocked(stoppingToken, token);
+        notifier.VaultLocked += _ => Fire(stoppingToken, "vaultLocked");
+        notifier.SessionExpired += token => FireSessionExpired(stoppingToken, token);
         return Task.CompletedTask;
     }
 
@@ -58,16 +59,14 @@ public sealed class VaultHubRelay(IHubContext<VaultHub> hub, IVaultChangeNotifie
             : hub.Clients.All.SendAsync(method, argument, CancellationToken.None);
     }
 
-    private void FireVaultLocked(CancellationToken ct, string token)
+    /// <summary>A single token expired: only its own hub group is told.</summary>
+    private void FireSessionExpired(CancellationToken ct, string token)
     {
-        if (ct.IsCancellationRequested)
+        if (ct.IsCancellationRequested || string.IsNullOrEmpty(token))
         {
             return;
         }
 
-        // An empty token means "no sessions remain": tell everyone.
-        _ = string.IsNullOrEmpty(token)
-            ? hub.Clients.All.SendAsync("vaultLocked", CancellationToken.None)
-            : hub.Clients.Group(VaultHub.Group(token)).SendAsync("vaultLocked", CancellationToken.None);
+        _ = hub.Clients.Group(VaultHub.Group(token)).SendAsync("vaultLocked", CancellationToken.None);
     }
 }

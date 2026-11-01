@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Doopass.WebUi</RootNamespace>
     <AssemblyName>Doopass.WebUi</AssemblyName>
-    <Version>5.0.0</Version>
+    <Version>5.0.2</Version>
     <Description>Doopass web UI: Razor components, themes and the vault session contract shared by the server host and mobile thin clients.</Description>
   </PropertyGroup>
 

@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Doopass.Cli.Services;
 using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
@@ -61,6 +62,17 @@ public static class WebHostFactory
         var tlsPassword = options.TlsPassword ?? ReadApiSetting(settings, "tls_pass");
         var fingerprint = ValidateTlsCertificate(tlsPfx, tlsPassword);
 
+        if (options.Lan && tlsPfx is null)
+        {
+            // --lan is explicit, so it stays allowed, but the user must know what it
+            // exposes. --tls binds 0.0.0.0 on its own, so it needs no --lan.
+            const string warning =
+                "WARNING: plaintext HTTP on the LAN - the master password and all secrets travel unencrypted. " +
+                "Use --tls <pfx> for encrypted access (--tls already binds 0.0.0.0, no --lan needed).";
+            Console.Error.WriteLine(warning);
+            AppLogger.Error(warning);
+        }
+
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             Args = [],
@@ -89,6 +101,7 @@ public static class WebHostFactory
         // Server-side services: coordinator + notifier.
         builder.Services.AddSingleton(settings);
         builder.Services.AddSingleton<IVaultChangeNotifier, VaultChangeNotifier>();
+        builder.Services.AddSingleton<AuthThrottle>();
         builder.Services.AddSingleton<ApiVaultCoordinator>();
 
         builder.Services.AddSignalR();
@@ -109,6 +122,38 @@ public static class WebHostFactory
         var app = builder.Build();
 
         app.Lifetime.ApplicationStopping.Register(() => AppLogger.Info("Doopass web server stopped"));
+
+        // Security headers for every response (assets, API, hub handshake, pages).
+        // Applied in OnStarting so they are written even after the static-file
+        // pipeline, and with the indexer so a header the framework already set
+        // is replaced rather than duplicated. style-src needs 'unsafe-inline'
+        // because Razor pages carry inline style="..." attributes; script-src
+        // needs 'wasm-unsafe-eval' for the Blazor WebAssembly runtime.
+        var usesTls = tlsPfx is not null;
+        app.Use((context, next) =>
+        {
+            context.Response.OnStarting(() =>
+            {
+                var headers = context.Response.Headers;
+                headers["X-Content-Type-Options"] = "nosniff";
+                headers["X-Frame-Options"] = "DENY";
+                headers["Referrer-Policy"] = "no-referrer";
+                headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()";
+                headers["Content-Security-Policy"] =
+                    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+                    "script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ws: wss:; " +
+                    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+
+                if (usesTls && ShouldSendHsts(context.Request.Host.Host))
+                {
+                    headers["Strict-Transport-Security"] = "max-age=31536000";
+                }
+
+                return Task.CompletedTask;
+            });
+
+            return next(context);
+        });
 
         if (!app.Environment.IsDevelopment())
         {
@@ -177,6 +222,7 @@ public static class WebHostFactory
         MapSpaFallback(app, wasmProvider);
 
         var scheme = fingerprint is not null ? "https" : "http";
+        ((IApplicationBuilder)app).Properties[SchemeProperty] = scheme;
         var url = $"{scheme}://localhost:{options.Port}";
         app.Logger.LogInformation("Doopass web interface: {Url} (bind: {Host})", url, host);
 
@@ -189,6 +235,9 @@ public static class WebHostFactory
     }
 
     private const string WasmBundleResource = "Doopass.Cli.wwwroot.wasm.zip";
+
+    /// <summary>App property carrying the scheme the host actually serves.</summary>
+    private const string SchemeProperty = "Doopass.Scheme";
 
     private static readonly FileExtensionContentTypeProvider WasmContentTypes = CreateWasmContentTypes();
 
@@ -330,7 +379,11 @@ public static class WebHostFactory
 
         if (options.OpenBrowser)
         {
-            var scheme = options.TlsPfx is not null ? "https" : "http";
+            // The certificate may come from settings.json, not the CLI flag, so
+            // use the scheme BuildWebHost actually resolved.
+            var scheme = ((IApplicationBuilder)app).Properties.TryGetValue(SchemeProperty, out var resolved)
+                ? (string)resolved!
+                : "http";
             var url = $"{scheme}://localhost:{options.Port}";
 
             _ = Task.Run(() =>
@@ -351,5 +404,27 @@ public static class WebHostFactory
 
         app.Run();
         return 0;
+    }
+    /// <summary>
+    /// HSTS may only be pinned for a real network host. If a browser remembers it
+    /// for localhost, the next plain <c>http://localhost</c> run is upgraded to
+    /// https against a certificate that run does not even serve.
+    /// </summary>
+    internal static bool ShouldSendHsts(string? host)
+    {
+        if (string.IsNullOrEmpty(host))
+        {
+            return false;
+        }
+
+        // HostString keeps IPv6 literals without brackets, but accept both forms.
+        var normalized = host.Trim('[', ']');
+
+        if (string.Equals(normalized, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !IPAddress.TryParse(normalized, out var address) || !IPAddress.IsLoopback(address);
     }
 }

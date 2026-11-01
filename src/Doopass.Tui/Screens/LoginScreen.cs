@@ -98,6 +98,9 @@ internal sealed class LoginScreen : ScreenBase
             case LoginStatus.IncorrectPassword:
                 _error.Text = "incorrect password";
                 break;
+            case LoginStatus.Corrupted:
+                _error.Text = "store is corrupted";
+                break;
         }
     }
 }

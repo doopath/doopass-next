@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Doopass.Cli.Services;
 using Doopass.Core;
 using Doopass.Core.Configuration;
 using Doopass.Core.Storage;
@@ -13,6 +14,9 @@ public sealed class ApiSession(string token)
 {
     /// <summary>The opaque bearer token that identifies this session.</summary>
     public string Token { get; } = token;
+
+    /// <summary>When the token was issued; the absolute TTL is measured from here.</summary>
+    public DateTimeOffset CreatedUtc { get; internal set; } = DateTimeOffset.UtcNow;
 
     /// <summary>UTC timestamp of the last authorized call; drives the sliding TTL.</summary>
     public DateTimeOffset LastSeenUtc { get; internal set; } = DateTimeOffset.UtcNow;
@@ -30,19 +34,25 @@ public sealed class ApiVaultCoordinator
     /// <summary>Session lifetime used when <c>api.session_ttl_minutes</c> is absent (30 minutes).</summary>
     public static readonly TimeSpan DefaultSessionTtl = TimeSpan.FromMinutes(30);
 
+    /// <summary>Hard cap on a token's lifetime, no matter how active it is.</summary>
+    public static readonly TimeSpan DefaultAbsoluteSessionTtl = TimeSpan.FromHours(8);
+
     private readonly object _gate = new();
     private readonly Settings _settings;
     private readonly IVaultChangeNotifier _notifier;
+    private readonly AuthThrottle _throttle;
     private readonly ConcurrentDictionary<string, ApiSession> _sessions = new();
     private Store? _store;
 
-    /// <summary>Creates the coordinator, reading the optional session TTL from settings.</summary>
+    /// <summary>Creates the coordinator, reading the optional session TTLs from settings.</summary>
     /// <param name="settings">Host-wide settings (store path, backups, API options).</param>
     /// <param name="notifier">Server-wide change notifier used to wake clients.</param>
-    public ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier)
+    /// <param name="throttle">Shared master-password failure counter.</param>
+    public ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier, AuthThrottle throttle)
     {
         _settings = settings;
         _notifier = notifier;
+        _throttle = throttle;
 
         // Overridable for TTL tests.
         Clock = () => DateTimeOffset.UtcNow;
@@ -62,6 +72,22 @@ public sealed class ApiVaultCoordinator
         }
 
         SessionTtl = ttl;
+
+        var absoluteTtl = DefaultAbsoluteSessionTtl;
+
+        if (settings.Sections.Contains("api", StringComparer.Ordinal))
+        {
+            var api = settings.GetSection("api");
+
+            if (api.TryGetValue("absolute_session_ttl_hours", out var rawHours)
+                && double.TryParse(rawHours, System.Globalization.CultureInfo.InvariantCulture, out var hours)
+                && hours > 0)
+            {
+                absoluteTtl = TimeSpan.FromHours(hours);
+            }
+        }
+
+        AbsoluteSessionTtl = absoluteTtl;
     }
 
     /// <summary>Time source; replaced with a fake clock in TTL tests.</summary>
@@ -70,12 +96,17 @@ public sealed class ApiVaultCoordinator
     /// <summary>Sliding session TTL (reads <c>api.session_ttl_minutes</c> from settings.json when present).</summary>
     public TimeSpan SessionTtl { get; }
 
+    /// <summary>
+    /// Absolute session lifetime (reads <c>api.absolute_session_ttl_hours</c>, 8 h
+    /// by default): an active token must still not live forever.
+    /// </summary>
+    public TimeSpan AbsoluteSessionTtl { get; }
+
     /// <summary>The host version reported to clients.</summary>
     public string ServerVersion => Doopass.Core.Constants.Version;
 
     /// <summary>Number of live sessions (exposed for tests and diagnostics).</summary>
     public int SessionCount { get { lock (_gate) { return _sessions.Count; } } }
-
 
     /// <summary>
     /// Per-test isolation: drops every token, relocks and removes the store file,
@@ -88,6 +119,7 @@ public sealed class ApiVaultCoordinator
             _sessions.Clear();
             _store = null;
             Clock = () => DateTimeOffset.UtcNow;
+            _throttle.Reset();
 
             if (File.Exists(_settings.StoreFile))
             {
@@ -113,6 +145,13 @@ public sealed class ApiVaultCoordinator
     private bool StoreExistsCore => Store.DoesStoreFileExist(_settings.StoreFile);
 
     /// <summary>
+    /// How long a REST login should pause before checking the password. Shares
+    /// the host-wide failure counter with the Blazor page; it never refuses, so
+    /// the ASP.NET limiter remains the only hard cap on REST attempts.
+    /// </summary>
+    public TimeSpan LoginDelay() => _throttle.DelayBeforeAttempt();
+
+    /// <summary>
     /// Validates the master password and issues a token. When some session has
     /// already unlocked the vault, a correct password just adds a token — the
     /// live store is kept so parallel clients never race over the file.
@@ -132,12 +171,14 @@ public sealed class ApiVaultCoordinator
 
             if (store is null)
             {
+                _throttle.RegisterFailure();
                 return (false, null, "Incorrect password!");
             }
 
+            _throttle.RegisterSuccess();
             _store ??= store;
             var token = NewToken();
-            _sessions[token] = new ApiSession(token) { LastSeenUtc = Clock() };
+            _sessions[token] = NewSession_locked(token);
             return (true, token, null);
         }
     }
@@ -163,7 +204,7 @@ public sealed class ApiVaultCoordinator
 
             _store = new Store(password, _settings.StoreFile);
             var token = NewToken();
-            _sessions[token] = new ApiSession(token) { LastSeenUtc = Clock() };
+            _sessions[token] = NewSession_locked(token);
             return (true, token, null);
         }
     }
@@ -312,20 +353,21 @@ public sealed class ApiVaultCoordinator
         {
             RequireToken_locked(token);
 
+            var password = _store?.Password
+                ?? throw new StoreIsNotInitializedError("Store isn't initialized!");
+
             var backups = BuildStoreBackup();
+            RequireExistingBackup_locked(backups, backupName);
+
             var name = backupName + _settings.BackupExtension;
 
-            if (!File.Exists(Path.Combine(_settings.BackupsDir, name)))
-            {
-                throw new PropertyDoesNotExistError($"Backup '{backupName}' does not exist!");
-            }
+            // Validate the candidate BEFORE any write: swapping in a file we cannot
+            // decrypt (tampered, truncated, from another vault) would destroy the
+            // live store, and only then would the failure be noticed.
+            Store.Decrypt(password, backups.GetBackupContent(name));
 
             backups.SwapStoreWithBackup(name);
-
-            if (_store is not null)
-            {
-                _store = new Store(_store.Password, _settings.StoreFile);
-            }
+            _store = new Store(password, _settings.StoreFile);
         }
 
         _notifier.NotifyBackupsChanged();
@@ -341,18 +383,26 @@ public sealed class ApiVaultCoordinator
         {
             RequireToken_locked(token);
 
-            var name = backupName + _settings.BackupExtension;
-            var path = Path.Combine(_settings.BackupsDir, name);
+            var backups = BuildStoreBackup();
+            RequireExistingBackup_locked(backups, backupName);
 
-            if (!File.Exists(path))
-            {
-                throw new PropertyDoesNotExistError($"Backup '{backupName}' does not exist!");
-            }
-
-            BuildStoreBackup().DeleteBackup(name);
+            backups.DeleteBackup(backupName + _settings.BackupExtension);
         }
 
         _notifier.NotifyBackupsChanged();
+    }
+
+    /// <summary>
+    /// Rejects unsafe (path-traversal) and unknown backup names before any file
+    /// operation — including the safety backup a restore would otherwise write.
+    /// </summary>
+    private static void RequireExistingBackup_locked(StoreBackup backups, string backupName)
+    {
+        if (!StoreBackup.IsSafeBackupName(backupName)
+            || !backups.GetBackupNames().Contains(backupName, StringComparer.Ordinal))
+        {
+            throw new PropertyDoesNotExistError($"Backup '{backupName}' does not exist!");
+        }
     }
 
     /// <summary>Reads every settings section; requires a live token.</summary>
@@ -435,14 +485,18 @@ public sealed class ApiVaultCoordinator
     private void PruneExpired_locked(DateTimeOffset now)
     {
         var expired = _sessions
-            .Where(kv => now - kv.Value.LastSeenUtc > SessionTtl)
+            .Where(kv => now - kv.Value.LastSeenUtc > SessionTtl
+                         || now - kv.Value.CreatedUtc > AbsoluteSessionTtl)
             .Select(kv => kv.Key)
             .ToList();
 
         foreach (var token in expired)
         {
             _sessions.TryRemove(token, out _);
-            _notifier.NotifyVaultLocked(token);
+
+            // Only the expired token's clients care: the vault itself may still be
+            // unlocked for everybody else (an idle phone must not kick the browser).
+            _notifier.NotifySessionExpired(token);
         }
 
         RelockIfIdle_locked();
@@ -458,6 +512,12 @@ public sealed class ApiVaultCoordinator
 
         _store = null;
         _notifier.NotifyVaultLocked(string.Empty);
+    }
+
+    private ApiSession NewSession_locked(string token)
+    {
+        var now = Clock();
+        return new ApiSession(token) { CreatedUtc = now, LastSeenUtc = now };
     }
 
     private static string NewToken()

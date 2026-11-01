@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Doopass.Core.Diagnostics;
+using Doopass.Core.Storage;
 
 namespace Doopass.Core.Configuration;
 
@@ -22,6 +24,20 @@ public sealed class Settings
     {
         "remote",
     };
+
+    /// <summary>
+    /// Settings the UI/API may change. Everything that names a path is read-only:
+    /// a writable <c>store_file</c> or <c>backup_extension</c> turns the settings
+    /// API into an arbitrary-file write (or delete) primitive.
+    /// </summary>
+    private static readonly HashSet<string> EditableKeys = new(StringComparer.Ordinal)
+    {
+        "version",            // informational
+        "backup_extension",   // validated below
+    };
+
+    private static readonly Regex BackupExtensionPattern =
+        new(@"^(\.[A-Za-z0-9]{1,8}){1,2}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private Dictionary<string, Dictionary<string, string>> _settings = new();
 
@@ -69,16 +85,30 @@ public sealed class Settings
     public IReadOnlyDictionary<string, string> GetSection(string section) =>
         new Dictionary<string, string>(_settings[section]);
 
+    /// <summary>True when the UI/API may change this setting; paths are read-only.</summary>
+    public static bool IsEditable(string section, string key) =>
+        string.Equals(section, "local", StringComparison.Ordinal) && EditableKeys.Contains(key);
+
     /// <summary>Changes a single setting and persists it.</summary>
     public void ModifyProperty(string section, string key, string value)
     {
-        if (!_settings.TryGetValue(section, out var pairs))
+        if (!_settings.ContainsKey(section))
         {
-            pairs = new Dictionary<string, string>();
-            _settings[section] = pairs;
+            throw new PropertyDoesNotExistError($"Settings section '{section}' does not exist!");
         }
 
-        pairs[key] = value;
+        if (!IsEditable(section, key))
+        {
+            throw new ReadOnlySettingError($"Setting '{section}.{key}' is read-only.");
+        }
+
+        if (key == "backup_extension" && !BackupExtensionPattern.IsMatch(value))
+        {
+            throw new InvalidSettingValueError(
+                "backup_extension must look like '.enc.bak' (one or two dot-separated alphanumerics).");
+        }
+
+        _settings[section][key] = value;
         Save();
         AppLogger.Info($"Setting changed: {section}.{key}");
     }
@@ -89,7 +119,7 @@ public sealed class Settings
         Directory.CreateDirectory(AppDir);
         Directory.CreateDirectory(AppDataDir);
 
-        File.WriteAllText(SettingsFile, ReadEmbeddedDefault(), TextFile.Utf8NoBom);
+        AtomicFile.WriteAllText(SettingsFile, ReadEmbeddedDefault(), TextFile.Utf8NoBom);
 
         Load();
         AppLogger.Info("Settings restored to defaults");
@@ -165,7 +195,7 @@ public sealed class Settings
         }
 
         var json = JsonSerializer.Serialize(raw, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(SettingsFile, json, TextFile.Utf8NoBom);
+        AtomicFile.WriteAllText(SettingsFile, json, TextFile.Utf8NoBom);
     }
 
     private string SubstituteAppData(string value)
