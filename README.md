@@ -164,10 +164,11 @@ dotnet run --project src/Doopass.Cli -- serve --tls ~/doopass/doopass.pfx --tls-
 | `--port N` (`-p`)             | HTTP port (default `7240`)                      |
 | `--no-browser`                | do not open the browser automatically           |
 | `--lan` (`--network`)         | listen on `0.0.0.0` instead of `localhost`      |
-| `--tls <pfx> [--tls-pass P]`  | serve HTTPS from a PKCS#12 certificate (binds    |
-|                               | every interface); the startup log prints the     |
-|                               | SHA-256 fingerprint, which thin clients pin for  |
-|                               | trust-on-first-use                               |
+| `--tls [pfx] [--tls-pass P]`  | serve HTTPS from a PKCS#12 certificate (binds    |
+|                               | every interface; without a path it uses          |
+|                               | `~/doopass/doopass.pfx` from `setup-tls`); the   |
+|                               | startup log prints the SHA-256 fingerprint,      |
+|                               | which thin clients pin for trust-on-first-use    |
 | `--announce`                  | force LAN discovery announce (also on with `--lan`) |
 
 The web UI is a **thin client**: all HTTP calls to `/api/*` originate from the

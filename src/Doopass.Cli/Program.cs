@@ -1,12 +1,13 @@
 using Doopass.Cli;
 using Doopass.Cli.Api;
+using Doopass.Core;
 using Doopass.Tui;
 using Microsoft.AspNetCore.Connections;
 
 // Single entry point for Doopass.
 //   doopass                         -> run the terminal UI
 //   doopass serve [--port N] [--no-browser] [--lan] [--announce]
-//                   [--tls <pfx>] [--tls-pass <password>]
+//                   [--tls [pfx]] [--tls-pass <password>]
 //                                  -> run the web interface: Blazor UI, the REST API
 //                                     for thin clients under /api, the /hubs/vault
 //                                     SignalR channel and LAN discovery
@@ -61,17 +62,29 @@ static int Run(string[] args)
         {
             options = options with { Announce = true };
         }
-        else if (args[i] is "--tls" or "--tls-pfx" && i + 1 < args.Length)
+        else if (args[i] is "--tls" or "--tls-pfx")
         {
-            options = options with { TlsPfx = args[i + 1] };
-            i++;
+            // The path is optional: bare --tls means the certificate setup-tls creates.
+            var path = i + 1 < args.Length && !args[i + 1].StartsWith('-')
+                ? args[++i]
+                : Path.Combine(AppPaths.AppDir, "doopass.pfx");
+
+            if (!File.Exists(path))
+            {
+                Console.Error.WriteLine(
+                    $"TLS certificate not found: {path}. Run 'doopass setup-tls' first, " +
+                    "or pass --tls <file.pfx>.");
+                return 1;
+            }
+
+            options = options with { TlsPfx = path };
         }
         else if (args[i] == "--tls-pass" && i + 1 < args.Length)
         {
             options = options with { TlsPassword = args[i + 1] };
             i++;
         }
-        else if (args[i] is "--tls" or "--tls-pfx" or "--tls-pass" or "--port" or "-p")
+        else if (args[i] is "--tls-pass" or "--port" or "-p")
         {
             Console.Error.WriteLine($"{args[i]} needs a value (see doopass serve --help).");
             return 2;
@@ -113,7 +126,7 @@ static int ShowHelp()
           --no-browser        do not open the browser
           --lan, --network    listen on 0.0.0.0 and announce discovery
           --announce          force discovery announce
-          --tls <pfx>         serve HTTPS from a PKCS#12 certificate
+          --tls [pfx]         serve HTTPS; without a path uses ~/doopass/doopass.pfx
           --tls-pass <pwd>    certificate password
           -h, --help          show this help
 

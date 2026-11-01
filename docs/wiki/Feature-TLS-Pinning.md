@@ -10,7 +10,8 @@ enough for the phone — no CA, no domain, no reverse proxy.
 doopass serve --lan --tls ~/doopass/doopass.pfx --tls-pass CHANGE-ME
 ```
 
-* `--tls <pfx>` (alias `--tls-pfx`) points at a PKCS#12 file; `--tls-pass` is its
+* `--tls [pfx]` (alias `--tls-pfx`) points at a PKCS#12 file; without a path it
+  uses `~/doopass/doopass.pfx`, the file `setup-tls` creates. `--tls-pass` is its
   password. Command-line values override `settings.json` → `api.tls_pfx` /
   `api.tls_pass`.
 * The certificate is loaded **before** the server starts; a missing or unloadable

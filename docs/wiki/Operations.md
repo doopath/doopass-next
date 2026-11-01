@@ -120,7 +120,8 @@ master password and are useless without it.
 * Keep `store.enc`, `doopass.pfx`, `doopass.key` out of version control and
   off shared folders.
 * Use a long master password: it is the only protection for a copied vault.
-* Prefer `--tls` on shared networks; plain `--lan` exposes tokens and secrets.
+* Use `--tls` whenever the host leaves `localhost`; run it only on a trusted
+  home network. Plain `--lan` exposes tokens and secrets.
 * Lower `api.session_ttl_minutes` if a phone may be lost.
 * Log out of the web UI when leaving a shared machine — the host stays unlocked
   until logout or the session TTL expires (swept every 30 s by `SessionJanitor`).
