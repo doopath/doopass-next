@@ -86,7 +86,7 @@ Location: `<AppDataDir>/settings.json`, default `~/doopass/appdata/settings.json
 ```json
 {
   "local": {
-    "version": "5.0.0",
+    "version": "5.1.0",
     "backup_extension": ".enc.bak",
     "store_file": "APPDATA/store.enc",
     "log_file": "APPDATA/doopass.log",
@@ -162,9 +162,9 @@ Base content type: `application/json`; responses carry
 
 | Endpoint | Body in | Body out |
 | -------- | ------- | -------- |
-| `POST /api/auth/login` | `{"password": "..."}` | `{"token": "...", "serverVersion": "5.0.0"}` |
+| `POST /api/auth/login` | `{"password": "..."}` | `{"token": "...", "serverVersion": "5.1.0"}` |
 | `POST /api/auth/init` | `{"password": "..."}` | same |
-| `GET /api/vault/state` | — | `{"storeExists":true,"unlocked":false,"serverVersion":"5.0.0","certFingerprint":null}` |
+| `GET /api/vault/state` | — | `{"storeExists":true,"unlocked":false,"serverVersion":"5.1.0","certFingerprint":null}` |
 | `GET /api/vault/keys` | — | `{"keys":["github","router"]}` |
 | `GET /api/vault/value?key=` | — | `{"value":"..."}` |
 | `POST /api/vault/pairs` | `{"key":"k","value":"v"}` | 204 |
@@ -222,7 +222,7 @@ Reply:
   "port": 7240,
   "tls": true,
   "fingerprint": "d3894b6e...c8e50f",
-  "version": "5.0.0"
+  "version": "5.1.0"
 }
 ```
 
@@ -235,7 +235,7 @@ client only accepts replies with `service == "doopass"` and a port in
 | Key | Store | Value |
 | --- | ----- | ----- |
 | `doopass-theme` | `localStorage` | `"dark"` or `"light"`; anything else is ignored |
-| Blazor circuit | server memory | session state, no browser cookie |
+| `doopass_vault_token` | `sessionStorage` | browser bearer token; one tab, cleared on logout/lock |
 
 ## 8. Android storage
 

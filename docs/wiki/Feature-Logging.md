@@ -24,7 +24,7 @@ Phone: `FileSystem.AppDataDirectory/doopass.log` in the Android app sandbox.
 | CRUD | `Property added: github`, `Property updated: github`, `Property removed: github` |
 | Backups | `Backup created: 26_10_2026_store_1.enc.bak`, `Backup deleted: …`, `Store restored from backup: …` |
 | Settings | `Setting changed: local.store_file`, `Settings restored to defaults`, `Dropped obsolete settings section: remote` |
-| Host lifecycle | `Doopass web server starting (v5.0.0, bind localhost, port 7240)`, `Doopass web server stopped` |
+| Host lifecycle | `Doopass web server starting (v5.1.0, bind localhost, port 7240)`, `Doopass web server stopped` |
 | TLS | `TLS enabled; certificate SHA-256 fingerprint: <hex>` |
 | Discovery | `UDP discovery announcing on port 7241`, bind/create failures |
 | Errors | full exception text from UI handlers and background services |

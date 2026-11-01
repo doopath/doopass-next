@@ -4,42 +4,16 @@ Deliberate trade-offs and genuine sharp edges, documented so they are not
 rediscovered the hard way. Security-relevant items are also summarised in
 [Security Model](Security-Model.md).
 
-## Two in-memory store instances
-
-**What:** the web host can hold two independently decrypted `Store` objects at
-once — one per Blazor circuit (`DoopassSession`) and one inside
-`ApiVaultCoordinator` for all REST tokens.
-
-**Consequence:** both write the whole `store.enc` on every mutation. Any client
-converges on change events, so a UI sees the other's writes, but two simultaneous
-writes are resolved by last-writer-wins at file level. A write based on a stale
-copy can silently drop the other client's entry.
-
-**Mitigation:** use one client type at a time for edits, take backups before bulk
-changes. A real fix means a single shared store for both paths (or per-write
-merge/reload), which is not implemented.
-
 ## Rename can lose the old key
 
 **What:** "update" is implemented as `RemoveProperty(old)` + `AddProperty(new)`.
 
 * The **TUI** checks whether `new` already exists *before* removing `old`.
-* The **web session** and the **REST API** do not. If the new key exists, the old
+* The **browser UI** and the **REST API** do not. If the new key exists, the old
   key is already gone and the add fails with a 409, leaving the entry deleted.
 
 **Mitigation:** rename through the TUI, or delete the target key first. A safety
 backup taken beforehand is the only recovery.
-
-## Writes are not atomic
-
-**What:** every save does `File.WriteAllText(store.enc, …)` in place. No temp file
-+ rename, no fsync, no file lock.
-
-**Consequence:** a crash, power loss or full disk during a save can truncate the
-vault, which is then indistinguishable from a wrong password. Two processes
-sharing a directory can overwrite each other.
-
-**Mitigation:** take backups before risky changes; keep only one writer process.
 
 ## Backup ordering is lexicographic
 
@@ -57,13 +31,6 @@ not parse dates.
   MAC.
 * The master password lives in a .NET `string`: it can be dropped but not zeroed.
 * No key rotation: changing the master password is not supported at all.
-
-## Web login is not rate limited
-
-Only `/api/auth/login` and `/api/auth/init` are limited (5/min per IP). The
-Blazor login form (`/`) performs an unlimited number of password attempts against
-the local file, so anyone who can reach the web port can brute-force it. On a
-loopback-only host this is a local attack; with `--lan` it is a network one.
 
 ## Plain HTTP mode
 
@@ -101,9 +68,10 @@ are not detected at all — `/api/vault/reload` is the manual escape hatch.
 ## Sessions
 
 * A hub connection does not refresh the sliding TTL; only REST calls do. A phone
-  that sits idle on the store page expires after the TTL.
-* A web circuit has no idle timeout: it stays unlocked until logout, disconnect
-  or server restart.
+  or browser tab that sits idle on the store page expires after the TTL.
+* The browser token lives in `sessionStorage`, so it survives a page reload and
+  is readable by any script on the origin; closing the tab does not itself drop
+  the host's store, the TTL/janitor does.
 * API tokens are all-powerful: any token reads and writes the whole vault.
 * There is no "log out all devices" action.
 
@@ -124,7 +92,7 @@ are not detected at all — `/api/vault/reload` is the manual escape hatch.
   a self-signed certificate is enough for the phone but blocks installation.
 * The service worker only provides a shell: vault operations need the server.
 * Asset URLs are unhashed; after an upgrade the worker cache version
-  (`doopass-pwa-v2`) must be bumped, otherwise an installed app can serve stale
+  (`doopass-pwa-v9`) must be bumped, otherwise an installed app can serve stale
   CSS/JS.
 
 ## Settings
@@ -137,10 +105,10 @@ are not detected at all — `/api/vault/reload` is the manual escape hatch.
 
 ## Operations and tooling
 
-* Version `5.0.0` is duplicated in `Constants.cs`, six `.csproj` files and
+* The version is duplicated in `Constants.cs`, seven `.csproj` files and
   `DefaultConfig.json`; nothing enforces consistency.
-* No CI pipeline, no coverage reporting, no container image, no package signing,
-  no SBOM.
+* No coverage reporting, no container image, no package signing, no SBOM. CI
+  builds and tests on push, but there is no release pipeline.
 * No structured logging, no log levels, one 5 MB archive only.
 * Logging from multiple processes to the same file can interleave.
 * Rate limiting keys on `RemoteIpAddress`, so behind a reverse proxy all clients
@@ -148,6 +116,10 @@ are not detected at all — `/api/vault/reload` is the manual escape hatch.
 
 ## Data exposure in the client
 
+* Every secret the browser shows crosses the Network tab in a plaintext JSON
+  response — unavoidable unless decryption moves into the browser (not planned).
+* The bearer token in `sessionStorage` is readable by any same-origin script;
+  the CSP limits what can load, but a hostile extension or DevTools still sees it.
 * Revealed values are rendered into the DOM and can be read by extensions or
   DevTools; the app cannot prevent that.
 * Copied secrets stay in the OS clipboard until replaced.

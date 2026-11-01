@@ -6,7 +6,8 @@ that file:
 
 * a **terminal UI** (Terminal.Gui v2) that mirrors the original Textual
   interface;
-* a **web UI** (Blazor Server) that is also installable as a PWA;
+* a **web UI** — a Blazor WebAssembly thin client served by the host, also
+  installable as a PWA;
 * a **private REST API** plus a **SignalR change channel** served by the same
   process;
 * an **Android thin client** (MAUI + Blazor) that holds no vault of its own and
@@ -87,7 +88,7 @@ Requirements: .NET SDK 10 to build; a published binary needs no runtime.
 
 ## Version and license
 
-* Current version: **5.0.0** (`Doopass.Core.Constants.Version`, mirrored in every
+* Current version: **5.1.0** (`Doopass.Core.Constants.Version`, mirrored in every
   `.csproj`).
 * License: **GPL-3.0**, inherited from the original project.
 

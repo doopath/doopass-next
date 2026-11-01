@@ -9,7 +9,9 @@ what it does **not** protect. It is written from the code, not from marketing.
 | ----- | -------------- | ---------- |
 | Secret values and key names | `store.enc` | Fernet (AES-128-CBC + HMAC-SHA256) with a PBKDF2-derived key |
 | Master password | process memory while unlocked | none (see §6) |
-| API session tokens | host memory | random 256-bit, TTL, never written to disk or logs |
+| Browser session token | `sessionStorage` + page memory | random 256-bit, sliding/absolute TTL, cleared on logout or 401 |
+| Phone session token | Android `SecureStorage` | Keystore-backed |
+| API session tokens (host side) | host memory | random 256-bit, TTL, never written to the host's disk or logs |
 | TLS private key | user-supplied `.pfx` path | filesystem permissions |
 | Certificate pin | Android `SecureStorage` | Keystore-backed |
 | Phone session token | Android `SecureStorage` | Keystore-backed |
@@ -74,9 +76,10 @@ The construction is the standard Fernet spec with the Python argument order
 | Malware or another user with access to the unlocked process | The decrypted vault and password live in memory; `ptrace`/debugger access wins |
 | An attacker who can read the process memory of the host | Same as above; no memory encryption |
 | Offline brute force with a weak master password | PBKDF2 slows but does not prevent guessing; there is no password strength policy |
-| Plain HTTP on the LAN (`--lan` without `--tls`) | Bearer tokens and secret values travel in clear text; anyone on the network can read or replay them |
-| Someone who can reach the web port | The UI has **no login rate limiting**; only the REST endpoints are limited |
-| A hostile browser extension or a compromised browser | The web UI renders secrets into the DOM when revealed and writes them to the clipboard |
+| Plain HTTP on the LAN (`--lan` without `--tls`) | Bearer tokens, the master password and secret values travel in clear text; anyone on the network can read or replay them. The host prints a warning at startup |
+| Someone who can reach the web port | Login attempts are rate-limited (5/min per IP) and slowed by a shared failure counter; there is no hard lockout |
+| A hostile browser extension or a compromised browser | The token is readable by any script on the origin (hence the CSP), and revealed secrets are rendered into the DOM and copied to the clipboard |
+| Browser DevTools | A decrypted value is in the response body by design: the browser must receive it to display or copy it |
 | Clipboard snooping | Copied secrets stay in the OS clipboard until replaced |
 | A stolen phone with an unlocked session | The token in `SecureStorage` grants API access until TTL expiry or logout |
 | Denial of service | No quotas; large values or many entries can exhaust memory/disk |
@@ -105,24 +108,28 @@ The construction is the standard Fernet spec with the Python argument order
 
 | Surface | Mechanism | Notes |
 | ------- | --------- | ----- |
-| TUI / web UI | master password unlocks the vault in that session | no accounts, no roles |
-| REST API | opaque bearer token issued after a password check | token equals authorization: full vault access |
+| TUI | master password unlocks the in-process store | no accounts, no roles |
+| Web UI + REST API | opaque bearer token issued after a password check | token equals authorization: full vault access |
 | SignalR hub | token as `access_token` query parameter | aborted if unknown/expired |
 | `GET /api/vault/state` | anonymous | leaks existence, version, TLS fingerprint |
 | LAN discovery | anonymous | leaks host name, port, version, fingerprint to the LAN |
 
-The API has no cookies, so there is no CSRF surface; the browser UI uses
-ASP.NET Core antiforgery middleware. All API responses are `no-store` so
-secret-bearing bodies are not cached by proxies or browsers.
+The API has no cookies: auth is bearer-only, so there is no CSRF surface. The
+browser UI is static WebAssembly and keeps the token in `sessionStorage`, which
+any same-origin script can read — that is why every response carries a CSP
+(`script-src 'self' 'wasm-unsafe-eval'`). All API responses are `no-store` and
+the service worker never caches `/api`, so secret-bearing bodies do not land in
+Cache Storage or a proxy.
 
 ## 6. Memory and lifetime rules
 
 * The decrypted entry list and the password exist only inside a live `Store`
   instance.
-* Web UI: dropped on logout, circuit disposal or server shutdown → password
-  forgotten, must be re-entered.
-* REST: the single shared store is dropped when the last token disappears
-  (logout/TTL). Until then, any new login only adds a token.
+* Browser and phone: the shared store is dropped when the last token disappears
+  (logout/TTL), checked both on every request and every 30 s by `SessionJanitor`.
+  Until then, any new login only adds a token.
+* The browser's `sessionStorage` token dies with the tab; closing it does not by
+  itself drop the host's store, but the TTL (or the janitor at its expiry) does.
 * Phone: the master password is **never stored**; only the resulting token.
 * Nothing is written to swap by the application deliberately, but the OS may
   swap process memory — full-disk encryption is the mitigation.
@@ -132,7 +139,7 @@ secret-bearing bodies are not cached by proxies or browsers.
 | Setup | Outcome |
 | ----- | ------- |
 | `http://localhost:7240` | loopback only; acceptable for a single-user desktop |
-| `--lan` (HTTP, all interfaces) | usable but unsafe on shared networks; UI shows a warning on the phone |
+| `--lan` (HTTP, all interfaces) | usable but unsafe: secrets and the token are plaintext on the wire. The host prints a loud startup warning; use `--tls` |
 | `--tls host.pfx --tls-pass ...` | HTTPS on all interfaces; fingerprint printed at startup and reported by the API |
 | Self-signed certificate | fine for the Android client (pinning), rejected/warned by browsers; PWA install blocked |
 | Public CA certificate | best browser experience; pinning still works on the phone |

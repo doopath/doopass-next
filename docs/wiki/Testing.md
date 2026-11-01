@@ -2,11 +2,12 @@
 
 ```bash
 dotnet build Doopass.slnx         # must be warning-free
-dotnet test  Doopass.slnx         # 103 tests, ~7 s
+dotnet test  Doopass.slnx         # 247 tests, ~12 s
 ```
 
-Current baseline (2026-10): **103 passed, 0 failed** — Core 34, TUI 50, API 19.
-The Android project is not built by the solution and has no automated tests.
+Current baseline: **247 passed, 0 failed** — Core 92, TUI 50, API 83,
+WebClient 22. The Android project is not built by the solution and has no
+automated tests.
 
 ## Projects
 
@@ -14,9 +15,11 @@ The Android project is not built by the solution and has no automated tests.
 | ------- | ---------- | ------- |
 | `tests/Doopass.Core.Tests` | `Core` | format compatibility, storage CRUD, settings, validation, logging |
 | `tests/Doopass.Tui.Tests` | `Tui` | key mapping, focus ring, navigation, rendered screen content |
-| `tests/Doopass.Api.Tests` | `Cli` | the real web host on a random port: auth, CRUD, backups, settings, TTL, rate limit, discovery payload |
+| `tests/Doopass.Api.Tests` | `Cli` + `WebClient` | the real web host on a random port: auth, CRUD, backups, settings, TTL, rate limit, security headers, browser-session contract |
+| `tests/Doopass.WebClient.Tests` | `WebClient` | browser session JSON/status mapping, sessionStorage flow, push lifecycle |
 
-All three use xUnit (`Microsoft.NET.Test.Sdk` 17.11.1, xunit 2.9.2).
+All projects use xUnit (`Microsoft.NET.Test.Sdk` 17.11.1, xunit 2.9.2; the
+WebClient project uses the newer 17.14.1/2.9.3 pair).
 
 ## Core tests — what they pin down
 
@@ -58,6 +61,12 @@ deletes the store and backups and restores the clock).
 | `VaultTokenTests` | logout invalidates every protected endpoint |
 | `VaultTtlTests` | token survives a fresh TTL window; expires past the TTL and relocks; logging out the last session relocks the coordinator |
 | `RateLimitTests` | six bad logins trip 429; the rejection body is the JSON error shape |
+| `AbsoluteSessionTtlTests` | an active token still dies at the absolute cap |
+| `SessionJanitorTests` | the vault relocks after the TTL with no request at all |
+| `AuthThrottleTests` | failures delay instead of refusing; success resets |
+| `BackupNameTraversalTests`, `BackupRestoreValidationTests` | no path escape, restore validates before writing |
+| `SecurityHeadersTests`, `PwaServiceWorkerTests` | CSP/nosniff/HSTS rules; `/api` and `/hubs` never cached |
+| `WebClientContractTests` | the real `WebApiVaultSession` against the real host (DTO drift guard) |
 | `DiscoveryPayloadTests` | reply fields, null fingerprint without TLS, probe constant |
 
 `CollectionBehavior.cs` disables test parallelisation because the host binds
@@ -67,12 +76,12 @@ real ports and shares process-wide state (`AppPaths`, `AppLogger`).
 
 * `Doopass.Mobile` — no automated tests; verified manually on a device.
 * Web UI components — no bUnit tests; behaviour is exercised through the API
-  tests and manually.
-* End-to-end browser automation — `docs/E2E-CHECKLIST.md` (git-ignored) is the
-  manual list.
+  and WebClient tests, plus manual browser checks.
+* End-to-end browser automation — `docs/E2E-CHECKLIST.md` is the manual list.
 * Cryptography beyond compatibility vectors — the scheme is inherited, not
   designed here.
-* Concurrency — the "two stores" race is documented, not tested.
+* Real cross-process contention — `StoreFileLock` is exercised with a
+  file-lock simulation, not two OS processes.
 * Performance and load.
 
 ## Adding tests

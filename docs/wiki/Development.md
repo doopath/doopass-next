@@ -18,8 +18,9 @@ dotnet run --project src/Doopass.Cli -- serve        # web UI + API on :7240
 dotnet run --project src/Doopass.Cli -- serve --lan --tls ~/doopass/doopass.pfx --tls-pass CHANGE-ME
 ```
 
-The Android app is built separately (`scripts/build-android.sh`); it is not part
-of `Doopass.slnx` so the solution builds without the MAUI workload.
+The solution includes the Android app, so a full `dotnet build Doopass.slnx`
+needs the `maui-android` workload. Without it, build `src/Doopass.Cli` and the
+test projects individually — that is what CI does.
 
 To experiment without touching your real vault:
 
@@ -31,16 +32,17 @@ DOOPASS_HOME=/tmp/doopass-dev dotnet run --project src/Doopass.Cli -- serve
 
 ```
 Directory.Build.props      shared TFM/nullable/lang settings
-Doopass.slnx               solution (src + tests, no mobile)
+Doopass.slnx               solution (src + tests, includes the Android app)
 assets/                    logo masters used by the icon generator
 .pwa-assets/               generated icons (git-ignored, embedded by csprojs)
 scripts/                   publish, package, autostart, icons, smoke tests
 src/Doopass.Core/          storage, crypto, settings, logging
 src/Doopass.Tui/           Terminal.Gui front-end
 src/Doopass.WebUi/         shared Razor components + assets
+src/Doopass.WebClient/     Blazor WebAssembly thin client
 src/Doopass.Cli/           entry point, web host, REST, hub, PWA assets
 src/Doopass.Mobile/        Android thin client
-tests/                     Core, Tui, Api xUnit projects
+tests/                     Core, Tui, Api, WebClient xUnit projects
 docs/wiki/                 this documentation (published to the GitHub wiki)
 ```
 

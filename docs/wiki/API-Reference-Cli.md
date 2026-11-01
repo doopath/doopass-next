@@ -2,7 +2,7 @@
 
 > Generated from the compiler's XML documentation (`GenerateDocumentationFile=true`). Do not edit by hand: run `python scripts/generate-api-docs.py` after changing public members.
 
-Assembly: `doopass` · Source: `src/Doopass.Cli/bin/Debug/net10.0/doopass.xml`
+Assembly: `doopass` · Source: `src/Doopass.Cli/bin/Release/net10.0/doopass.xml`
 
 ## Types
 
@@ -13,6 +13,7 @@ Assembly: `doopass` · Source: `src/Doopass.Cli/bin/Debug/net10.0/doopass.xml`
 * [`Doopass.Cli.Api.IVaultChangeNotifier`](#ivaultchangenotifier)
 * [`Doopass.Cli.Api.NoStoreFilter`](#nostorefilter)
 * [`Doopass.Cli.Api.RequireVaultTokenFilter`](#requirevaulttokenfilter)
+* [`Doopass.Cli.Api.SessionJanitor`](#sessionjanitor)
 * [`Doopass.Cli.Api.VaultAuth`](#vaultauth)
 * [`Doopass.Cli.Api.VaultChangeNotifier`](#vaultchangenotifier)
 * [`Doopass.Cli.Api.VaultEndpoints`](#vaultendpoints)
@@ -20,7 +21,7 @@ Assembly: `doopass` · Source: `src/Doopass.Cli/bin/Debug/net10.0/doopass.xml`
 * [`Doopass.Cli.Api.VaultHubRelay`](#vaulthubrelay)
 * [`Doopass.Cli.Api.WebHostFactory`](#webhostfactory)
 * [`Doopass.Cli.Api.WebHostOptions`](#webhostoptions)
-* [`Doopass.Cli.Services.DoopassSession`](#doopasssession)
+* [`Doopass.Cli.Services.AuthThrottle`](#auththrottle)
 * [`Program`](#program)
 
 ## `(global)`
@@ -37,6 +38,7 @@ Auto-generated public partial Program class for top-level statement apps.
 
 An authenticated thin-client session over the REST API (sliding TTL).
 
+* `CreatedUtc` — When the token was issued; the absolute TTL is measured from here.
 * `LastSeenUtc` — UTC timestamp of the last authorized call; drives the sliding TTL.
 * `Token` — The opaque bearer token that identifies this session.
 * `ApiSession(string)` — An authenticated thin-client session over the REST API (sliding TTL).
@@ -49,14 +51,17 @@ parallel stores writing the same `store.enc`. The coordinator also owns
 token registration, the sliding session TTL and the auto-relock when the
 last session goes away (logout, TTL expiry).
 
+* `AbsoluteSessionTtl` — Absolute session lifetime (reads `api.absolute_session_ttl_hours`, 8 h by default): an active token must still not live forever.
 * `Clock` — Time source; replaced with a fake clock in TTL tests.
 * `ServerVersion` — The host version reported to clients.
 * `SessionCount` — Number of live sessions (exposed for tests and diagnostics).
 * `SessionTtl` — Sliding session TTL (reads `api.session_ttl_minutes` from settings.json when present).
+* `DefaultAbsoluteSessionTtl` — Hard cap on a token's lifetime, no matter how active it is.
 * `DefaultSessionTtl` — Session lifetime used when `api.session_ttl_minutes` is absent (30 minutes).
-* `ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier)` — Creates the coordinator, reading the optional session TTL from settings.
+* `ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier, AuthThrottle throttle)` — Creates the coordinator, reading the optional session TTLs from settings.
   * `settings` — Host-wide settings (store path, backups, API options).
   * `notifier` — Server-wide change notifier used to wake clients.
+  * `throttle` — Shared master-password failure counter.
 * `Add(string token, string key, string value)` — Adds a pair, persists it and notifies every client.
   * `token` — Caller's bearer token.
   * `key` — New key; must be unique.
@@ -81,6 +86,7 @@ last session goes away (logout, TTL expiry).
 * `Init(string)` — Creates a new store, validating the password first. Fails when the store already exists.
 * `IsTokenValid(string)` — Validates a hub token WITHOUT sliding its TTL.
 * `Login(string)` — Validates the master password and issues a token. When some session has already unlocked the vault, a correct password just adds a token — the live store is kept so parallel clients never race over the file.
+* `LoginDelay()` — How long a REST login should pause before checking the password. Shares the host-wide failure counter with the Blazor page; it never refuses, so the ASP.NET limiter remains the only hard cap on REST attempts.
 * `Logout(string)` — Expires the given token. When the last session goes away, the vault relocks.
 * `PruneExpiredSessions()` — Removes expired sessions; sliding TTL, so any tracked call refreshes `LastSeenUtc`.
 * `Reload(string)` — Re-reads the store from disk under the current password.
@@ -88,6 +94,7 @@ last session goes away (logout, TTL expiry).
 * `Remove(string token, string key)` — Removes a key and notifies every client.
   * `token` — Caller's bearer token.
   * `key` — Key to remove.
+* `RequireExistingBackup_locked(StoreBackup, string)` — Rejects unsafe (path-traversal) and unknown backup names before any file operation — including the safety backup a restore would otherwise write.
 * `RestoreBackup(string, string)` — Swaps the store with a backup (safety backup first) and re-reads the unlocked store.
 * `RestoreDefaultSettings(string token)` — Rewrites `settings.json` from the embedded defaults and notifies clients.
   * `token` — Caller's bearer token.
@@ -141,14 +148,17 @@ scopes re-read their state from the same events, so changes made through the
 web UI, the REST API or another client become visible everywhere.
 
 * `NotifyBackupsChanged()` — Notifies listeners that the backup list changed.
+* `NotifySessionExpired(string token)` — Notifies that one token expired while the vault may stay unlocked.
+  * `token` — The expired token.
 * `NotifySettingsChanged()` — Notifies listeners that settings changed.
 * `NotifyVaultChanged()` — Notifies listeners that vault content changed.
 * `NotifyVaultLocked(string token)` — Notifies listeners that a token ended or the vault relocked.
   * `token` — Affected token, or an empty string to notify everyone.
 * `BackupsChanged` — Raised after a snapshot was created, restored or deleted.
+* `SessionExpired` — One token expired (or was dropped) while other sessions may still hold the vault.
 * `SettingsChanged` — Raised after settings were edited or restored to defaults.
 * `VaultChanged` — Raised after pairs were added, updated or removed, or the store was reloaded.
-* `VaultLocked` — Raised when a session ends or the vault relocks. The argument is the affected token, or an empty string when no sessions remain (broadcast).
+* `VaultLocked` — The vault really locked: no session is left, so the store was dropped.
 
 ### `NoStoreFilter`
 
@@ -167,6 +177,15 @@ Endpoint filter enforcing `Authorization: Bearer <token>` against the coordinato
   *Returns:* 401 JSON on failure, otherwise the endpoint result.
   * `context` — Invocation context of the endpoint.
   * `next` — The next filter or the endpoint itself.
+
+### `SessionJanitor`
+
+Drops sessions whose sliding or absolute TTL ran out, even when no client
+makes another request. Without this the decrypted store would stay in host
+memory indefinitely after the last browser tab or phone closed.
+
+* `Interval` — How often expired tokens are swept (default 30 seconds).
+* `SessionJanitor(ApiVaultCoordinator)` — Drops sessions whose sliding or absolute TTL ran out, even when no client makes another request. Without this the decrypted store would stay in host memory indefinitely after the last browser tab or phone closed.
 
 ### `VaultAuth`
 
@@ -197,10 +216,12 @@ parameters or JSON bodies — never path segments — because they may contain
 `Cache-Control: no-store`; errors are always
 `{ "error": "<message>" }`.
 
-* `CanonicalStatus(string)` — Auth outcomes carry their message in the coordinator result; missing store is a conflict.
+* `CanonicalStatus(string)` — Auth outcomes carry their message in the coordinator result; a missing store is a conflict. Failures never turn into a refusal any more — they only delay the attempt — so there is no "too many attempts" status here.
+* `GuardAsync(IResult}})` — Async sibling of `Guard(IResult>)` for handlers that wait before touching the store.
 * `MapDoopassApi(IEndpointRouteBuilder app)` — Maps the whole `/api` group (auth, vault, backups, settings) onto the pipeline.
   *Returns:* The group, for further conventions if needed.
   * `app` — Endpoint route builder of the web host.
+* `Unexpected(Exception)` — Anything we did not plan for may carry file-system paths, .NET type names or other internals; the client gets a fixed message and the details go to the log only.
 
 ### `VaultHub`
 
@@ -223,19 +244,20 @@ Relays server-side vault changes to connected hub clients.
 * `ExecuteAsync(CancellationToken stoppingToken)` — Subscribes to the notifier and starts relaying events to hub clients.
   *Returns:* A completed task; the service is event-driven.
   * `stoppingToken` — Host shutdown token.
+* `FireSessionExpired(CancellationToken, string)` — A single token expired: only its own hub group is told.
 
 ### `WebHostFactory`
 
-Builds (and runs) the Doopass web host: Blazor Server UI, REST API under
+Builds (and runs) the Doopass web host: static Blazor WebAssembly UI, REST API under
 /api, the vault SignalR hub and LAN discovery. Split from `Program.cs`
 so integration tests can build the same pipeline on a random port.
 
-* `BuildWebHost(WebHostOptions options)` — Builds the web host (Blazor UI, REST API, SignalR hub and discovery) without starting it, so tests can run the real pipeline on a free port.
-  *Returns:* A configured, not yet started application.
-  * `options` — Port, bind address, TLS and discovery options.
-  *Throws* `InvalidOperationException`: The TLS certificate is missing or cannot be loaded.
+* `SchemeProperty` — App property carrying the scheme the host actually serves.
+* `BuildWebHost(WebHostOptions)` — Builds the web host (static WASM UI, REST API, SignalR hub and discovery) without starting it, so tests can run the real pipeline on a free port.
+* `ExtractEmbeddedWasmBundle()` — Extracts the embedded WASM bundle to a version-addressed temp directory and returns its path. A marker file makes repeat starts cheap; failures fall back to the SDK static web assets instead of taking the host down.
+* `MapSpaFallback(WebApplication, IFileProvider)` — Serves index.html for client-side routes, but leaves API, hub, PWA and file-shaped paths as real 404s instead of masking them with the SPA shell.
 * `RunWebHost(WebHostOptions)` — Runs a built host to completion (SIGTERM/CTRL-C handled by the runtime).
-* `ValidateTlsCertificate(string, string)` — Checks the TLS certificate exists and is loadable; returns its SHA-256 fingerprint.
+* `ShouldSendHsts(string)` — HSTS may only be pinned for a real network host. If a browser remembers it for localhost, the next plain `http://localhost` run is upgraded to https against a certificate that run does not even serve.
 
 ### `WebHostOptions`
 
@@ -251,51 +273,22 @@ Options for building the web host: ports, TLS, announce and browser behavior.
 
 ## `Doopass.Cli.Services`
 
-### `DoopassSession`
+### `AuthThrottle`
 
-Per-circuit session holding the currently unlocked store. The store only
-lives in server memory while the user is logged in. Every mutation raises
-`IVaultChangeNotifier` events, which fan out to SignalR hub
-clients (API tokens) and back into this circuit's `VaultEventRelay`
-so open pages refresh.
+Shared master-password throttle for every login path (REST API and the Blazor
+page). One instance per host, so the failure counter is global rather than
+per client: a LAN attacker who keeps guessing can no longer lock the owner
+out. Instead of refusing attempts, the throttle inserts a growing pause
+before the password check once five failures fell inside the sliding minute
+(1 s, 2 s, 4 s, at most 5 s) and a successful login clears the count. The
+owner can therefore always log in; raw REST request volume is still capped by
+the ASP.NET per-IP limiter, which sees the network but not Blazor circuits.
 
-* `Backups` — Backup helper bound to this vault.
-* `IsUnlocked` — True while this circuit holds a decrypted store.
-* `Settings` — The host-wide settings object (shared by every circuit).
-* `StoreExists` — True when the encrypted store file exists on disk.
-* `DoopassSession(Settings settings, IVaultChangeNotifier notifier, VaultEventRelay relay)` — Creates the session and wires the server-wide change events into this circuit's relay (when both are supplied by the host).
-  * `settings` — Host-wide settings.
-  * `notifier` — Optional server-wide notifier.
-  * `relay` — Optional per-circuit relay.
-* `Add(string key, string value)` — Adds a pair and notifies every client.
-  * `key` — New key; must be unique.
-  * `value` — Secret value.
-* `DeleteBackupAsync(string backupName, CancellationToken ct = default)` — Deletes a backup by extensionless name.
-  * `backupName` — Extensionless snapshot name.
-  * `ct` — Cancellation token.
-* `Dispose()` — Detaches this circuit from the server-wide notifier.
-* `GetBackupNamesAsync(CancellationToken ct = default)` — Lists backup names without extension, newest first.
-  *Returns:* Extensionless snapshot names.
-  * `ct` — Cancellation token.
-* `GetKeys()` — Lists every key of the unlocked store (empty when locked).
-  *Returns:* Keys in storage order.
-* `GetValue(string key)` — Reads one secret value from the unlocked store.
-  *Returns:* The stored value.
-  * `key` — Key to read.
-* `Init(string password)` — Creates a new store with the given password and unlocks it.
-  *Returns:* Success flag and a user-facing message.
-  * `password` — The new master password.
-* `Login(string password)` — Tries to unlock the store with the given password.
-  *Returns:* Success flag and a user-facing message.
-  * `password` — The master password.
-* `Logout()` — Locks this circuit: the decrypted store and the password are dropped.
-* `Reload()` — Re-reads the store from disk (e.g. after restoring a backup).
-* `Remove(string key)` — Removes a key and notifies every client.
-  * `key` — Key to remove.
-* `RestoreBackupAsync(string backupName, CancellationToken ct = default)` — Restores a backup by extensionless name; a safety backup is written first, then the session re-reads the store.
-  * `backupName` — Extensionless snapshot name.
-  * `ct` — Cancellation token.
-* `Update(string oldKey, string newKey, string newValue)` — Renames a key and replaces its value, then notifies every client.
-  * `oldKey` — Existing key.
-  * `newKey` — Target key.
-  * `newValue` — New value.
+* `Clock` — Time source; replaced with a fake clock in tests.
+* `DelayHook` — Performs the pause computed by `DelayBeforeAttempt`; replaced in tests so they record the delays instead of waiting for them.
+* `DelayStartsAfter` — Number of failures inside the window after which attempts start to be delayed.
+* `MaxDelay` — Upper bound on the pause inserted before a login attempt.
+* `DelayBeforeAttempt()` — How long to pause before checking the password. Never refuses an attempt: with five failures in the sliding window the pause grows 1 s → 2 s → 4 s and stays at `MaxDelay` after that, so the owner always gets in.
+* `RegisterFailure()` — Records one failed master-password attempt.
+* `RegisterSuccess()` — Clears the failure history after a successful login.
+* `Reset()` — Forgets every failure (test isolation and an explicit admin reset).

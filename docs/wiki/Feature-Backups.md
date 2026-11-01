@@ -58,7 +58,7 @@ Then the session re-reads the store from disk with the same password:
 
 | Client | Reload path |
 | ------ | ----------- |
-| Web UI | `DoopassSession.RestoreBackupAsync` → `Reload()` |
+| Browser UI | `WebApiVaultSession.RestoreBackupAsync` → server re-reads the store |
 | TUI | `Context.ReloadStore()` |
 | REST API | `ApiVaultCoordinator.RestoreBackup` → `new Store(password, path)` |
 
@@ -103,7 +103,7 @@ The UI shows names verbatim; it does not parse or reformat dates.
 | ------- | ---- |
 | Storage | `Doopass.Core/Store/StoreBackup.cs` |
 | Web page | `WebUi/Pages/Backups.razor` |
-| Web session | `Cli/Services/DoopassSession.cs` (`*BackupAsync`) |
+| Browser session | `WebClient/WebApiVaultSession.cs` (`*BackupAsync`) |
 | API | `Api/VaultEndpoints.cs`, `Api/ApiVaultCoordinator.cs` |
 | TUI | `Tui/Screens/BackupScreen.cs` |
 | Phone | `Mobile/Services/RemoteVaultSession.cs` |

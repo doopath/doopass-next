@@ -25,7 +25,9 @@ dist/portable/linux-x64/doopass
 
 * `PublishSingleFile` + `SelfContained`: no .NET runtime needed on the target.
 * Web assets are embedded, so no `wwwroot` folder is published (the csproj
-  removes `wwwroot/**` from content).
+  removes `wwwroot/**` from content). The Blazor WebAssembly bundle is zipped
+  into the host assembly and extracted on first start to
+  `%TEMP%/doopass-web/<version>-<hash>/`.
 * `.pdb` files are deleted after publishing, including stale ones copied from
   `bin/` by an incremental build.
 * The shell script marks the Linux binary executable and can cross-publish from
@@ -47,8 +49,8 @@ scripts\package-release
 Produces, from an existing portable publish:
 
 ```
-dist/release/doopass-5.0.0-win-x64.zip
-dist/release/doopass-5.0.0-linux-x64.tar.gz
+dist/release/doopass-5.1.0-win-x64.zip
+dist/release/doopass-5.1.0-linux-x64.tar.gz
 ```
 
 Each archive contains the executable, the install/uninstall scripts, the README
@@ -128,7 +130,7 @@ publishing — the csprojs embed files from that directory.
 
 ## 6. Version bumps
 
-Version `5.0.0` appears in several places; keep them in sync:
+Version `5.1.0` appears in several places; keep them in sync:
 
 1. `src/Doopass.Core/Constants.cs` → `Version`;
 2. `Directory.Build.props` is version-free, but every `.csproj` sets `<Version>`;

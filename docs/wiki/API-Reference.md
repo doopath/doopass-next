@@ -11,7 +11,9 @@ are in [Application: REST API](Application-REST-API.md).
 * Errors: `{"error": "<message>"}` with a 4xx/5xx status.
 * Auth: `Authorization: Bearer <token>`; token from `/api/auth/login` or
   `/api/auth/init`.
-* Token lifetime: sliding, default 30 minutes (`api.session_ttl_minutes`).
+* Token lifetime: sliding 30 minutes (`api.session_ttl_minutes`) with an
+  absolute 8 h cap (`api.absolute_session_ttl_hours`); `SessionJanitor` prunes
+  expired tokens every 30 s even without traffic.
 
 ## Authentication
 
@@ -25,7 +27,7 @@ Anonymous, rate-limited (5/min per IP).
 
 | Result | Status | Body |
 | ------ | ------ | ---- |
-| success | 200 | `{"token":"…","serverVersion":"5.0.0"}` |
+| success | 200 | `{"token":"…","serverVersion":"5.1.0"}` |
 | missing password | 400 | `{"error":"Password is required!"}` |
 | wrong password | 401 | `{"error":"Incorrect password!"}` |
 | no store | 409 | `{"error":"Store is not initialized. Please initialize it first."}` |
@@ -37,7 +39,7 @@ Anonymous, rate-limited. Creates the vault; fails when one exists.
 
 | Result | Status | Body |
 | ------ | ------ | ---- |
-| success | 200 | `{"token":"…","serverVersion":"5.0.0"}` |
+| success | 200 | `{"token":"…","serverVersion":"5.1.0"}` |
 | invalid password (validator message) | 400 | `{"error":"Password is too small!"}` etc. |
 | store exists | 409 | `{"error":"Store already exists!"}` |
 
@@ -57,7 +59,7 @@ Anonymous.
 {
   "storeExists": true,
   "unlocked": false,
-  "serverVersion": "5.0.0",
+  "serverVersion": "5.1.0",
   "certFingerprint": null
 }
 ```
@@ -192,7 +194,7 @@ UDP port 7241. Send exactly `DOOPASS_DISCOVER`; receive:
   "port": 7240,
   "tls": true,
   "fingerprint": "d3894b6e…c8e50f",
-  "version": "5.0.0"
+  "version": "5.1.0"
 }
 ```
 

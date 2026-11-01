@@ -1,17 +1,18 @@
 # E2E verification — thin-client architecture
 
-Status after the four-phase implementation (the API contract is documented in
+Status for 5.1.0 (the API contract is documented in
 [the REST API section of the README](../README.md#rest-api-and-thin-clients)).
 Environment: Windows host (MONSTERMACHINE), .NET SDK 10.0.402, `maui-android`
 workload 36.1.2.
 
-## Automated coverage (`dotnet test`, 222 tests green)
+## Automated coverage (`dotnet test`, 247 tests green)
 
 | Area                              | Result                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------- |
 | Store format compatibility        | 92 / 92 Core.Tests (incl. concurrency, corruption, settings policy)        |
 | TUI behaviour                     | 50 / 50 Tui.Tests                                                          |
-| API integration                   | 80 / 80 Api.Tests incl. `T01`–`T05` auth lifecycle                        |
+| API integration                   | 83 / 83 Api.Tests incl. `T01`–`T05` auth lifecycle                        |
+| Browser session                   | 22 / 22 WebClient.Tests (token, error mapping, push lifecycle)            |
 | Pair CRUD (unicode, 404, 409)     | covered in `VaultDataTests`                                                |
 | Backup lifecycle (safety backup)  | covered in `VaultDataTests.T02`                                            |
 | Settings round trip               | `VaultSettingsTests` (path keys 403, bad extension 400)                    |
@@ -19,7 +20,10 @@ workload 36.1.2.
 | Backup restore validation         | `BackupRestoreValidationTests` (422/401, store untouched)                  |
 | Backup restore locking            | `BackupTests.Restore_takes_the_store_lock` (busy → 409, store unchanged)   |
 | Corrupted store                   | `CorruptStoreTests`, `CorruptedStoreApiTests` (422, fast rejection)        |
-| Login throttle (API + Blazor)     | `AuthThrottleTests`, `DoopassSessionThrottleTests` (delay only, no lockout)|
+| Login throttle                    | `AuthThrottleTests` (delay only, no lockout)                              |
+| Browser ↔ host contract           | `WebClientContractTests` (real host, real `WebApiVaultSession`)           |
+| Periodic relock                   | `SessionJanitorTests` (no request after the TTL)                          |
+| Service worker excludes secrets   | `PwaServiceWorkerTests` (`/api` and `/hubs` bypassed, versioned cache)    |
 | Inline handlers vs CSP            | `InlineEventHandlerTests` (no `onclick=` in WebUi/Mobile Razor sources)    |
 | Mobile 409 mapping                | `VaultResponseErrorsTests` (busy / uninitialized / duplicate pair)         |
 | Stale temp-file sweep             | `AtomicFileTests`                                                          |
@@ -46,10 +50,24 @@ workload 36.1.2.
 | Settings GET / PUT / restore-defaults          | 200 / 403 (path keys) / 400 (bad extension) / 204          |
 | Hub negotiate with token                       | 200, connectionId issued                                   |
 | Logout then protected calls                    | 204 → 401 `{error: "Session expired…"}`                     |
-| Discovery probe (`--lan`)                      | `{"service":"doopass","name":…,"port":…,"tls":false,"fingerprint":null,"version":"5.0.2"}` |
+| Discovery probe (`--lan`)                      | `{"service":"doopass","name":…,"port":…,"tls":false,"fingerprint":null,"version":"5.1.0"}` |
 | TLS mode (`--tls pfx`)                         | HTTPS 200; discovery reply `tls:true` + fingerprint; plain HTTP rejected | fingerprint also logged at startup |
 | Single-file publish (`scripts/publish-portable`) | OK       | exe serves `app.css` (29 771 bytes) from the RCL resources  |
 | Release APK                                    | `io.github.doopath.doopass-Signed.apk` (62.5 MB) published with AOT/trim disabled for the first release |
+
+## Browser smoke tests (manual, one tab unless noted)
+
+| Scenario | Expected |
+| -------- | -------- |
+| `GET /` in DevTools | `index.html` from the extracted bundle, CSP header present |
+| Login, then reload | store page opens without re-entering the password |
+| Second tab, same origin | starts locked (own `sessionStorage` token) |
+| Log out in one tab | only that tab returns to login; another tab keeps working |
+| Close the tab, wait past the TTL | host relocks within 30 s (`SessionJanitor`), no request needed |
+| Reveal a value, inspect Network | `GET /api/vault/value` response body holds the value; `Cache-Control: no-store` |
+| Add a pair in the browser | phone's store page refreshes via `vaultChanged` |
+| PWA installed, host upgraded | newly bumped service-worker cache replaces the old assets |
+| `--lan` without `--tls` | stderr shows the plaintext warning; the UI still opens |
 
 ## Matrix that needs physical devices (deferred, documented steps)
 
@@ -71,7 +89,7 @@ host side of each step is already covered above.
       token is not cleared, and Change host finds the new address through
       discovery or manual entry.
 - [ ] Phone-side pair change appears in the browser without reload and vice
-      versa (via `vaultChanged` through `/hubs/vault` + the per-circuit relay).
+      versa (via `vaultChanged` through `/hubs/vault` + each client's relay).
 - [ ] Backup restore on the phone: browser updates; safety backup created.
 - [ ] TTL expiry / `vaultLocked` event drops the phone to the login screen.
 - [ ] Logout on the phone → all host requests answer 401; six rapid login

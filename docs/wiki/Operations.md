@@ -122,8 +122,8 @@ master password and are useless without it.
 * Use a long master password: it is the only protection for a copied vault.
 * Prefer `--tls` on shared networks; plain `--lan` exposes tokens and secrets.
 * Lower `api.session_ttl_minutes` if a phone may be lost.
-* Log out of the web UI when leaving a shared machine — a circuit stays unlocked
-  until logout or disconnect.
+* Log out of the web UI when leaving a shared machine — the host stays unlocked
+  until logout or the session TTL expires (swept every 30 s by `SessionJanitor`).
 
 ## Logs for support
 

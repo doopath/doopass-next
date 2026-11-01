@@ -34,28 +34,29 @@ with no extra files on disk.
 }
 ```
 
-`App.razor` links the manifest, the Apple touch icon, the SVG + `.ico` favicons
-and the Apple/Chrome mobile-web-app meta tags. `theme.js` keeps the
-`theme-color` meta in sync with the chosen light/dark theme.
+`Doopass.WebClient/wwwroot/index.html` links the manifest, the Apple touch icon,
+the SVG + `.ico` favicons and the Apple/Chrome mobile-web-app meta tags.
+`theme.js` keeps the `theme-color` meta in sync with the chosen light/dark theme.
 
 ## Service worker
 
-`sw.js` (cache name `doopass-pwa-v2`):
+`sw.js` (cache name `doopass-pwa-v9`):
 
-* precaches `/`, `/app.css`, `/theme.js`, `/app.js`,
-  `/_framework/blazor.web.js`, the manifest and the icons; a failed precache is
-  tolerated (`Promise.allSettled`) so one flaky asset cannot break installation;
+* precaches `/`, the manifest and the icons; a failed precache is tolerated
+  (`Promise.allSettled`) so one flaky asset cannot break installation;
 * `skipWaiting()` on install, deletes old caches and `clients.claim()` on
   activate — **bump `CACHE` when served assets change**;
-* fetch handling: same-origin GET only; `/_blazor*` (SignalR) is never cached;
-  navigations go network-first with a cached shell fallback (503 "Offline" text
-  when nothing is cached); other assets are cache-first with fill-on-miss.
+* fetch handling: same-origin GET only; `/api` and `/hubs` are never cached
+  (a cached `/api/vault/value` would persist a decrypted secret); `/_framework`
+  assets are cached with revalidation; navigations go network-first with a
+  cached shell fallback (503 "Offline" text when nothing is cached); other
+  assets are cache-first with fill-on-miss.
 
 Registered by `app.js` with `{ scope: '/' }`; registration failures are silent,
 and on a non-secure origin the worker simply does not register.
 
 Offline behaviour is honest: the shell loads, but every vault operation needs
-the server and the Blazor circuit reconnects when the host returns.
+the server; the SignalR hub reconnects when the host returns.
 
 ## Installation matrix
 
@@ -109,7 +110,7 @@ and auth card.
 | | PWA | Android client |
 | --- | --- | --- |
 | Runs | web UI in a browser window | native thin client + WebView |
-| Needs | Blazor Server connection | REST + SignalR |
+| Needs | REST + SignalR | REST + SignalR |
 | Host discovery | no (typing the URL) | yes (UDP) |
 | Certificate pinning | no (browser rules) | yes |
 | Offline | shell only | no offline vault either |

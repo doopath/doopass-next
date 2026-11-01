@@ -9,13 +9,14 @@ src/Doopass.Cli
 ├── Program.cs                  mode dispatch + argument parsing
 ├── Api/
 │   ├── ApiVaultCoordinator.cs  shared unlocked store, tokens, TTL, events
+│   ├── SessionJanitor.cs       periodic expiry sweep + relock
 │   ├── DiscoveryService.cs     UDP 7241 announcer
 │   ├── VaultAuth.cs            bearer filter, no-store filter, rate limiter
 │   ├── VaultChangeNotifier.cs  server-wide change events
 │   ├── VaultEndpoints.cs       REST surface under /api
 │   ├── VaultHub.cs             /hubs/vault hub + relay background service
 │   └── WebHostFactory.cs       Kestrel, DI, middleware, embedded assets
-├── Services/DoopassSession.cs  per-circuit IVaultSession implementation
+├── Services/AuthThrottle.cs    shared master-password failure counter
 └── wwwroot/pwa/                manifest, service worker, icons (embedded)
 ```
 
@@ -80,58 +81,52 @@ pipeline on `127.0.0.1:0` with a temporary `DOOPASS_HOME`.
 
 | Service | Lifetime | Notes |
 | ------- | -------- | ----- |
-| `Settings` | singleton | shared by coordinator and every circuit |
+| `Settings` | singleton | shared by the coordinator and the hosted services |
 | `IVaultChangeNotifier` → `VaultChangeNotifier` | singleton | server-wide fan-out |
-| `ApiVaultCoordinator` | singleton | owns the API store and tokens |
+| `AuthThrottle` | singleton | shared master-password failure counter |
+| `ApiVaultCoordinator` | singleton | owns the shared store and tokens |
 | `DiscoveryAnnounce` | singleton | read by `/api/vault/state` for the fingerprint |
-| `VaultEventRelay` | scoped | one per circuit |
-| `DoopassSession` | scoped | one per circuit; also exposed as `IVaultSession` |
-| `IVaultEvents` | scoped | resolves to the circuit's relay |
-| `ToastService` | scoped | in-memory toast queue per circuit |
-| `ISecretClipboard` → `JsClipboard` | scoped | browser clipboard with fallback |
 | `DiscoveryService` | hosted | UDP listener |
 | `VaultHubRelay` | hosted | forwards notifier events to SignalR |
+| `SessionJanitor` | hosted | prunes expired tokens every 30 s |
 
-`DoopassSession` is constructed with the notifier and the relay and wires
-`VaultChanged`/`BackupsChanged`/`SettingsChanged`/`VaultLocked` into the relay;
-`Dispose` unhooks them when the circuit ends.
+The browser's UI services (`IVaultSession`, `IVaultEvents`, `ToastService`,
+`ISecretClipboard`) are registered by `Doopass.WebClient`, not by the host: the
+host serves only static WASM files and the API.
 
 ## Middleware and endpoints
 
 ```
-UseExceptionHandler("/Error")            (non-development)
-UseStatusCodePagesWithReExecute("/not-found")
-UseAntiforgery()
+security headers (CSP, nosniff, DENY, no-referrer)   OnStarting
+UseResponseCompression()
+UseExceptionHandler("/Error")                        (non-development)
 UseRateLimiter()
-MapDoopassApi()                          /api/**
+MapDoopassApi()                                      /api/**
 MapHub<VaultHub>("/hubs/vault")
-embedded asset routes                    /app.css /theme.js /app.js
-                                         /_content/Doopass.WebUi/brand.svg
-                                         /_framework/blazor.web.js
-                                         /pwa/* /favicon.ico
-MapRazorComponents<App>()                interactive server components
+embedded PWA routes                                  /pwa/* /favicon.ico
+UseStaticFiles(extracted WASM bundle)                /index.html /_framework/* /_content/*
+MapFallback(...)                                     SPA shell for client routes
 ```
+
+`/api`, `/hubs` and any path containing a dot never fall back to `index.html`;
+they stay real 404s.
 
 Embedded assets are read from assembly manifest resources:
 
 | URL | Resource | Cache |
 | --- | -------- | ----- |
-| `/app.css`, `/theme.js`, `/app.js` | `Doopass.WebUi.wwwroot.*` | `no-cache` |
-| `/_content/Doopass.WebUi/brand.svg` | `Doopass.WebUi.wwwroot.brand.svg` | `no-cache` |
-| `/_framework/blazor.web.js` | `Doopass.Cli.wwwroot.blazor.web.js` | 1 hour |
-| `/pwa/manifest.webmanifest`, `/pwa/sw.js` | `Doopass.Cli.wwwroot.pwa.*` | `no-cache` |
-| `/pwa/icon-*.png`, `/pwa/apple-touch-icon.png` | generated icons | 1 hour |
-| `/pwa/favicon.svg`, `/pwa/favicon.ico`, `/favicon.ico` | favicons | 1 hour |
+| `/pwa/sw.js`, `/pwa/manifest.webmanifest` | `Doopass.Cli.wwwroot.pwa.*` | `no-cache` |
+| `/pwa/icon-*.png`, `/pwa/apple-touch-icon.png` | `Doopass.Cli.wwwroot.pwa.*` | `max-age=3600` |
+| `/pwa/favicon.svg`, `/favicon.ico` | embedded assets | `max-age=3600` |
+| `/_framework/*`, `/_content/*`, `/index.html` | extracted WASM bundle | no-cache / compressed |
 
 `sw.js` is served with `Service-Worker-Allowed: /` so a worker under `/pwa/`
 can control the whole origin. The csproj removes `wwwroot/**` from published
 content: the binary is the asset store.
 
-### Build-time guard
-
-`_RequireBlazorWebJs` fails the build when
-`Microsoft.AspNetCore.App.Internal.Assets` was not restored, because a missing
-`blazor.web.js` would otherwise only show up as a 404 in the published app.
+`PackWasmBundle` publishes `Doopass.WebClient`, zips its `wwwroot/` and embeds
+the archive; `ExtractEmbeddedWasmBundle` unpacks it to
+`%TEMP%/doopass-web/<version>-<hash>/` on first start.
 
 ## Exit codes and lifecycle
 
@@ -145,7 +140,7 @@ content: the binary is the asset store.
 ## Logging produced by the host
 
 ```
-INFO Doopass web server starting (v5.0.0, bind localhost, port 7240)
+INFO Doopass web server starting (v5.1.0, bind localhost, port 7240)
 INFO TLS enabled; certificate SHA-256 fingerprint: <hex>
 INFO UDP discovery announcing on port 7241          (when enabled)
 INFO Doopass web server stopped
@@ -162,6 +157,6 @@ durable record.
   `ApiVaultCoordinator`, raise the matching notifier event, and add a test in
   `Doopass.Api.Tests`.
 * New server-wide state → register it in `WebHostFactory` and decide the
-  lifetime deliberately (singleton = host-wide, scoped = per circuit).
+  lifetime deliberately (singleton = host-wide).
 * New static asset → embed it in the owning csproj and map a route with the
   right `Cache-Control`; do not reintroduce a loose `wwwroot` publish.

@@ -7,22 +7,23 @@ event relay → page re-read.
 ## Event flow
 
 ```
- write (web page)                         write (phone / API token)
+ write (browser tab)                      write (phone / TUI / API)
       |                                            |
- DoopassSession.Add                       ApiVaultCoordinator.Add
+ WebApiVaultSession.Add                  ApiVaultCoordinator.Add
       \_______________________  ___________________/
                               \/
                  IVaultChangeNotifier (singleton)
                    VaultChanged / BackupsChanged
                    SettingsChanged / VaultLocked
-                    /                          \
-      VaultHubRelay (hosted)             DoopassSession (each circuit)
-                    |                          |
-          SignalR /hubs/vault            VaultEventRelay (scoped)
-                    |                          |
-        phone: VaultPushClient          Store.razor / Backups.razor /
-                    |                   Settings.razor / MainLayout
-        VaultEventRelay → pages re-read
+                              |
+                   VaultHubRelay (hosted)
+                              |
+                    SignalR /hubs/vault
+                    /                    \
+   browser: WebVaultPushClient     phone: VaultPushClient
+                    |                    |
+            VaultEventRelay (scoped) → Store.razor / Backups.razor /
+                                       Settings.razor / MainLayout
 ```
 
 ## Server side
@@ -32,7 +33,7 @@ event relay → page re-read.
 | `IVaultChangeNotifier` | event source; implemented by `VaultChangeNotifier` (singleton) |
 | `VaultHubRelay` | `BackgroundService` subscribing to the notifier and sending to SignalR clients |
 | `VaultHub` | validates `access_token` on connect, joins group `doopass:<token>` |
-| `DoopassSession` | subscribes the notifier to its circuit relay in the constructor, unsubscribes in `Dispose` |
+| `SessionJanitor` | prunes expired tokens and raises `VaultLocked` when the last one goes |
 
 Event payloads are empty: receivers re-read state. This keeps the protocol small
 and guarantees the file stays the source of truth.
@@ -64,11 +65,13 @@ Pages subscribe in `OnInitializedAsync` / `OnInitialized` and unsubscribe in
 Handlers marshal back to the renderer with `InvokeAsync`, and only call
 `StateHasChanged` when the component is still on its route.
 
-## Android client
+## Thin clients
 
-`VaultPushClient` connects to `<host>/hubs/vault` with the token and forwards
-hub messages into the shared `VaultEventRelay`, so the same Razor pages react
-identically. Details:
+`WebVaultPushClient` (browser) and `VaultPushClient` (phone) connect to
+`<host>/hubs/vault` with their token and forward hub messages into the shared
+`VaultEventRelay`, so the same Razor pages react identically. The browser reads
+its token from `sessionStorage`, starts the connection after login and stops it
+on logout/lock. Details:
 
 * automatic reconnect at 0, 1, 5, 15, 30 seconds;
 * `IsCurrentSession` prevents reusing a connection bound to an old host/token;
@@ -107,7 +110,8 @@ alternative modes).
 
 * `Cli/Api/VaultChangeNotifier.cs` — event contract
 * `Cli/Api/VaultHub.cs` — hub + relay
-* `Cli/Services/DoopassSession.cs` — circuit fan-in
+* `Cli/Api/SessionJanitor.cs` — expiry sweep that raises the lock events
 * `WebUi/Abstractions/VaultEvents.cs` — `IVaultEvents` + `VaultEventRelay`
+* `WebClient/WebVaultPushClient.cs` — browser client
 * `Mobile/Services/VaultPushClient.cs` — phone client
 * `Mobile/Components/ConnectGuard.razor` — connection lifecycle + lock routing

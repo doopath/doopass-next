@@ -19,7 +19,7 @@ The web page also hosts the **Install as app** card for the PWA (see
 ```json
 {
   "local": {
-    "version": "5.0.0",
+    "version": "5.1.0",
     "backup_extension": ".enc.bak",
     "store_file": "APPDATA/store.enc",
     "log_file": "APPDATA/doopass.log",
@@ -87,7 +87,7 @@ JSON file fails to load; delete it to regenerate defaults (paths, not data).
 | ------- | ---- |
 | Model, placeholders, defaults | `Doopass.Core/Configuration/Settings.cs`, `DefaultConfig.json` |
 | Web page | `Doopass.WebUi/Components/Pages/Settings.razor` |
-| Web session | `Cli/Services/DoopassSession.cs` |
+| Browser session | `WebClient/WebApiVaultSession.cs` |
 | API | `VaultEndpoints` (`/api/settings*`), `ApiVaultCoordinator` |
 | TUI | `Tui/Screens/SettingsScreen.cs`, `ValueFormScreen.cs` |
 | Phone | `RemoteVaultSession.GetSettingsAsync` / `SetSettingAsync` |

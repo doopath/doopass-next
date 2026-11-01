@@ -2,7 +2,7 @@
 
 > Generated from the compiler's XML documentation (`GenerateDocumentationFile=true`). Do not edit by hand: run `python scripts/generate-api-docs.py` after changing public members.
 
-Assembly: `Doopass.Tui` · Source: `src/Doopass.Tui/bin/Debug/net10.0/Doopass.Tui.xml`
+Assembly: `Doopass.Tui` · Source: `src/Doopass.Tui/bin/Release/net10.0/Doopass.Tui.xml`
 
 ## Types
 
@@ -79,6 +79,7 @@ Result of an init-store attempt.
 
 Result of a login attempt.
 
+* `Corrupted` — The store file exists but is not a valid vault container.
 * `IncorrectPassword` — The password did not decrypt the store.
 * `NotInitialized` — No store file exists yet.
 * `Success` — The store was decrypted and is now unlocked.

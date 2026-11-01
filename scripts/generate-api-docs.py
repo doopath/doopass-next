@@ -7,13 +7,13 @@ script turns those files into wiki pages:
 
     docs/wiki/API-Reference-Core.md
     docs/wiki/API-Reference-WebUi.md
+    docs/wiki/API-Reference-WebClient.md
     docs/wiki/API-Reference-Cli.md
     docs/wiki/API-Reference-Tui.md
     docs/wiki/API-Reference-Mobile.md
 
 Usage:
     dotnet build Doopass.slnx
-    dotnet build src/Doopass.Mobile/Doopass.Mobile.csproj   # not in the solution
     python scripts/generate-api-docs.py [--check]
 
 ``--check`` exits with status 1 when a page would change, which is useful in a
@@ -36,6 +36,7 @@ WIKI_DIR = REPO_ROOT / "docs" / "wiki"
 PAGES = [
     ("Doopass.Core", "Doopass.Core", "API-Reference-Core"),
     ("Doopass.WebUi", "Doopass.WebUi", "API-Reference-WebUi"),
+    ("Doopass.WebClient", "Doopass.WebClient", "API-Reference-WebClient"),
     ("Doopass.Cli", "doopass", "API-Reference-Cli"),
     ("Doopass.Tui", "Doopass.Tui", "API-Reference-Tui"),
     ("Doopass.Mobile", "Doopass.Mobile", "API-Reference-Mobile"),

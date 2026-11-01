@@ -6,7 +6,7 @@ Doopass is a cross-platform password manager for the **terminal**, the
 byte-for-byte compatible with the original Python implementation.
 
 This wiki is the reference documentation for the `doopass-next` code base
-(version 5.0.0, GPL-3.0). It describes **what the product does**, **how each
+(version 5.1.0, GPL-3.0). It describes **what the product does**, **how each
 application is put together**, and **how the code is organised**.
 
 The pages are maintained in the repository under `docs/wiki/` and published to
@@ -28,7 +28,8 @@ the GitHub wiki with `scripts/publish-wiki.sh`.
 | ---- | ----------- |
 | [Application: Core](Application-Core.md) | `Doopass.Core` — storage, crypto, settings, backups, logging |
 | [Application: CLI Host](Application-CLI-Host.md) | `Doopass.Cli` — the single `doopass` entry point and web host |
-| [Application: Web UI](Application-Web-UI.md) | `Doopass.WebUi` — Blazor components, themes, PWA shell |
+| [Application: Web UI](Application-Web-UI.md) | `Doopass.WebUi` — shared Blazor components, themes, PWA assets |
+| [Application: WebAssembly Client](Application-WebClient.md) | `Doopass.WebClient` — browser thin client (REST + SignalR) |
 | [Application: REST API](Application-REST-API.md) | `/api` + `/hubs/vault` contract for thin clients |
 | [Application: TUI](Application-TUI.md) | `Doopass.Tui` — Terminal.Gui interface |
 | [Application: Android Client](Application-Android-Client.md) | `Doopass.Mobile` — MAUI thin client |

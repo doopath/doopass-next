@@ -49,7 +49,7 @@ validation error path.
 ```json
 {
   "local": {
-    "version": "5.0.0",
+    "version": "5.1.0",
     "backup_extension": ".enc.bak",
     "store_file": "APPDATA/store.enc",
     "log_file": "APPDATA/doopass.log",
@@ -69,7 +69,7 @@ validation error path.
 
 | Key | Default | Meaning |
 | --- | ------- | ------- |
-| `version` | `5.0.0` | informational; not checked at runtime |
+| `version` | `5.1.0` | informational; not checked at runtime |
 | `backup_extension` | `.enc.bak` | suffix for snapshots |
 | `store_file` | `APPDATA/store.enc` | vault path |
 | `log_file` | `APPDATA/doopass.log` | log path (`AppLogger.Initialize`) |
@@ -111,7 +111,7 @@ directory are stored as-is.
 
 | Constant | Value | Where |
 | -------- | ----- | ----- |
-| `Constants.Version` | `5.0.0` | `Doopass.Core/Constants.cs` |
+| `Constants.Version` | `5.1.0` | `Doopass.Core/Constants.cs` |
 | `Constants.DefaultIterations` / `Store.DefaultIterations` | `100 000` | key derivation when writing |
 | `Constants.StoreBackupExtension` | `.enc.bak` | fallback when settings lack the key |
 | API port default | `7240` | `WebHostOptions.Port` |

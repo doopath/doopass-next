@@ -7,7 +7,7 @@ There is exactly **one executable**: `doopass` (`src/Doopass.Cli`, assembly name
 
 ```
 doopass                     -> Terminal UI (Doopass.Tui)
-doopass serve [options]     -> web host: Blazor UI + REST API + SignalR + discovery
+doopass serve [options]     -> web host: static WASM client + REST API + SignalR + discovery
 ```
 
 Both modes run in a single OS process and use the same `Doopass.Core` storage
@@ -19,9 +19,9 @@ layer. There is no background service, no database and no message broker.
                         |                                             |
   TERMINAL  <---------->|  Doopass.Tui  ---+                          |
                         |                   |                          |
-  BROWSER   <---------->|  Doopass.WebUi ---+--> Doopass.Core         |
-                        |   (Blazor        |      Store / Settings   |
-                        |    Server)       |      StoreBackup        |
+  BROWSER   <--HTTP---->|  static WASM  ----+--> Doopass.Core         |
+            <--SignalR-->|  REST /api        |      Store / Settings   |
+                        |  /hubs/vault      |      StoreBackup        |
                         |                   |      AppLogger          |
   ANDROID   <--HTTP---->|  REST /api  ------+      Fernet / PBKDF2    |
             <--SignalR-->|  /hubs/vault      |                         |
@@ -35,13 +35,15 @@ layer. There is no background service, no database and no message broker.
 
 Key consequences:
 
-* **The host owns the file.** The TUI and the web host both mutate `store.enc`
-  directly. The Android client never touches it.
+* **The host owns the file.** The TUI mutates `store.enc` directly; the browser
+  and the phone go through `ApiVaultCoordinator`, which holds the single shared
+  `Store`. The thin clients never touch the file.
 * **Mode is exclusive per process.** A running TUI cannot also serve HTTP; start
   `doopass serve` for the web/API mode.
 * **Several host processes would fight over the file.** Each process keeps an
-  in-memory copy and rewrites the whole file on every mutation, so running two
-  hosts against the same `DOOPASS_HOME` is unsupported (last write wins).
+  in-memory copy and rewrites the whole file on every mutation. Running two
+  hosts against the same `DOOPASS_HOME` is still unsupported: the file lock
+  prevents clobbering, but each host has its own event fan-out.
 
 ## Projects and dependency rules
 
@@ -49,15 +51,17 @@ Key consequences:
 | ------- | ---- | ---------- | -------------- |
 | `Doopass.Core` | class library | BCL only | Crypto, store, backups, settings, paths, logging, password validation |
 | `Doopass.WebUi` | Razor Class Library | `Core`, `Microsoft.AspNetCore.Components.Web` | Shared components, CSS/JS assets, `IVaultSession` / `IVaultEvents` contracts |
+| `Doopass.WebClient` | Blazor WebAssembly app | `Core`, `WebUi`, `SignalR.Client` | Browser thin client: REST session, push channel, host page |
 | `Doopass.Tui` | class library | `Core`, `Terminal.Gui` 2.4.17 | Screens, key routing, monochrome theme |
-| `Doopass.Cli` | web app (`Microsoft.NET.Sdk.Web`) | `Core`, `Tui`, `WebUi` | Entry point, web host, REST API, hub, discovery, PWA assets |
+| `Doopass.Cli` | web app (`Microsoft.NET.Sdk.Web`) | `Core`, `Tui`, `WebUi`, `WebClient` | Entry point, web host, REST API, hub, discovery, embedded assets |
 | `Doopass.Mobile` | MAUI app (`net10.0-android`) | `Core`, `WebUi`, `SignalR.Client` | Thin client: connect flow, remote session, push client |
 | `Doopass.Core.Tests` | xUnit | `Core` | Format compatibility, CRUD, settings, backups, logging |
 | `Doopass.Tui.Tests` | xUnit | `Tui` | Key map, focus ring, navigation, screen dumps |
-| `Doopass.Api.Tests` | xUnit | `Cli` | Real host on a random port: auth, CRUD, TTL, rate limit |
+| `Doopass.Api.Tests` | xUnit | `Cli`, `WebClient` | Real host on a random port: auth, CRUD, TTL, security, browser contract |
+| `Doopass.WebClient.Tests` | xUnit | `WebClient` | SessionStorage flow, status mapping, push lifecycle |
 
 Dependency rule: **`Core` knows nothing about UI, HTTP or MAUI.** `WebUi` knows
-nothing about ASP.NET Core hosting, the REST API or Android. The web host and
+nothing about ASP.NET Core hosting, the REST API or Android. The browser and
 the phone are two implementations of the same UI contracts.
 
 `Doopass.WebUi` compiles Razor components against the
@@ -73,13 +77,16 @@ makes web UI and Android client share code:
 ### `IVaultSession`
 
 Awaitable vault operations: state, login/init/logout/reload, key/value CRUD,
-backup list/create/restore/delete, settings read/write/restore. Two
-implementations:
+backup list/create/restore/delete, settings read/write/restore. Two thin-client
+implementations, both speaking HTTP to the host REST API and mapping statuses
+back to the Core exceptions:
 
 | Implementation | Host | Behaviour |
 | -------------- | ---- | --------- |
-| `DoopassSession` (`Cli/Services`) | web host, one per Blazor circuit | wraps synchronous `Store` calls in `ValueTask` |
-| `RemoteVaultSession` (`Mobile/Services`) | Android | HTTP calls to the host REST API; maps status codes back to the Core exceptions |
+| `WebApiVaultSession` (`WebClient`) | browser (Blazor WebAssembly) | same-origin `HttpClient`; bearer from `sessionStorage`; maps 401/403/404/409/422/429 |
+| `RemoteVaultSession` (`Mobile/Services`) | Android | pinned TLS, four-second host probe, token in `SecureStorage` |
+
+The TUI does not use this contract; it calls `Store` directly in-process.
 
 Backup names are **always extensionless** in this contract; each implementation
 adds the configured extension itself.
@@ -89,11 +96,11 @@ adds the configured extension itself.
 Per-scope event relay with four events: `VaultChanged`, `BackupsChanged`,
 `SettingsChanged`, `VaultLocked`. `VaultEventRelay` is the concrete relay.
 
-* In the web host, `DoopassSession` subscribes to the server-wide
-  `IVaultChangeNotifier` and forwards changes into its circuit's relay, so a
-  change made by the API or another browser tab refreshes open pages.
-* In the Android client, `VaultPushClient` subscribes to the SignalR hub and
-  raises the same events.
+* In the browser, `WebVaultPushClient` subscribes to `/hubs/vault` and raises
+  the same events, so a change made by the phone or the TUI refreshes open pages.
+* In the Android client, `VaultPushClient` does the same over the same hub.
+* The host's `VaultHubRelay` is the only publisher: it subscribes to the
+  server-wide `IVaultChangeNotifier`.
 
 Optional host descriptor: `IHostConnection` is registered **only** by the phone.
 Pages resolve it with `IServiceProvider.GetService<IHostConnection>()` so the
@@ -106,63 +113,68 @@ host actually exists.
 registration and middleware matters:
 
 1. Load `Settings`, initialise `AppLogger`, resolve TLS certificate (CLI flag
-   wins over `settings.json`), compute its SHA-256 fingerprint.
+   wins over `settings.json`), compute its SHA-256 fingerprint. `--lan` without
+   TLS prints a loud plaintext warning.
 2. Configure Kestrel: plain HTTP on `localhost:port` (or `0.0.0.0` with
    `--lan`), or HTTPS on all interfaces when a `.pfx` is supplied.
 3. Services:
-   * singleton `Settings`, `IVaultChangeNotifier`, `ApiVaultCoordinator`,
-     `DiscoveryAnnounce`;
-   * scoped `VaultEventRelay`, `DoopassSession`, `IVaultSession`, `IVaultEvents`,
-     `ToastService`, `ISecretClipboard`;
-   * SignalR, rate limiter, hosted `DiscoveryService`, hosted `VaultHubRelay`.
-4. Middleware: exception handler → status-code pages (`/not-found`) →
-   antiforgery → rate limiter.
-5. Endpoints: `/api` group, `/hubs/vault`, embedded asset routes
-   (`/app.css`, `/theme.js`, `/app.js`, `/brand.svg`, `/blazor.web.js`,
-   `/pwa/*`, favicons), then Razor components with interactive server rendering.
+   * singleton `Settings`, `IVaultChangeNotifier`, `AuthThrottle`,
+     `ApiVaultCoordinator`, `DiscoveryAnnounce`;
+   * SignalR, rate limiter, response compression, hosted `DiscoveryService`,
+     hosted `VaultHubRelay`, hosted `SessionJanitor`.
+4. Middleware: security headers (CSP, nosniff, DENY framing, no-referrer) →
+   response compression → exception handler → rate limiter.
+5. Endpoints: `/api` group, `/hubs/vault`, embedded PWA routes (`/pwa/*`,
+   favicons), then the extracted WASM bundle as static files and an SPA fallback
+   for client routes.
 
-Assets are **embedded resources**, not loose files, so a single-file publish
-serves them without a `wwwroot` directory. Static hashed URLs do not exist, so
-text assets are served with `Cache-Control: no-cache` to prevent stale CSS/JS
-after an upgrade.
+Assets are **embedded resources**, not loose files: the WebAssembly bundle is
+zipped into the host assembly and extracted to a version-addressed temp folder
+on first start. Static hashed URLs do not exist, so text assets are served with
+`Cache-Control: no-cache`; the framework files are compressed on the fly.
 
 ## Session and locking model
 
-Two independent session types exist in the host:
+The host has **one** session type for every client:
 
 ```
-Browser circuit                          REST/API clients
----------------                          ----------------
-DoopassSession (scoped)                  ApiVaultCoordinator (singleton)
-   owns a Store instance                    owns one shared Store
-   unlocked per circuit                     unlocked for the whole host
-   logout -> drops its store                token dictionary with sliding TTL
-                                            last token gone -> relock + notice
+Browser tab                 Android phone                 TUI
+-----------                 -------------                 ---
+WebApiVaultSession          RemoteVaultSession            direct Store
+  token in sessionStorage     token in SecureStorage       in-process
+  bearer on every call        bearer on every call
+        \                        /
+         \                      /
+          ApiVaultCoordinator (singleton)
+             one shared Store
+             token dictionary (sliding + absolute TTL)
+             SessionJanitor sweeps expired tokens
+             last token gone -> relock + vaultLocked
 ```
 
-* The **web UI** is unlocked per browser circuit. Opening a second browser
-  session requires the master password again, even while the first is open.
-* The **REST API** keeps a single unlocked store for all tokens; tokens are
-  random 32-byte base64url strings, valid while used within the TTL (default 30
-  minutes, configurable through `api.session_ttl_minutes`). When the last token
-  is removed (logout or expiry) the store is dropped from memory and clients are
-  told `vaultLocked`.
-* Both paths publish mutation events through `IVaultChangeNotifier`, which fans
-  out to (a) the SignalR hub for API clients and (b) every circuit's relay.
-
-Because the two session types hold **separate** `Store` instances, consistency
-between web pages and API clients is achieved by re-reading the file on change
-events, not by sharing memory. That is the main architectural sharp edge; see
-[Known Limitations](Known-Limitations.md#two-in-memory-store-instances).
+* Every browser call is authenticated with a bearer token; there is no cookie
+  and no server-side circuit. The token is random 32-byte base64url, valid while
+  used within the sliding TTL (default 30 min, `api.session_ttl_minutes`) and
+  never past the absolute cap (default 8 h, `api.absolute_session_ttl_hours`).
+* `SessionJanitor` runs every 30 seconds and prunes expired tokens even when no
+  client makes a request, so the decrypted store does not sit in host memory
+  after the last tab or phone goes away.
+* All mutation events go through `IVaultChangeNotifier`; `VaultHubRelay` pushes
+  them to `/hubs/vault`. A single expired token is told on its own group;
+  `vaultLocked` is broadcast only when no session remains.
+* Mutations take a cross-process `StoreFileLock`, re-read `store.enc` and write
+  it atomically (temp file + rename), so the browser, phone and TUI cannot lose
+  each other's entries.
 
 ## Persistence model
 
 * `store.enc` is rewritten in full on every mutation (no append, no journal).
-* Writes are not atomic at the filesystem level (write text, no temp-file rename
-  and no fsync).
-* `settings.json` is rewritten in full on every change.
+* Writes go through `AtomicFile`: temp file in the same directory, then rename,
+  so a crash or full disk can never leave a half-written vault.
+* Mutations also take a cross-process `StoreFileLock` and re-read the file
+  before writing, so two clients converge instead of overwriting each other.
+* `settings.json` is rewritten in full on every change (also atomically).
 * Backups are byte copies of `store.enc`, so they remain encrypted.
-* There are **no file locks**; correctness relies on a single writer process.
 
 See [Business Rules](Business-Rules.md) for the exact semantics and
 [Data Formats](Data-Formats.md) for the bytes.
@@ -211,9 +223,10 @@ unit-tested without a terminal. See [Application: TUI](Application-TUI.md).
 | State | Location | Lifetime |
 | -------- | -------- | -------- |
 | Secrets | `~/doopass/appdata/store.enc` | persistent, encrypted |
-| Master password | process memory (a `Store` instance) | until lock/exit |
-| API tokens | `ApiVaultCoordinator` dictionary | TTL-bounded, memory only |
-| Web session | Blazor circuit | circuit lifetime |
+| Master password | process memory (a `Store` instance) | until relock/TTL/exit |
+| API tokens | `ApiVaultCoordinator` dictionary | sliding + absolute TTL, memory only |
+| Browser session token | `sessionStorage` | one tab, survives reload |
+| Phone session token | Android `SecureStorage` | Keystore-backed |
 | Settings | `settings.json` | persistent |
 | Theme choice | browser `localStorage` key `doopass-theme` | per browser |
 | Phone host/pin/token | Android `SecureStorage` | persistent, Keystore-backed |

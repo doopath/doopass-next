@@ -83,16 +83,17 @@ enforces it, so a change in the code can be traced to a change in the product.
 
 ## 5. Sessions, tokens and locking
 
-### 5.1 Web UI
+### 5.1 Web UI (browser thin client)
 
 | Rule | Details |
 | ---- | ------- |
-| Unlock scope | One Blazor circuit = one `DoopassSession` = one `Store`. |
-| Redirect rules | `/store`, `/backups`, `/settings` redirect to `/` when the circuit's state is not unlocked. `/` redirects to `/store` when it is. |
-| Logout | Drops the store reference; navigates to `/`. No token, no cookie: the session simply forgets the password. |
-| Lock event | `VaultLocked` (from the server notifier, or the phone's push client) sends the user to `/`. |
-| No idle timeout | A circuit stays unlocked until logout, disconnect, or server restart. Blazor's own circuit timeout applies. |
-| No login rate limiting | The limiter covers only `/api/auth/*`. |
+| Unlock scope | The browser gets its own bearer token; all tokens share the single store in `ApiVaultCoordinator`. |
+| Token storage | `sessionStorage`, scoped to one tab and surviving a reload; cleared on logout or a 401. |
+| Redirect rules | `/store`, `/backups`, `/settings` redirect to `/` when the tab has no live token. `/` redirects to `/store` when the server reports the vault unlocked *and* the tab holds a token. |
+| Logout | Calls `POST /api/auth/logout`, clears the token and stops the SignalR connection; navigates to `/`. |
+| Lock event | `vaultLocked` from the hub sends the user to `/` and drops the stored token. |
+| Idle timeout | Sliding 30 min TTL, absolute 8 h cap; `SessionJanitor` relocks even when no request arrives. |
+| Login rate limiting | `/api/auth/login` and `/api/auth/init` are limited to 5/min per IP, plus the shared `AuthThrottle` delay. |
 
 ### 5.2 REST API
 
@@ -101,7 +102,7 @@ enforces it, so a change in the code can be traced to a change in the product.
 | Tokens | 32 random bytes, base64url, no padding; opaque, stored in memory only. |
 | TTL | Sliding, default 30 minutes, configurable via `api.session_ttl_minutes` (>0, invariant culture). |
 | Sliding | Any authorized request calls `TouchToken` and refreshes the timestamp. Hub connections validate without sliding. |
-| Expiry | Checked before every operation; expired tokens are removed and their clients receive `vaultLocked`. |
+| Expiry | Checked before every operation and every 30 s by `SessionJanitor`; an expired token is told on its own group, and the last one triggers a broadcast relock. |
 | Relock | When the token set becomes empty (logout or expiry), the shared store is dropped and *all* hub clients receive `vaultLocked`. |
 | Login is password-verified even when unlocked | A second client must still supply the correct master password; a correct one just adds a token and keeps the existing store instance. |
 | Init only when no store exists | Returns 409 otherwise. |
@@ -114,7 +115,7 @@ enforces it, so a change in the code can be traced to a change in the product.
 | ---- | ------- |
 | Every mutation raises an event | Pairs → `VaultChanged`; backups → `BackupsChanged`; settings → `SettingsChanged`; lock → `VaultLocked`. |
 | Restore raises two | A backup restore raises `BackupsChanged` *and* `VaultChanged`, because vault content changed too. |
-| Fan-out | `VaultChangeNotifier` is server-wide; the hub relay pushes to SignalR clients; each circuit's relay wakes open pages. |
+| Fan-out | `VaultChangeNotifier` is server-wide; `VaultHubRelay` pushes to every connected browser and phone, and each client's relay wakes its open pages. |
 | Hub scope | Content events go to *all* connected clients (they still need a valid token to read data); lock events target the affected token group, or everyone when no sessions remain. |
 | Pages re-read, they do not receive data | Events carry no payload. Receivers call `Reload`/`GetKeys` again, so the file is the single source of truth. |
 | Self-notification | A client that made the change also receives its own event and refreshes; handlers are idempotent. |
@@ -150,5 +151,5 @@ enforces it, so a change in the code can be traced to a change in the product.
 | Logging never throws | `AppLogger` swallows all I/O failures. |
 | Log rotation | 5 MB threshold, one archive (`doopass.log.1`), no compression. |
 | Asset caching | Text assets revalidate (`no-cache`); icons/blazor script cache for an hour. |
-| Version | `5.0.0` in `Constants.Version`, all `.csproj` files; reported by `/api/vault/state` and the UI chrome. |
+| Version | `5.1.0` in `Constants.Version`, all `.csproj` files; reported by `/api/vault/state` and the UI chrome. |
 | Language | UI copy and code comments in English; commit messages follow `type(scope): summary`. |

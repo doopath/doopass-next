@@ -159,8 +159,10 @@ types on the server and on the phone.
 
 ## Threading
 
-* `Store` is **not** thread-safe. Each owner wraps it in a private lock:
-  `DoopassSession._gate`, `ApiVaultCoordinator._gate`, TUI single-threaded loop.
+* `Store` serialises its own mutations under `Store._io`; the web host adds the
+  cross-process `StoreFileLock`. `ApiVaultCoordinator._gate` protects its token
+  dictionary and the shared store reference, and the TUI runs a
+  single-threaded loop.
 * `Settings` is not thread-safe either; the coordinator serialises settings
   writes under the same gate.
 * Static state: `AppPaths._overrideRoot`, `AppLogger._file`. Both are set once at

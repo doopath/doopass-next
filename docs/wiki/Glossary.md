@@ -16,7 +16,7 @@ UI copy says "pair" or "item".
 **Value** — the secret itself (arbitrary string, trimmed on load).
 
 **Master password** — the password that derives the vault key. Never stored;
-required for every unlock (and again for every new web circuit).
+required for every unlock (a new browser token is issued per login).
 
 **Snapshot / backup** — a byte copy of `store.enc` in `appdata/backups`, named
 `dd_MM_yyyy_<store>_<n>.enc.bak`. Still encrypted.
@@ -49,15 +49,14 @@ and requiring an exact match afterwards.
 **Host** — a running `doopass serve` process that owns the vault and exposes the
 web UI, REST API, hub and discovery.
 
-**Thin client** — the Android app: no local vault, only host address, pin and
-token.
+**Thin client** — a UI with no vault of its own: the browser app (token in
+`sessionStorage`) and the Android app (host, pin and token in SecureStorage).
 
-**Front-end** — one of TUI, web UI, Android UI. All sit on the same Core layer.
+**Front-end** — one of TUI, browser UI, Android UI. All talk to the same Core
+layer, directly (TUI) or through the REST API (browser and phone).
 
-**Circuit** — a Blazor Server connection; the unit of web-UI session state.
-
-**Scope (DI)** — per-circuit service lifetime in the web host; singleton means
-host-wide.
+**Scope (DI)** — service lifetime in the web host or the WASM app; singleton
+means host-wide (or app-wide in the browser).
 
 **RCL** — Razor Class Library; `Doopass.WebUi`, shared between the host and the
 phone.

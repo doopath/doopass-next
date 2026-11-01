@@ -2,7 +2,7 @@
 
 > Generated from the compiler's XML documentation (`GenerateDocumentationFile=true`). Do not edit by hand: run `python scripts/generate-api-docs.py` after changing public members.
 
-Assembly: `Doopass.WebUi` · Source: `src/Doopass.WebUi/bin/Debug/net10.0/Doopass.WebUi.xml`
+Assembly: `Doopass.WebUi` · Source: `src/Doopass.WebUi/bin/Release/net10.0/Doopass.WebUi.xml`
 
 ## Types
 
@@ -12,6 +12,7 @@ Assembly: `Doopass.WebUi` · Source: `src/Doopass.WebUi/bin/Debug/net10.0/Doopas
 * [`Doopass.WebUi.Abstractions.IVaultEvents`](#ivaultevents)
 * [`Doopass.WebUi.Abstractions.IVaultSession`](#ivaultsession)
 * [`Doopass.WebUi.Abstractions.VaultEventRelay`](#vaulteventrelay)
+* [`Doopass.WebUi.Abstractions.VaultResponseErrors`](#vaultresponseerrors)
 * [`Doopass.WebUi.Abstractions.VaultState`](#vaultstate)
 * [`Doopass.WebUi.Services.JsClipboard`](#jsclipboard)
 * [`Doopass.WebUi.Services.ToastKind`](#toastkind)
@@ -69,12 +70,11 @@ or the MAUI thin client's SignalR push connection.
 
 ### `IVaultSession`
 
-The vault operations the UI components need. Both hosts implement it:
-the web server wraps its per-circuit `DoopassSession` (synchronous core
-storage calls wrapped in tasks), and the MAUI thin client talks to the REST
-API of a remote host. Backup names are always extensionless — the host
-builds the real file names itself. Methods are awaitable because the
-remote implementation performs HTTP round-trips.
+The vault operations the UI components need. Both thin clients implement it:
+the browser (`WebApiVaultSession`) and the MAUI app
+(`RemoteVaultSession`) call the REST API of their host. Backup names are
+always extensionless — the host builds the real file names itself. Methods
+are awaitable because the implementations perform HTTP round-trips.
 
 * `AddAsync(string key, string value, CancellationToken ct = default)` — Adds a new key/value pair.
   * `key` — Unique key; duplicates are rejected.
@@ -141,13 +141,23 @@ Scoped relay implementation; a host wires its event source into it (public for c
 * `RaiseVaultChanged()` — Raises `VaultChanged` for every subscriber.
 * `RaiseVaultLocked()` — Raises `VaultLocked` without awaiting the handlers.
 
+### `VaultResponseErrors`
+
+Maps a host REST error envelope back to the Core exception the shared Razor
+pages already understand, so a thin client behaves like the local session.
+Shared by the mobile client (and unit-testable without a host) instead of
+living in the Android project, which cannot be referenced from the test
+projects.
+
+* `Conflict(string)` — 409 covers three different vault states. The host's fixed messages are the only discriminator: a busy store and an uninitialized store are not "this pair already exists", and the pages render them differently.
+
 ### `VaultState`
 
 What the client knows about the host vault: whether the store file exists,
 whether some session has unlocked it, and the host version. Used by the
 login / initialization screens and by thin clients probing a host.
 
-* `IsOffline` — True only on thin clients that could not reach their host; the other values then say nothing about the vault. Always false on the web host.
+* `IsOffline` — True only on thin clients that could not reach their host; the other values then say nothing about the vault.
 * `VaultState(bool, bool, string)` — What the client knows about the host vault: whether the store file exists, whether some session has unlocked it, and the host version. Used by the login / initialization screens and by thin clients probing a host.
 
 ## `Doopass.WebUi.Services`

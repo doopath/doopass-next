@@ -2,7 +2,7 @@
 
 > Generated from the compiler's XML documentation (`GenerateDocumentationFile=true`). Do not edit by hand: run `python scripts/generate-api-docs.py` after changing public members.
 
-Assembly: `Doopass.Mobile` · Source: `src/Doopass.Mobile/bin/Debug/net10.0-android/Doopass.Mobile.xml`
+Assembly: `Doopass.Mobile` · Source: `src/Doopass.Mobile/bin/Release/net10.0-android/Doopass.Mobile.xml`
 
 ## Types
 

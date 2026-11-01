@@ -61,8 +61,20 @@ Security fixes are listed in [CHANGELOG.md](CHANGELOG.md).
 ## Build and test
 
 ```bash
-dotnet build Doopass.slnx
+dotnet build Doopass.slnx                # includes the Android project
 dotnet test Doopass.slnx                 # all test projects
+```
+
+The solution includes `Doopass.Mobile`, so a full build also needs the
+`maui-android` workload (see [Android thin client](#android-thin-client)). To
+build and test only the host (what CI does):
+
+```bash
+dotnet build src/Doopass.Cli/Doopass.Cli.csproj
+dotnet test tests/Doopass.Core.Tests/Doopass.Core.Tests.csproj
+dotnet test tests/Doopass.Tui.Tests/Doopass.Tui.Tests.csproj
+dotnet test tests/Doopass.Api.Tests/Doopass.Api.Tests.csproj
+dotnet test tests/Doopass.WebClient.Tests/Doopass.WebClient.Tests.csproj
 ```
 
 ## Run it
@@ -113,8 +125,8 @@ dotnet run --project src/Doopass.Cli -- serve --port 7240 --lan
 
 The web UI is a **thin client**: all HTTP calls to `/api/*` originate from the
 browser (visible in the Network tab), and the session token is kept in
-`sessionStorage` per tab — it survives a reload but is never shared between
-tabs. The host renders no Razor: it serves the compiled Blazor WebAssembly
+`sessionStorage`, scoped to that tab (it survives a reload; a tab opened with
+`window.open` inherits a copy). The host renders no Razor: it serves the compiled Blazor WebAssembly
 bundle as static assets (`index.html`, `_framework/*`, `_content/*`). In a
 self-contained single-file build the whole bundle is embedded in the executable
 and extracted to a temp folder on first start; real-time events still arrive via
@@ -160,10 +172,9 @@ Android app) and a SignalR channel for change push, both on the same port:
   `{ "error": "<message>" }` with 400/401/403/404/409/422 semantics and a fixed
   `Internal server error.` for unexpected failures; login/init are rate-limited
   to 5 requests per minute per IP (429 after that). Failed master-password
-  attempts are shared between the API and the Blazor login page: after 5
-  failures in the last minute each further attempt is delayed by 1 s, 2 s, 4 s
-  and then at most 5 s. There is no hard lockout, so a correct password always
-  logs in.
+  attempts share one host-wide counter: after 5 failures in the last minute each
+  further attempt is delayed by 1 s, 2 s, 4 s and then at most 5 s. There is no
+  hard lockout, so a correct password always logs in.
 
 ### LAN discovery
 
@@ -196,7 +207,7 @@ The app ships its own manifest, service worker and icons, all embedded in the
 executable and served from virtual routes (`/pwa/manifest.webmanifest`,
 `/pwa/sw.js`, …) — a single-file build supports installation with no extra
 files. The service worker offers a basic offline shell; vault operations still
-need the server and reconnect over their existing SignalR circuit.
+need the server and reconnect over the SignalR hub.
 
 > [!IMPORTANT]
 > Installation requires a **secure origin**: `http://localhost` or any HTTPS
@@ -497,8 +508,8 @@ scripts\package-release             # after publish-portable
 
 Builds archives ready for GitHub Releases:
 
-* `dist/release/doopass-5.0.0-win-x64.zip` (exe + install/uninstall scripts + README)
-* `dist/release/doopass-5.0.0-linux-x64.tar.gz` (exe + install/uninstall scripts + systemd unit + README)
+* `dist/release/doopass-5.1.0-win-x64.zip` (exe + install/uninstall scripts + README)
+* `dist/release/doopass-5.1.0-linux-x64.tar.gz` (exe + install/uninstall scripts + systemd unit + README)
 
 ### Autostart at sign-in
 
@@ -594,8 +605,9 @@ base64url( salt[16] || iterations[4, big-endian] || fernet_token )
 where `fernet_token = 0x80 || timestamp[8] || IV[16] || AES-128-CBC(ciphertext) || HMAC-SHA256(32)`.
 The plaintext is a newline-separated list of `key = value` pairs, encrypted
 with a key derived from your master password (PBKDF2-HMAC-SHA256, 100 000
-iterations by default). The master password is kept in memory only and erased
-on lock (<kbd>G</kbd>), exit or server shutdown.
+iterations by default). The master password is kept in host memory only. The
+TUI forgets it on lock (<kbd>G</kbd>); a REST session is dropped on logout, when
+its sliding or absolute TTL runs out, or on host shutdown.
 
 ## Documentation
 
@@ -613,9 +625,10 @@ The wiki sources are versioned with the code in [`docs/wiki/`](docs/wiki):
 | [Business Rules](docs/wiki/Business-Rules.md) | every rule the product enforces |
 | [Data Formats](docs/wiki/Data-Formats.md) | `store.enc`, `settings.json`, wire formats |
 | [Security Model](docs/wiki/Security-Model.md) | crypto, threat model, trust boundaries |
-| [Applications](docs/wiki/Application-Core.md) | Core, CLI host, web UI, REST API, TUI, Android |
+| [Applications](docs/wiki/Application-Core.md) | Core, CLI host, web UI, WebAssembly client, REST API, TUI, Android |
 | [Features](docs/wiki/Feature-Store.md) | store, backups, settings, sessions, sync, discovery, TLS, PWA, logging, packaging |
 | [Reference](docs/wiki/Configuration.md) | configuration, API, testing, development, operations, limitations |
+| [API reference](docs/wiki/API-Reference.md) | generated per-assembly reference (Core, WebUi, WebClient, CLI, TUI, Mobile) |
 | [Glossary](docs/wiki/Glossary.md) | project vocabulary |
 
 Publish or refresh the wiki (needs `gh auth login` and one page created in the
@@ -631,7 +644,6 @@ API documentation is generated from the XML comments the compiler emits
 
 ```bash
 dotnet build Doopass.slnx
-dotnet build src/Doopass.Mobile/Doopass.Mobile.csproj   # not in the solution
 python scripts/generate-api-docs.py
 ```
 
@@ -645,11 +657,13 @@ change.
 | `src/Doopass.Core`           | Store, Fernet/PBKDF2 crypto, settings, backups, validation, logs |
 | `src/Doopass.Tui`            | Terminal.Gui v2 interface (mirrors the original TUI)             |
 | `src/Doopass.WebUi`          | Shared Razor Class Library: components, themes, IVaultSession    |
-| `src/Doopass.Cli`            | Single entry point: TUI or web host (Blazor + REST API + hub)    |
+| `src/Doopass.WebClient`      | Blazor WebAssembly thin client (browser-side UI)                 |
+| `src/Doopass.Cli`            | Single entry point: TUI or web host (REST API + hub + assets)    |
 | `src/Doopass.Mobile`         | Android thin client (MAUI + Blazor WebView)                      |
 | `tests/Doopass.Core.Tests`   | xUnit tests: format compatibility, CRUD, backups, settings       |
 | `tests/Doopass.Tui.Tests`    | xUnit tests: key mapping and screen behaviour                    |
 | `tests/Doopass.Api.Tests`    | xUnit integration tests: the REST API on a real host             |
+| `tests/Doopass.WebClient.Tests` | xUnit tests: browser session, error mapping, push channel     |
 
 ---
 

@@ -1,8 +1,10 @@
 # Application: Web UI (`Doopass.WebUi`)
 
-A Razor Class Library shared by the desktop web host and the Android thin
-client. Everything here is a Blazor component, an asset, or a contract — no
-ASP.NET Core hosting, no HTTP, no platform APIs.
+A Razor Class Library shared by the browser thin client (`Doopass.WebClient`)
+and the Android thin client. Everything here is a Blazor component, an asset, or
+a contract — no ASP.NET Core hosting, no HTTP, no platform APIs. The host page
+(`index.html`) and the router (`App.razor`) live in `Doopass.WebClient`; the
+phone supplies its own `AppRoot.razor`.
 
 ```
 Doopass.WebUi
@@ -13,8 +15,7 @@ Doopass.WebUi
 │   ├── ISecretClipboard.cs     clipboard contract
 │   └── HostUnreachableException.cs
 ├── Components/
-│   ├── App.razor               HTML shell, theme bootstrap, reconnect dialog
-│   ├── Routes.razor            router (MainLayout as default)
+│   ├── Routes.razor            router used by the Android host
 │   ├── Layout/MainLayout.razor sidebar, topbar, ErrorBoundary, lock handling
 │   ├── Layout/AuthLayout.razor centred card for login / init
 │   ├── Pages/Login.razor       "/"
@@ -123,7 +124,7 @@ happened".
 
 `VaultLocked` from `IVaultEvents` navigates back to `/`. The layout also
 subscribes to `NavigationManager.LocationChanged` and uses `ErrorBoundary` so a
-component exception shows a reload card instead of a dead circuit.
+component exception shows a reload card instead of a dead page.
 
 `AuthLayout` is the centred card used by login and init.
 
@@ -135,17 +136,14 @@ component exception shows a reload card instead of a dead circuit.
   `prefers-color-scheme`.
 * Applies `data-theme="dark|light"` on `<html>` **before paint** and keeps the
   `theme-color` meta in sync (`#0d0f15` / `#f6f7fb`).
-* Re-asserts the theme with a `MutationObserver`, `enhancedload`,
-  `visibilitychange` and `pageshow`, because Blazor can strip the attribute on a
-  server-rendered navigation.
+* Re-asserts the theme with a `MutationObserver`, `visibilitychange` and
+  `pageshow`, because Blazor can strip the attribute during navigation.
 * Exposes `window.doopassTheme = { toggle, isDark, set, current, restore }`.
 
 ### `app.js`
 
 * `doopass.copyText(text)` → `navigator.clipboard.writeText`, falling back to a
   hidden textarea + `execCommand('copy')`; returns `false` instead of throwing.
-* Wires the custom reconnection dialog's **Reload** button
-  (`[data-reconnect-action="reload"]`).
 * PWA helpers: `beforeinstallprompt` capture, `isStandalone`, `canInstall`,
   `promptInstall`, `probe`, and service-worker registration with scope `/`.
   Registration failures are silent.
@@ -176,25 +174,25 @@ Adding an icon is a new arm of the `Name switch` expression.
 | `ThemeToggle` | calls `doopassTheme.toggle()` and tracks the current mode |
 | `Icon` | inline SVG set |
 
-`ToastService` is scoped (per circuit), keeps toasts in memory and auto-dismisses
-each after 3.8 s. Kinds: `Success`, `Error`, `Info`.
+`ToastService` is scoped, keeps toasts in memory and auto-dismisses each after
+3.8 s. Kinds: `Success`, `Error`, `Info`.
 
-## App shell (`App.razor`)
+## App shell (`Doopass.WebClient`)
 
-* `viewport-fit=cover` + safe-area CSS for notched phones.
-* SVG favicon first, `.ico` fallback; manifest and Apple touch icon links.
-* `theme.js` loads in `<head>` (before paint); `app.js` and `blazor.web.js` at
-  the end of `<body>`.
-* Interactive server rendering with **prerender disabled**
-  (`new InteractiveServerRenderMode(prerender: false)`), so a page never flashes
-  server-rendered content that is about to be replaced by the circuit.
-* Custom reconnect modal (`#components-reconnect-modal`) with a Reload button
-  handled by `app.js`.
+* `wwwroot/index.html` carries `viewport-fit=cover` + safe-area CSS, the SVG
+  favicon, the manifest, the Apple touch icon and the `theme.js`/`app.js`
+  includes; `App.razor` only mounts the router over the shared pages.
+* The Blazor WebAssembly runtime (`_framework/blazor.webassembly.js`) is loaded
+  at the end of `<body>`. There is no server circuit, no prerender and no
+  reconnect modal: a lost host is reported by the session/offline banner.
+* Login/init call `/api/auth/*` directly; the token goes to `sessionStorage`.
+* The PWA registration and install prompt come from `app.js`.
 
 ## Conventions when editing the UI
 
 1. Pages talk to `IVaultSession`/`IVaultEvents` only — never to `Store`,
-   `Settings` or HTTP directly. Anything else breaks the thin client.
+   `Settings` or HTTP directly. The TUI is the only front-end that skips the
+   contract.
 2. Unsubscribe in `Dispose`; every page that subscribes also checks the state in
    `OnInitializedAsync`.
 3. Secrets stay out of markup unless the user revealed them; never bind a value

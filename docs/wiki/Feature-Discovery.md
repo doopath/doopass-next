@@ -22,7 +22,7 @@ Reply payload:
   "port": 7240,
   "tls": true,
   "fingerprint": "d3894b6e...c8e50f",
-  "version": "5.0.0"
+  "version": "5.1.0"
 }
 ```
 
@@ -59,7 +59,7 @@ Both the raw reply fields and the constant are exposed for tests
    built from the **sender address**, not from the payload, and de-duplicated by
    URL. Scheme is `https` when `tls` is true.
 
-The reconnect window, probe text and port are constants in
+The probe window, probe text and port are constants in
 `HostDiscovery`/`DiscoveryService`; they must stay in sync.
 
 ## Firewall

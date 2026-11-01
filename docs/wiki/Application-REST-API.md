@@ -21,16 +21,17 @@ on the same port as the web UI; there is no separate listener.
 | `VaultAuth` | token parsing regex, 401 helper, fixed-window rate limiter |
 | `VaultHub` | SignalR hub; validates the token on connect, joins a per-token group |
 | `VaultHubRelay` | hosted service forwarding `IVaultChangeNotifier` events to all/grouped clients |
-| `VaultChangeNotifier` | server-wide event source also consumed by Blazor circuits |
+| `VaultChangeNotifier` | server-wide event source consumed by the hub relay |
 
 ## Coordinator semantics
 
 ```csharp
-ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier)
-  Clock            // injectable for TTL tests
-  SessionTtl       // default 30 min, from api.session_ttl_minutes
-  ServerVersion    // Doopass.Core.Constants.Version
-  SessionCount     // diagnostics
+ApiVaultCoordinator(Settings settings, IVaultChangeNotifier notifier, AuthThrottle throttle)
+  Clock              // injectable for TTL tests
+  SessionTtl         // default 30 min, from api.session_ttl_minutes
+  AbsoluteSessionTtl // default 8 h, from api.absolute_session_ttl_hours
+  ServerVersion      // Doopass.Core.Constants.Version
+  SessionCount       // diagnostics
 ```
 
 | Operation | Behaviour |
