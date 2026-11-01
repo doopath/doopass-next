@@ -1,7 +1,6 @@
 // Doopass web helpers.
-// Served from an embedded resource and mapped at /app.js (see Program.cs).
-// Contents: clipboard helper used by the store page and support for the
-// custom Blazor Server reconnection dialog (#components-reconnect-modal).
+// Served from the RCL as _content/Doopass.WebUi/app.js.
+// Contents: clipboard helper used by the store page and the PWA install probe.
 (function () {
     'use strict';
 
@@ -64,21 +63,6 @@
 
         return legacyCopy(text);
     };
-
-    // blazor.web.js merely toggles classes on the custom reconnect dialog and
-    // never wires up its buttons, so handle the reload action here.
-    document.addEventListener('click', function (ev) {
-        var target = ev.target instanceof Element ? ev.target : null;
-        var button = target && target.closest ? target.closest('[data-reconnect-action]') : null;
-
-        if (button) {
-            ev.preventDefault();
-
-            if (button.getAttribute('data-reconnect-action') === 'reload') {
-                location.reload();
-            }
-        }
-    });
 
     // ---- PWA ---------------------------------------------------------------
     // Installable web app: manifest + service worker are served by the server
