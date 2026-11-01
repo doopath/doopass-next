@@ -58,6 +58,11 @@ You do not need the .NET SDK — take the release archive.
 Re-run it with `--force` to rotate the certificate; paired phones then have to
 trust the new fingerprint again.
 
+> [!NOTE]
+> TLS moves the UI from `http://` to `https://`. An old `http://` bookmark, or a
+> PWA installed from that origin, keeps dialling the plain-HTTP address and
+> reports "host unreachable" — open the `https://` address instead.
+
 > [!WARNING]
 > Only run the host on your own trusted home network. Do not expose it on
 > public, café or hotel Wi-Fi, a shared/corporate LAN, or the internet — not

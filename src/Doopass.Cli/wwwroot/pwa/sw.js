@@ -69,7 +69,7 @@ self.addEventListener('fetch', (event) => {
         return resp;
       } catch (err) {
         const cached = await cache.match(req);
-        return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+        return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       }
     })());
     return;
@@ -85,7 +85,10 @@ self.addEventListener('fetch', (event) => {
         const cache = await caches.open(CACHE);
         return (await cache.match(req)) ||
                (await cache.match('/')) ||
-               new Response('Offline — host unreachable', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+               new Response(
+                   'Offline - host unreachable. If TLS was just enabled, open https://' +
+                       self.location.host + '/ instead.',
+                   { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       }
     })());
     return;
