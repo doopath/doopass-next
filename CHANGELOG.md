@@ -5,6 +5,37 @@ and backup file names — is unchanged since 5.0.0, so existing vaults and
 settings files keep working as they are. 5.1.0 includes the security fixes from
 5.0.1 and 5.0.2.
 
+## 5.2.0 — Packaging, HTTPS setup and CLI polish
+
+### Added
+
+- **`scripts/publish-release.sh`** builds everything a GitHub release needs in one
+  run: the win-x64 and linux-x64 portable archives, the Android APK and
+  `SHA256SUMS`. Both archives now ship `setup-tls` and the autostart scripts.
+- **`setup-tls.ps1` / `setup-tls.sh`** create the HTTPS certificate and store it
+  in settings, so reaching the host from the phone no longer needs hand-written
+  `--tls` / `--tls-pass` arguments. `--tls` without a path now uses that
+  certificate.
+- **`doopass --help`**, and the autostart installers start the service
+  immediately instead of waiting for the next sign-in.
+- **GitHub Actions**: CI builds and tests every push and pull request; the
+  `Release` workflow builds the release artifacts on a `v*` tag and attaches them
+  to the GitHub release.
+
+### Fixed
+
+- A port that is already in use is reported as an error instead of crashing the
+  host with a stack trace.
+- HTTPS to the local host works from the Android app again: the certificate the
+  host prints at startup can be pinned even when it is self-signed.
+- The service worker refreshes the cached WebAssembly bundle after an upgrade
+  instead of serving the previous version until a manual reload.
+
+### Removed
+
+- The unused `version` field in `settings.json`. Existing settings files still
+  load; the field is ignored.
+
 ## 5.1.0 — WebAssembly thin client
 
 ### Changed
