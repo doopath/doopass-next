@@ -7,7 +7,7 @@ namespace Doopass.WebClient;
 
 /// <summary>
 /// SignalR push channel for the Blazor WebAssembly thin client: keeps open
-/// pages fresh. The token comes from sessionStorage (per-tab, survives reload);
+/// pages fresh. The token comes from sessionStorage (one tab, survives reload);
 /// a lock event clears it and raises <c>VaultLocked</c> so the guard routes to
 /// login. The connection is started explicitly after the session is ready and
 /// stopped when the session ends.
@@ -21,6 +21,10 @@ public sealed class WebVaultPushClient : IAsyncDisposable
     private string? _connectionToken;
     private readonly SemaphoreSlim _startGate = new(1, 1);
 
+    /// <summary>Creates the push channel for the host that served the WASM app.</summary>
+    /// <param name="js">Browser interop used to read the stored token.</param>
+    /// <param name="relay">Per-app event relay shared with the UI.</param>
+    /// <param name="hubBaseAddress">Origin of the host that serves the app.</param>
     public WebVaultPushClient(IJSRuntime js, VaultEventRelay relay, string hubBaseAddress)
     {
         _js = js;
@@ -169,6 +173,7 @@ public sealed class WebVaultPushClient : IAsyncDisposable
         }
     }
 
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         await _startGate.WaitAsync();

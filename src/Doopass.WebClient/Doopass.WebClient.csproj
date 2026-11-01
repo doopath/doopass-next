@@ -4,11 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Doopass.WebClient</RootNamespace>
     <AssemblyName>Doopass.WebClient</AssemblyName>
-    <Version>5.0.0</Version>
+    <Version>5.1.0</Version>
     <Description>Doopass Blazor WebAssembly thin client: runs UI in the browser, calls the REST API and SignalR hub of Doopass.Cli.</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- A Blazor WebAssembly publish keeps every asset as a file; the host
          embeds its output as a zip for single-file builds, so never build this
          project as a single file itself (it has no runtime to self-extract). -->

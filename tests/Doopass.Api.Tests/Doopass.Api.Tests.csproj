@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Doopass.Cli\Doopass.Cli.csproj" />
+    <!-- Contract test: the browser session must parse the real host's JSON. -->
+    <ProjectReference Include="..\..\src\Doopass.WebClient\Doopass.WebClient.csproj" />
   </ItemGroup>
 
 </Project>

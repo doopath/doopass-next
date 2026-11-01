@@ -13,8 +13,8 @@ namespace Doopass.WebClient;
 /// IVaultSession for the Blazor WebAssembly thin client: every call is a direct
 /// HTTP request against the host REST API. HTTP statuses map back to Core
 /// exceptions so the shared RCL pages behave identically across hosts. Token
-/// lives only in memory plus sessionStorage (per-tab, survives reload, never
-/// cross-tab), and the bearer header is attached to each outgoing request.
+/// lives only in memory plus sessionStorage (scoped to one tab, survives
+/// reload), and the bearer header is attached to each outgoing request.
 /// </summary>
 public sealed class WebApiVaultSession : IVaultSession, IDisposable
 {
@@ -26,6 +26,10 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
     private string? _token;
     private bool _disposed;
 
+    /// <summary>Creates the browser session over the host's same-origin HTTP client.</summary>
+    /// <param name="httpClient">Client whose base address is the Blazor app origin.</param>
+    /// <param name="js">Browser interop used for sessionStorage.</param>
+    /// <param name="relay">Per-app event relay shared with the UI.</param>
     public WebApiVaultSession(HttpClient httpClient, IJSRuntime js, VaultEventRelay relay)
     {
         _httpClient = httpClient;
@@ -126,6 +130,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
     private static VaultState OfflineState() =>
         new(false, false, $"{Constants.Version} (offline)") { IsOffline = true };
 
+    /// <inheritdoc />
     public async ValueTask<VaultState> GetStateAsync(CancellationToken ct = default)
     {
         using var request = BuildRequest(HttpMethod.Get, "/api/vault/state");
@@ -156,6 +161,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public async ValueTask<(bool Success, string Message)> LoginAsync(string password, CancellationToken ct = default)
     {
         HttpResponseMessage response;
@@ -181,6 +187,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public async ValueTask<(bool Success, string Message)> InitAsync(string password, CancellationToken ct = default)
     {
         HttpResponseMessage response;
@@ -206,6 +213,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public async ValueTask LogoutAsync(CancellationToken ct = default)
     {
         using var request = BuildRequest(HttpMethod.Post, "/api/auth/logout");
@@ -225,42 +233,53 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public ValueTask ReloadAsync(CancellationToken ct = default) =>
         ValueTask.CompletedTask; // the remote session always reflects the host
 
     // --- Vault pairs ------------------------------------------------------
 
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<string>> GetKeysAsync(CancellationToken ct = default) =>
         (await GetJsonAsync<KeysDto>("/api/vault/keys", ct))!.Keys;
 
+    /// <inheritdoc />
     public async ValueTask<string> GetValueAsync(string key, CancellationToken ct = default) =>
         (await GetJsonAsync<ValueDto>($"/api/vault/value?key={Uri.EscapeDataString(key)}", ct))!.Value;
 
+    /// <inheritdoc />
     public async ValueTask AddAsync(string key, string value, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/vault/pairs", new { key, value }, ct);
 
+    /// <inheritdoc />
     public async ValueTask UpdateAsync(string oldKey, string newKey, string newValue, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Put, "/api/vault/pairs", new { oldKey, newKey, newValue }, ct);
 
+    /// <inheritdoc />
     public async ValueTask RemoveAsync(string key, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Delete, $"/api/vault/pairs?key={Uri.EscapeDataString(key)}", null, ct);
 
     // --- Backups ----------------------------------------------------------
 
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<string>> GetBackupNamesAsync(CancellationToken ct = default) =>
         (await GetJsonAsync<NamesDto>("/api/backups", ct))!.Names;
 
+    /// <inheritdoc />
     public async ValueTask CreateBackupAsync(CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/backups", null, ct);
 
+    /// <inheritdoc />
     public async ValueTask RestoreBackupAsync(string backupName, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, $"/api/backups/restore?name={Uri.EscapeDataString(backupName)}", null, ct);
 
+    /// <inheritdoc />
     public async ValueTask DeleteBackupAsync(string backupName, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Delete, $"/api/backups?name={Uri.EscapeDataString(backupName)}", null, ct);
 
     // --- Settings ---------------------------------------------------------
 
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<(string Section, IReadOnlyDictionary<string, string> Pairs)>> GetSettingsAsync(CancellationToken ct = default)
     {
         var dto = await GetJsonAsync<SettingsDto>("/api/settings", ct);
@@ -269,9 +288,11 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
             .ToList();
     }
 
+    /// <inheritdoc />
     public async ValueTask SetSettingAsync(string section, string key, string value, CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Put, $"/api/settings/{Uri.EscapeDataString(section)}/{Uri.EscapeDataString(key)}", new { value }, ct);
 
+    /// <inheritdoc />
     public async ValueTask RestoreDefaultSettingsAsync(CancellationToken ct = default) =>
         await SendAsync(HttpMethod.Post, "/api/settings/restore-defaults", null, ct);
 
@@ -374,7 +395,12 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
                 _relay.RaiseVaultLocked();
                 throw new UnauthorizedAccessException(message);
             case 409:
-                throw new PropertyAlreadyExistError(message);
+                // Busy, uninitialized and duplicate-pair all answer 409; the
+                // message selects the exception the shared pages understand.
+                throw VaultResponseErrors.Conflict(message);
+            case 422:
+                // The host could read the store file but it is not a valid vault.
+                throw new StoreCorruptedError(message);
             case 404:
                 throw new PropertyDoesNotExistError(message);
             case 429:
@@ -429,6 +455,7 @@ public sealed class WebApiVaultSession : IVaultSession, IDisposable
     private sealed record SettingsDto(IReadOnlyList<SettingsSectionDto> Sections);
     private sealed record ErrorDto(string? Error);
 
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed) return;

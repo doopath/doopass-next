@@ -388,6 +388,36 @@ public sealed class WebApiVaultSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task AddAsync_409_busy_maps_to_StoreBusyError()
+    {
+        Setup();
+        _handler.Queue(JsonResponses.Error(409, "The vault is busy, try again."));
+        _httpClient = new HttpClient(_handler) { BaseAddress = new Uri("http://localhost:7240/") };
+
+        await Assert.ThrowsAsync<StoreBusyError>(async () => await Session.AddAsync("key", "value"));
+    }
+
+    [Fact]
+    public async Task AddAsync_409_not_initialized_maps_to_StoreIsNotInitializedError()
+    {
+        Setup();
+        _handler.Queue(JsonResponses.Error(409, "Store isn't initialized!"));
+        _httpClient = new HttpClient(_handler) { BaseAddress = new Uri("http://localhost:7240/") };
+
+        await Assert.ThrowsAsync<StoreIsNotInitializedError>(async () => await Session.AddAsync("key", "value"));
+    }
+
+    [Fact]
+    public async Task GetKeysAsync_422_maps_to_StoreCorruptedError()
+    {
+        Setup();
+        _handler.Queue(JsonResponses.Error(422, "The store file is corrupted."));
+        _httpClient = new HttpClient(_handler) { BaseAddress = new Uri("http://localhost:7240/") };
+
+        await Assert.ThrowsAsync<StoreCorruptedError>(async () => await Session.GetKeysAsync());
+    }
+
+    [Fact]
     public async Task LoginAsync_host_unreachable_returns_offline_message_not_throws()
     {
         Setup();

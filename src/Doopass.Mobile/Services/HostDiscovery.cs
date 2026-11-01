@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Doopass.Core;
 using Doopass.Core.Diagnostics;
 
 namespace Doopass.Mobile.Services;
@@ -236,7 +237,7 @@ public sealed class HostDiscovery
 
             var scheme = reply.Tls ? "https" : "http";
             var url = $"{scheme}://{remote}:{reply.Port}";
-            var candidate = new HostCandidate(reply.Name ?? "Doopass host", url, reply.Tls, reply.Fingerprint, reply.Version ?? "5.0.0");
+            var candidate = new HostCandidate(reply.Name ?? "Doopass host", url, reply.Tls, reply.Fingerprint, reply.Version ?? Constants.Version);
 
             if (found.All(item => !string.Equals(item.Url, candidate.Url, StringComparison.OrdinalIgnoreCase)))
             {

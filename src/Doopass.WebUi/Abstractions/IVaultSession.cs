@@ -9,18 +9,17 @@ public sealed record VaultState(bool StoreExists, bool IsUnlocked, string Server
 {
     /// <summary>
     /// True only on thin clients that could not reach their host; the other
-    /// values then say nothing about the vault. Always false on the web host.
+    /// values then say nothing about the vault.
     /// </summary>
     public bool IsOffline { get; init; }
 }
 
 /// <summary>
-/// The vault operations the UI components need. Both hosts implement it:
-/// the web server wraps its per-circuit <c>DoopassSession</c> (synchronous core
-/// storage calls wrapped in tasks), and the MAUI thin client talks to the REST
-/// API of a remote host. Backup names are always extensionless — the host
-/// builds the real file names itself. Methods are awaitable because the
-/// remote implementation performs HTTP round-trips.
+/// The vault operations the UI components need. Both thin clients implement it:
+/// the browser (<c>WebApiVaultSession</c>) and the MAUI app
+/// (<c>RemoteVaultSession</c>) call the REST API of their host. Backup names are
+/// always extensionless — the host builds the real file names itself. Methods
+/// are awaitable because the implementations perform HTTP round-trips.
 /// </summary>
 public interface IVaultSession
 {

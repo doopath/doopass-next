@@ -30,6 +30,20 @@ public sealed class WebHostStaticTests(ApiHostFixture fixture) : IClassFixture<A
     }
 
     [Fact]
+    public async Task Framework_assets_are_compressed()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/_framework/blazor.webassembly.js");
+        request.Headers.AcceptEncoding.ParseAdd("br, gzip");
+
+        using var response = await fixture.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(
+            response.Content.Headers.ContentEncoding,
+            encoding => encoding is "br" or "gzip");
+    }
+
+    [Fact]
     public async Task Unknown_api_route_is_not_the_spa_fallback()
     {
         using var response = await fixture.Client.GetAsync("/api/does-not-exist");

@@ -9,6 +9,7 @@ using Doopass.Core.Configuration;
 using Doopass.Core.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 
@@ -107,6 +108,15 @@ public static class WebHostFactory
         builder.Services.AddSignalR();
         VaultAuth.AddVaultRateLimiter(builder.Services);
 
+        // The WASM bundle is ~29 MB raw and ships .br/.gz sidecars that a plain
+        // PhysicalFileProvider cannot negotiate; compress it on the fly instead.
+        builder.Services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+                ["application/wasm", "application/octet-stream"]);
+        });
+
         var announceEnabled = options.Lan || options.Announce
             || string.Equals(ReadApiSetting(settings, "announce"), "true", StringComparison.OrdinalIgnoreCase);
         var serverName = Environment.MachineName is { Length: > 0 } machine ? machine : "doopass";
@@ -118,6 +128,7 @@ public static class WebHostFactory
         builder.Services.AddSingleton(announce);
 
         builder.Services.AddHostedService<VaultHubRelay>();
+        builder.Services.AddHostedService<SessionJanitor>();
 
         var app = builder.Build();
 
@@ -154,6 +165,8 @@ public static class WebHostFactory
 
             return next(context);
         });
+
+        app.UseResponseCompression();
 
         if (!app.Environment.IsDevelopment())
         {
@@ -269,9 +282,9 @@ public static class WebHostFactory
 
         try
         {
-            using var buffer = new MemoryStream();
-            resource.CopyTo(buffer);
-            var hash = Convert.ToHexString(SHA256.HashData(buffer.ToArray())).ToLowerInvariant()[..16];
+            // Hash the resource in place: a marker hit costs one read and no
+            // second 30 MB copy of the bundle in memory.
+            var hash = Convert.ToHexString(SHA256.HashData(resource)).ToLowerInvariant()[..16];
             var version = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
             var root = Path.Combine(Path.GetTempPath(), "doopass-web", $"{version}-{hash}");
             var marker = Path.Combine(root, ".complete");
@@ -284,8 +297,8 @@ public static class WebHostFactory
                 }
 
                 Directory.CreateDirectory(root);
-                buffer.Position = 0;
-                using var archive = new ZipArchive(buffer, ZipArchiveMode.Read);
+                resource.Position = 0;
+                using var archive = new ZipArchive(resource, ZipArchiveMode.Read);
                 archive.ExtractToDirectory(root);
                 File.WriteAllText(marker, hash);
             }
