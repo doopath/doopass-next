@@ -1,9 +1,45 @@
 # Changelog
 
 Notable changes to Doopass. The on-disk format — `store.enc`, `settings.json`
-and backup file names — is unchanged since 5.0.0: 5.0.1 and 5.0.2 only close
-security and robustness issues, so existing vaults and settings files keep
-working as they are.
+and backup file names — is unchanged since 5.0.0, so existing vaults and
+settings files keep working as they are. 5.1.0 includes the security fixes from
+5.0.1 and 5.0.2.
+
+## 5.1.0 — WebAssembly thin client
+
+### Changed
+
+- **The web UI is now a Blazor WebAssembly thin client.** The browser runs the
+  whole UI and calls the host REST API itself; the host renders no Razor. The
+  session token lives in `sessionStorage` (one tab, survives a reload) and is
+  attached as a bearer to every request. The Network tab therefore shows the
+  `/api` calls — that is by design, and no secret-bearing response is cached
+  (`Cache-Control: no-store`, the service worker skips `/api` and `/hubs`).
+- **One shared vault.** `DoopassSession` and the per-circuit store are gone.
+  The browser and the phone now share the single store in
+  `ApiVaultCoordinator`, so concurrent edits can no longer lose each other's
+  entries. The TUI keeps its in-process store and converges through the
+  cross-process file lock.
+- **The WASM bundle is embedded in the host executable** and extracted to a
+  version-addressed temp directory on first start, so a single-file publish
+  needs no loose `wwwroot/`.
+- **`SessionJanitor`** sweeps expired tokens every 30 seconds and relocks the
+  vault even when no client makes another request.
+- **Response compression** covers the WASM bundle (about 29 MB raw versus
+  ~8.5 MB brotli), and the CSP allows `'wasm-unsafe-eval'` for the runtime.
+
+### Fixed
+
+- The browser session maps 409 to busy / uninitialized / duplicate-pair and 422
+  to a corrupted store, matching the phone.
+- Open-browser now uses the scheme actually resolved from `settings.json`
+  (TLS configured there no longer opens the wrong `http://` URL).
+- Removed the unreachable Blazor Server host page (`WebUi/Components/App.razor`,
+  `Routes.razor`) and its missing `doopass-api.js` reference.
+
+### Tests
+
+247 tests green: Core 92, Tui 50, Api 83, WebClient 22.
 
 ## 5.0.2 — security fixes
 

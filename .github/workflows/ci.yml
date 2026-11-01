@@ -29,3 +29,6 @@ jobs:
 
       - name: API tests
         run: dotnet test tests/Doopass.Api.Tests/Doopass.Api.Tests.csproj
+
+      - name: WebClient tests
+        run: dotnet test tests/Doopass.WebClient.Tests/Doopass.WebClient.Tests.csproj
