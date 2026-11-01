@@ -28,6 +28,41 @@ This project is a from-scratch .NET 10 rewrite of the original
 encrypted store format is **fully compatible**, so existing files open without
 any migration — just point the new app at the same `~/doopass` folder.
 
+## Quick start (most users)
+
+You do not need the .NET SDK — take the release archive.
+
+1. **Download** the latest release from
+   [github.com/doopath/doopass-next/releases/latest](https://github.com/doopath/doopass-next/releases/latest):
+   `doopass-<version>-win-x64.zip` or `doopass-<version>-linux-x64.tar.gz`,
+   plus `doopass-<version>-android.apk` if you want the phone client.
+2. **Unpack** the archive anywhere you like.
+3. **Create a TLS certificate.** HTTPS is needed for the phone and for any
+   browser that is not `localhost`:
+   - Linux: `./setup-tls.sh`
+   - Windows: `powershell -ExecutionPolicy Bypass -File .\setup-tls.ps1`
+4. **Install and start the service.** It starts immediately and is enabled at
+   login/sign-in:
+   - Linux: `./install-autostart-linux.sh`
+   - Windows: `powershell -ExecutionPolicy Bypass -File .\install-autostart-win.ps1`
+
+   The script prints the web address. With the certificate from step 3 it
+   serves HTTPS on the LAN; without one it stays on `localhost`.
+5. **Open that address**, accept the self-signed certificate warning and
+   initialize the vault with a master password.
+6. **Phone (optional):** install the APK, keep the phone on the same home
+   Wi-Fi, pick the discovered host, compare the SHA-256 fingerprint with the
+   startup log, tap **Trust and connect** and log in.
+
+`setup-tls` writes `~/doopass/doopass.pfx` and stores it in `settings.json`.
+Re-run it with `--force` to rotate the certificate; paired phones then have to
+trust the new fingerprint again.
+
+> [!WARNING]
+> Only run the host on your own trusted home network. Do not expose it on
+> public, café or hotel Wi-Fi, a shared/corporate LAN, or the internet — not
+> even with TLS.
+
 ## Features
 
 - **Drop-in compatible** with the original Python implementation: Fernet crypto
@@ -46,8 +81,8 @@ any migration — just point the new app at the same `~/doopass` folder.
   runtime required, and all web assets are embedded in the binary.
 - **Installable web app (PWA)** — opens as its own window on desktop and mobile,
   with a basic offline shell and its own icons.
-- **Launch at sign-in** — helper scripts install a Windows startup shortcut or a
-  `systemd` user service.
+- **Start now, launch at sign-in** — helper scripts install a Windows startup
+  shortcut or a `systemd` user service and start it immediately.
 - **Plain, honest data** — everything lives in `~/doopass/appdata`; secrets are
   never written to the log, only the names of the keys and the paths involved
   (needed to debug a failed operation), and the log rotates at 5 MB.
@@ -511,25 +546,36 @@ chmod +x dist/portable/linux-x64/doopass                # Linux
 
 ### Release archives
 
-```powershell
-scripts\package-release             # after publish-portable
+```bash
+scripts/publish-release.sh                 # everything, including the APK
+scripts/publish-release.sh --skip-android  # portable archives only
 ```
 
-Builds archives ready for GitHub Releases:
+Needs bash, `dotnet`, `tar` and `zip` (or `python3`) — Linux, macOS or WSL.
+Builds GitHub-release files in `dist/github-release`:
 
-* `dist/release/doopass-5.1.0-win-x64.zip` (exe + install/uninstall scripts + README)
-* `dist/release/doopass-5.1.0-linux-x64.tar.gz` (exe + install/uninstall scripts + systemd unit + README)
+* `doopass-<version>-win-x64.zip` — exe + `setup-tls`/install/uninstall scripts + README
+* `doopass-<version>-linux-x64.tar.gz` — exe + `setup-tls`/install/uninstall scripts + README
+* `doopass-<version>-android.apk` — signed APK for direct installation
+* `SHA256SUMS`
 
 ### Autostart at sign-in
 
-The installers take the executable path as the first argument and copy it to
-`~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows).
+Both installers copy the executable to `~/.local/bin`
+(`%USERPROFILE%\.local\bin` on Windows), register it to start at sign-in and
+**start it immediately**. Without an executable path they use the binary next
+to the script, so a release archive works as unpacked.
+
+Run `setup-tls` first: it stores the certificate in `settings.json`, and the
+installer then defaults to LAN + HTTPS. Without a certificate it stays on
+`localhost` and plain HTTP.
 
 **Windows**
 
 ```powershell
-powershell -File scripts\install-autostart-win.ps1 .\doopass.exe            # localhost
-powershell -File scripts\install-autostart-win.ps1 .\doopass.exe lan        # LAN
+powershell -File scripts\setup-tls.ps1
+powershell -File scripts\install-autostart-win.ps1 dist\portable\win-x64\doopass.exe
+powershell -File scripts\install-autostart-win.ps1 dist\portable\win-x64\doopass.exe local
 powershell -File scripts\uninstall-autostart-win.ps1
 ```
 
@@ -538,21 +584,19 @@ Options: `-Port 7240`, `-DryRun`, `-NoDesktopShortcut`.
 **Linux**
 
 ```bash
-scripts\install-autostart-linux.sh ./doopass                 # localhost
-scripts\install-autostart-linux.sh ./doopass lan [--linger]  # LAN
-scripts\uninstall-autostart-linux.sh
+scripts/setup-tls.sh
+scripts/install-autostart-linux.sh dist/portable/linux-x64/doopass
+scripts/install-autostart-linux.sh dist/portable/linux-x64/doopass local
+scripts/uninstall-autostart-linux.sh
 ```
 
 Installs a `systemd` **user service** (`~/.config/systemd/user/doopass.service`)
-started with `enable --now`.
+with `enable --now`.
 
 > [!WARNING]
-> `--lan` mode listens on all network interfaces over plain HTTP and is only
-> appropriate on a trusted network: the master password and every secret travel
-> unencrypted, and anyone on the network can reach the login screen. The host
-> prints a warning at startup when `--lan` is used without `--tls`; prefer
-> `--tls`, which binds every interface on its own (`--lan` then only adds the
-> discovery announce).
+> `--lan` without a certificate listens on all interfaces over plain HTTP: the
+> master password and every secret travel unencrypted. Use `setup-tls`, and only
+> on your own trusted home network — never public Wi-Fi or a shared LAN.
 
 ## Where your data lives
 

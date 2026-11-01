@@ -113,15 +113,48 @@ public sealed class Settings
         AppLogger.Info($"Setting changed: {section}.{key}");
     }
 
-    /// <summary>Restores the embedded default configuration.</summary>
+    /// <summary>
+    /// Stores the TLS certificate and its password, creating the <c>api</c>
+    /// section when it is absent. Used by <c>doopass setup-tls</c>.
+    /// </summary>
+    /// <param name="pfxPath">Absolute path to the PKCS#12 certificate.</param>
+    /// <param name="password">Password protecting the PKCS#12 file.</param>
+    public void SetTls(string pfxPath, string password)
+    {
+        if (!_settings.TryGetValue("api", out var api))
+        {
+            api = new Dictionary<string, string>(StringComparer.Ordinal);
+            _settings["api"] = api;
+        }
+
+        api["tls_pfx"] = pfxPath;
+        api["tls_pass"] = password;
+        Save();
+        AppLogger.Info("TLS certificate configured");
+    }
+
+    /// <summary>
+    /// Restores the embedded default configuration. The <c>api</c> section is
+    /// kept: resetting UI defaults must not silently drop the TLS certificate,
+    /// which would make the next LAN start fall back to plain HTTP.
+    /// </summary>
     public void RestoreDefaults()
     {
+        _settings.TryGetValue("api", out var api);
+
         Directory.CreateDirectory(AppDir);
         Directory.CreateDirectory(AppDataDir);
 
         AtomicFile.WriteAllText(SettingsFile, ReadEmbeddedDefault(), TextFile.Utf8NoBom);
 
         Load();
+
+        if (api is { Count: > 0 })
+        {
+            _settings["api"] = api;
+            Save();
+        }
+
         AppLogger.Info("Settings restored to defaults");
     }
 
@@ -196,6 +229,12 @@ public sealed class Settings
 
         var json = JsonSerializer.Serialize(raw, new JsonSerializerOptions { WriteIndented = true });
         AtomicFile.WriteAllText(SettingsFile, json, TextFile.Utf8NoBom);
+
+        // The file can hold api.tls_pass; keep it private on Unix.
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(SettingsFile, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 
     private string SubstituteAppData(string value)

@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs the Doopass web server to start automatically at Windows sign-in.
+    Installs the Doopass web server, starts it now and at every Windows sign-in.
 
 .DESCRIPTION
     Copies the given executable to %USERPROFILE%\.local\bin\doopass.exe, creates a
@@ -12,10 +12,11 @@
         install-autostart-win.ps1 .\doopass.exe lan
 
 .PARAMETER ExePath
-    Path to doopass.exe (required).
+    Path to doopass.exe. Defaults to the executable next to this script.
 
 .PARAMETER Bind
-    'local' (default, localhost only) or 'lan' (all interfaces).
+    'local' (localhost only) or 'lan' (all interfaces). Defaults to 'lan' when
+    setup-tls has stored a certificate in settings.json, 'local' otherwise.
 
 .PARAMETER Port
     HTTP port (default 7240).
@@ -26,12 +27,12 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, Position = 0, HelpMessage = 'Path to doopass.exe')]
+    [Parameter(Position = 0, HelpMessage = 'Path to doopass.exe (default: next to this script)')]
     [string]$ExePath,
 
     [Parameter(Position = 1)]
-    [ValidateSet('local', 'localhost', 'lan')]
-    [string]$Bind = 'local',
+    [ValidateSet('local', 'localhost', 'lan', '')]
+    [string]$Bind = '',
 
     [ValidateRange(1, 65535)]
     [int]$Port = 7240,
@@ -44,6 +45,37 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $script:DiscoveryPort = 7241
+
+# Allow "install-autostart-win.ps1 lan" as well as the positional exe path.
+if (-not $Bind -and $ExePath -in @('local', 'localhost', 'lan')) {
+    $Bind = $ExePath
+    $ExePath = ''
+}
+
+if (-not $ExePath) {
+    $ExePath = Join-Path $PSScriptRoot 'doopass.exe'
+}
+
+# setup-tls stores the certificate in settings.json; the host then serves HTTPS
+# without --tls on the command line. Default to the LAN only when TLS is set,
+# so a missing certificate never turns into plaintext LAN traffic by accident.
+$homeRoot = if ($env:DOOPASS_HOME) { $env:DOOPASS_HOME } else { Join-Path $HOME 'doopass' }
+$settingsFile = Join-Path $homeRoot 'appdata\settings.json'
+$tlsConfigured = $false
+
+if (Test-Path $settingsFile) {
+    try {
+        $tlsConfigured = -not [string]::IsNullOrWhiteSpace(
+            (Get-Content -Raw $settingsFile | ConvertFrom-Json).api.tls_pfx)
+    }
+    catch {
+        # A broken settings file is reported by the host itself.
+    }
+}
+
+if (-not $Bind) {
+    $Bind = if ($tlsConfigured) { 'lan' } else { 'local' }
+}
 
 function Get-LanIp {
     try {
@@ -86,7 +118,8 @@ if ($isLan) { $serveArgs += ' --lan' }
 
 $webHost = if ($isLan) { Get-LanIp } else { 'localhost' }
 if (-not $webHost) { $webHost = $env:COMPUTERNAME }
-$webUrl = "http://{0}:{1}" -f $webHost, $Port
+$scheme = if ($tlsConfigured) { 'https' } else { 'http' }
+$webUrl = "{0}://{1}:{2}" -f $scheme, $webHost, $Port
 
 $runLine = 'shell.Run """' + $targetExe + '"" ' + $serveArgs + '", 0, False'
 $vbs = 'Set shell = CreateObject("WScript.Shell")' + "`r`n" + $runLine + "`r`n"
@@ -129,7 +162,20 @@ if (-not $NoDesktopShortcut) {
 }
 
 Write-Host ""
-Write-Host "Installed. The web server will start automatically at your next sign-in." -ForegroundColor Green
+Write-Host "Starting the server now..." -ForegroundColor Cyan
+Start-Process -FilePath (Join-Path $env:WINDIR 'System32\wscript.exe') `
+    -ArgumentList ('"' + $launchVbs + '"') -WindowStyle Hidden
+Start-Sleep -Seconds 2
+
+$started = Get-Process -Name doopass -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($started) {
+    Write-Host "Running now (PID $($started.Id))." -ForegroundColor Green
+}
+else {
+    Write-Warning "The server did not stay up; check $settingsFile or run .\doopass.exe serve --lan manually."
+}
+
+Write-Host "Installed. The web server also starts at your next sign-in." -ForegroundColor Green
 Write-Host "Open the web interface any time: $webUrl"
 
 if ($isLan) {
@@ -157,5 +203,9 @@ if ($isLan) {
         Write-Warning "Could not add firewall rules automatically; allow inbound UDP 7241 (discovery) and TCP $Port (web/API) on private networks manually."
     }
 
-    Write-Warning "LAN mode listens on all interfaces. Plain HTTP is unencrypted -- pair it with --tls for phone clients."
+    if (-not $tlsConfigured) {
+        Write-Warning "LAN mode has no TLS certificate: the master password and every secret travel in clear text. Run setup-tls.ps1 first."
+    }
+
+    Write-Warning "Only use LAN mode on your own trusted home network -- never on public Wi-Fi or a shared LAN."
 }

@@ -83,6 +83,19 @@ public sealed class SettingsPolicyTests : IDisposable
     }
 
     [Fact]
+    public void RestoreDefaults_KeepsTlsSettings()
+    {
+        var settings = new Settings();
+        settings.SetTls("/tmp/doopass.pfx", "secret");
+
+        settings.RestoreDefaults();
+
+        var api = new Settings().GetSection("api");
+        Assert.Equal("/tmp/doopass.pfx", api["tls_pfx"]);
+        Assert.Equal("secret", api["tls_pass"]);
+    }
+
+    [Fact]
     public void Version_IsEditable()
     {
         var settings = new Settings();

@@ -413,9 +413,25 @@ public sealed class ApiVaultCoordinator
         return UseStore(token, _ =>
         {
             return _settings.Sections
-                .Select(section => (Section: section, Pairs: _settings.GetSection(section)))
+                .Select(section => (Section: section, Pairs: VisibleSection(section)))
                 .ToList();
         });
+    }
+
+    // The TLS key password is a secret: the settings UI/API must never return
+    // it, even to an authenticated client.
+    private IReadOnlyDictionary<string, string> VisibleSection(string section)
+    {
+        var pairs = _settings.GetSection(section);
+
+        if (!string.Equals(section, "api", StringComparison.Ordinal) || !pairs.ContainsKey("tls_pass"))
+        {
+            return pairs;
+        }
+
+        return pairs
+            .Where(pair => pair.Key != "tls_pass")
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
     }
 
     /// <summary>Writes one setting value and notifies clients.</summary>

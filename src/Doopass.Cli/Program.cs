@@ -1,3 +1,4 @@
+using Doopass.Cli;
 using Doopass.Cli.Api;
 using Doopass.Tui;
 
@@ -8,10 +9,18 @@ using Doopass.Tui;
 //                                  -> run the web interface: Blazor UI, the REST API
 //                                     for thin clients under /api, the /hubs/vault
 //                                     SignalR channel and LAN discovery
+//   doopass setup-tls [--pfx <path>] [--pass <pwd>] [--force]
+//                                  -> create a self-signed certificate and store it
+//                                     in settings.json for a later serve
 return Run(args);
 
 static int Run(string[] args)
 {
+    if (args.Length > 0 && args[0] == "setup-tls")
+    {
+        return TlsSetup.Run(args[1..]);
+    }
+
     var serve = args.Length > 0 && args[0] is "serve" or "--serve" or "--web";
 
     if (!serve)

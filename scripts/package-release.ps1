@@ -1,7 +1,8 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Packages the portable executables + install/uninstall scripts into release archives.
+    Legacy packager. Use publish-release.sh (Linux/macOS/WSL) instead; it also
+    builds the APK and ships setup-tls in both portable archives.
 
 .DESCRIPTION
     Assumes scripts\publish-portable.ps1 has already been run. Produces:

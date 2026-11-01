@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Doopass.Core.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Doopass.Api.Tests;
@@ -68,6 +70,30 @@ public sealed class VaultSettingsTests(ApiHostFixture fixture) : IClassFixture<A
 
         Assert.Equal(originalStoreFile, restored["store_file"]);
         Assert.Equal(originalExtension, restored["backup_extension"]);
+    }
+
+    [Fact]
+    public async Task T02_TlsPassword_is_not_returned()
+    {
+        fixture.Reset();
+        var (token, _) = await fixture.InitAsync("TLS settings 1234");
+        var settings = fixture.App.Services.GetRequiredService<Settings>();
+
+        try
+        {
+            settings.SetTls("/tmp/doopass.pfx", "super-secret");
+
+            var sections = (await (await fixture.Client.AuthSend(HttpMethod.Get, "/api/settings", token)).Content
+                .ReadFromJsonAsync<SettingsPayload>())!.Sections;
+            var api = sections.Single(section => section.Name == "api");
+
+            Assert.Equal("/tmp/doopass.pfx", api.Pairs["tls_pfx"]);
+            Assert.False(api.Pairs.ContainsKey("tls_pass"));
+        }
+        finally
+        {
+            settings.RestoreDefaults();
+        }
     }
 
     private sealed record SettingsPayload(IReadOnlyList<SectionDto> Sections);
